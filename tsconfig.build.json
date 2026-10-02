@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "apps/web/dist",
+    "rootDir": ".",
+    "declaration": false,
+    "sourceMap": true
+  },
+  "include": [
+    "packages/core/src/**/*.ts",
+    "packages/simulator/src/**/*.ts",
+    "apps/web/src/**/*.ts"
+  ]
+}

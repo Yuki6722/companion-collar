@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>宠物项圈多模态感知研究报告</title>
+<style>
+  :root{
+    --ink:#16181d; --ink-2:#3d434e; --muted:#6b7280; --line:#e4e7ec;
+    --bg:#fbfaf8; --card:#ffffff;
+    --teal:#0f766e; --teal-soft:#e6f4f1;
+    --amber:#b45309; --amber-soft:#fdf3e3;
+    --red:#b42318; --red-soft:#fdeceb;
+    --green:#15803d; --green-soft:#e9f6ec;
+    --blue:#1d4ed8; --blue-soft:#eaeffd;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(16,24,40,.05),0 4px 14px -6px rgba(16,24,40,.10);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",-apple-system,sans-serif;
+    font-size:16px; line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+  }
+  #progress{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--teal),var(--amber));z-index:100;transition:width .1s linear}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:236px minmax(0,1fr);gap:48px;align-items:start}
+  @media (max-width:1040px){.wrap{grid-template-columns:1fr;gap:0}}
+  nav.toc{position:sticky;top:28px;max-height:calc(100vh - 56px);overflow-y:auto;padding:24px 0 40px;font-size:13.5px}
+  @media (max-width:1040px){nav.toc{position:static;max-height:none;border-bottom:1px solid var(--line);margin-bottom:8px}}
+  nav.toc .toc-title{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 12px}
+  nav.toc a{display:block;color:var(--ink-2);text-decoration:none;padding:5px 10px;border-left:2px solid transparent;border-radius:0 6px 6px 0;line-height:1.45}
+  nav.toc a:hover{background:#f1f3f6;color:var(--ink)}
+  nav.toc a.sub{padding-left:22px;font-size:12.5px;color:var(--muted)}
+  nav.toc a.active{border-left-color:var(--teal);background:var(--teal-soft);color:var(--teal);font-weight:600}
+  header.masthead{grid-column:1/-1;padding:64px 0 36px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);font-weight:700;margin-bottom:14px}
+  h1{font-size:clamp(28px,4.2vw,42px);line-height:1.25;margin:0 0 16px;letter-spacing:-.02em;font-weight:800}
+  .subtitle{font-size:17px;color:var(--ink-2);max-width:64ch;margin:0 0 26px;line-height:1.7}
+  .meta-row{display:flex;flex-wrap:wrap;gap:8px 28px;font-size:13px;color:var(--muted)}
+  .meta-row b{color:var(--ink-2);font-weight:600}
+  main{padding:8px 0 96px;min-width:0}
+  section{padding:34px 0;border-bottom:1px solid var(--line);scroll-margin-top:24px}
+  section:last-of-type{border-bottom:none}
+  h2{font-size:25px;line-height:1.35;margin:0 0 6px;letter-spacing:-.01em;font-weight:750;scroll-margin-top:24px}
+  h2 .num{color:var(--teal);font-variant-numeric:tabular-nums;margin-right:10px;font-weight:800}
+  h3{font-size:18.5px;margin:34px 0 10px;font-weight:700;color:var(--ink);scroll-margin-top:24px}
+  h4{font-size:15.5px;margin:24px 0 8px;font-weight:700;color:var(--ink-2)}
+  p{margin:0 0 14px}
+  .lede{font-size:16.5px;color:var(--ink-2)}
+  ul,ol{margin:0 0 14px;padding-left:22px}
+  li{margin-bottom:7px}
+  a{color:var(--teal);text-decoration:none;border-bottom:1px solid rgba(15,118,110,.28)}
+  a:hover{border-bottom-color:var(--teal);background:var(--teal-soft)}
+  code{font-family:"Cascadia Mono",Consolas,monospace;font-size:.88em;background:#f1f3f6;padding:1px 5px;border-radius:4px}
+  .callout{border:1px solid var(--line);border-left:3px solid var(--teal);background:var(--card);border-radius:var(--radius);padding:16px 20px;margin:20px 0;box-shadow:var(--shadow)}
+  .callout.warn{border-left-color:var(--amber);background:var(--amber-soft)}
+  .callout.risk{border-left-color:var(--red);background:var(--red-soft)}
+  .callout.ok{border-left-color:var(--green);background:var(--green-soft)}
+  .callout .ct{font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px}
+  .callout p:last-child{margin-bottom:0}
+  .badge{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;line-height:1.6;vertical-align:middle}
+  .b-strong{background:var(--green-soft);color:var(--green)}
+  .b-mid{background:var(--amber-soft);color:var(--amber)}
+  .b-weak{background:var(--red-soft);color:var(--red)}
+  .b-peer{background:var(--blue-soft);color:var(--blue)}
+  .b-gray{background:#f1f3f6;color:var(--muted)}
+  .grid{display:grid;gap:16px}
+  .grid.g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .grid.g3{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 8px;font-size:15.5px;color:var(--ink)}
+  .card .kpi{font-size:27px;font-weight:800;color:var(--teal);line-height:1.2;letter-spacing:-.02em}
+  .card .kpi-label{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .card p{font-size:14px;color:var(--ink-2);margin-bottom:0}
+  .tablewrap{overflow-x:auto;margin:20px 0;border:1px solid var(--line);border-radius:var(--radius);background:var(--card)}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
+  th,td{text-align:left;padding:10px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f7f8fa;font-weight:700;color:var(--ink-2);font-size:12.5px;letter-spacing:.02em;white-space:nowrap;position:sticky;top:0}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fafbfc}
+  td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .refs{font-size:13.5px;color:var(--ink-2)}
+  .refs li{margin-bottom:11px;line-height:1.6;scroll-margin-top:24px}
+  .refs li:target{background:var(--amber-soft);border-radius:4px}
+  .tag{display:inline-block;font-size:11.5px;color:var(--muted);background:#f1f3f6;border-radius:4px;padding:1px 6px;margin-left:6px}
+  footer{grid-column:1/-1;border-top:1px solid var(--line);padding:28px 0 64px;font-size:13px;color:var(--muted)}
+  hr.soft{border:none;border-top:1px dashed var(--line);margin:26px 0}
+  .changed{background:var(--amber-soft);border-radius:3px;padding:0 3px}
+  @media print{
+    body{background:#fff;font-size:11pt}
+    nav.toc,#progress{display:none}
+    .wrap{display:block;max-width:none;padding:0}
+    section{page-break-inside:avoid;border-bottom:none;padding:16px 0}
+    a{color:#000;border:none}
+    .card,.callout,.tablewrap{box-shadow:none}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">研究报告 · v2.0 · 项圈多模态感知</div>
+    <h1>宠物项圈多模态感知研究报告</h1>
+    <p class="subtitle">带摄像头与传感器的项圈，能否检测宠物的健康状况以及它的视觉、触觉感受？本报告核查三个通道各自的科学依据与工程边界，并给出一个结论：这三个通道在现有产品中<strong>从未合一</strong>，而其中「触觉」这一项目前在物理上就做不到。</p>
+    <div class="meta-row">
+      <span><b>2026-10-02</b></span>
+      <span>引用来源 <b>45+</b></span>
+      <span>方法论 <b>二手研究 + 证据分级</b></span>
+    </div>
+  </header>
+
+  <nav class="toc" id="toc">
+    <p class="toc-title">目录</p>
+    <a href="#s-summary">摘要</a>
+    <a href="#s-scope">1 研究问题与方法</a>
+    <a href="#s-scope-rq" class="sub">1.1 研究问题</a>
+    <a href="#s-scope-bounds" class="sub">1.2 范围边界</a>
+    <a href="#s-scope-method" class="sub">1.3 方法与证据分级</a>
+    <a href="#s-scope-limits" class="sub">1.4 局限性声明</a>
+    <a href="#s-academic">2 学界研究</a>
+    <a href="#s-ac-senses" class="sub">2.1 感官世界：视觉与触觉</a>
+    <a href="#s-ac-epistemic" class="sub">2.2 感知与感受的鸿沟</a>
+    <a href="#s-ac-translation" class="sub">2.3 感官转译做到了哪一步</a>
+    <a href="#s-ac-biometrics" class="sub">2.4 生理行为指标效度</a>
+    <a href="#s-ac-embodiment" class="sub">2.5 影像能否代表宠物所见</a>
+    <a href="#s-ac-verdict" class="sub">2.6 学界小结</a>
+    <a href="#s-industry">3 业界产品</a>
+    <a href="#s-in-global" class="sub">3.1 传感器型项圈</a>
+    <a href="#s-in-china" class="sub">3.2 摄像头型项圈</a>
+    <a href="#s-in-matrix" class="sub">3.3 产品对比矩阵</a>
+    <a href="#s-in-vr" class="sub">3.4 中国健康监测设备</a>
+    <a href="#s-in-gap" class="sub">3.5 关键空白</a>
+    <a href="#s-synthesis">4 综合洞察</a>
+    <a href="#s-sy-core" class="sub">4.1 核心判断</a>
+    <a href="#s-sy-loop" class="sub">4.2 颈部项圈的固有边界</a>
+    <a href="#s-sy-gap" class="sub">4.3 证据落差</a>
+    <a href="#s-sy-risk" class="sub">4.4 风险与伦理</a>
+    <a href="#s-conclusion">5 结论与建议</a>
+    <a href="#s-refs">参考文献</a>
+    <a href="#s-appendix">附录：检索策略</a>
+  </nav>
+
+  <main>
+
+    <section id="s-summary">
+      <h2><span class="num">摘要</span></h2>
+      <p class="lede">本报告核查一个具体产品形态：<b>带摄像头与传感器的项圈</b>，目标是同时检测宠物的<b>健康状况</b>与它的<b>视觉、触觉感受</b>。核查结果是分层的——健康状况与视觉记录已有成熟技术支撑，而"触觉感受"这一项目前在物理上无法由颈部项圈完成。</p>
+
+      <div class="callout warn">
+        <div class="ct">v2.0 修订说明</div>
+        <p>本报告前一版（v1.0）评估的是<b>「让主人通过 VR 代入宠物视角」</b>。产品方向已调整为「摄像头 + 传感器项圈」，故本版重写了研究问题、范围边界、产品章节与结论，并<b>新增触觉感知一节</b>。v1.0 中关于犬猫视觉、生理传感效度、噪声应激的核查结论仍然有效，予以保留。</p>
+      </div>
+
+      <div class="grid g3" style="margin:24px 0">
+        <div class="card">
+          <div class="kpi">0</div>
+          <div class="kpi-label">同时具备摄像头与健康传感（心率/呼吸）的在售项圈产品</div>
+        </div>
+        <div class="card">
+          <div class="kpi">颈 vs 面</div>
+          <div class="kpi-label">宠物的触觉器官在<b>面部触须与爪垫</b>，而项圈佩戴在颈部——通道与传感器位置根本错配</div>
+        </div>
+        <div class="card">
+          <div class="kpi">30 / 58</div>
+          <div class="kpi-label">消费级摄像头常见 30 fps，而猫的临界闪烁融合频率约 58 Hz——录下的画面不等于猫的时间体验</div>
+        </div>
+      </div>
+
+      <h3>五条主要结论</h3>
+      <ol>
+        <li><b>摄像头与健康传感在现有产品中完全分离。</b>摄像头型项圈（优克联 PetCam、庆视互联 CW-01）只做影像与定位，不测心率呼吸；传感器型项圈（PetPace、Dinbeat UNO）只测生命体征，不带摄像头。<b>没有一款产品把两者合一</b>——这既是市场空白，也说明工程上存在尚未解决的约束（体积、功耗、发热、佩戴舒适度）。</li>
+
+        <li><b>"检测触觉感受"在颈部项圈上做不到，这是最根本的错配。</b>犬的触须是独立的感觉器官，每根都有高度神经支配的专用毛囊，结构与猫须相似；犬对触须被触碰敏感，触须承担包括护眼在内的保护功能。<b>触觉器官在面部与爪垫，不在颈部。</b>颈部项圈只能通过惯性测量单元检测<b>身体运动与碰撞事件</b>（抓挠、摩擦、撞击），无法测得宠物真正"感受到"的触觉。</li>
+
+        <li><b>摄像头能记录环境，但不代表"宠物所见"。</b>两个硬约束：其一，时间分辨率——猫的临界闪烁融合频率约 58 Hz，而消费级摄像头多为 30 fps，因此录下的画面在时间维度上并非猫的体验；其二，视野——项圈摄像头朝前或朝下，而犬的视野远宽于人类（常引 240°–250°，本报告<b>未能核实该数值</b>）。此外犬猫视觉的强项是运动侦测与暗光，而观看者是人。</li>
+
+        <li><b>健康状况检测的品类成熟，但消费级精度受独立研究质疑。</b>Dinbeat UNO 是目前传感器最全的产品（心电图、心率、呼吸频率、体温、活动、体位、<b>发声</b>），但为兽医专业级、B2B 销售；消费级侧 2024 年《AJVR》一项研究直接指出某商用可穿戴设备在追踪犬的能量摄入与消耗上<b>不可靠</b>。"能测"与"测得准"之间存在实质落差。</li>
+
+        <li><b>佩戴本身触及动物福利红线。</b>触须在德国、奥地利、瑞士受动物福利法保护，出于美观修剪触须被认定为"暂时性截肢"。任何与宠物身体接触的设备设计，都必须避开面部感觉器官；项圈虽不直接接触触须，但这一法律事实确立了"不得干扰感觉器官"的设计原则。</li>
+      </ol>
+
+      <div class="callout risk">
+        <div class="ct">最重要的判断</div>
+        <p>这个产品方向<b>比 v1.0 的 VR 构想更站得住</b>——因为它建立在真实可测量的生理信号上，而非主观代入。但要避免重蹈 v1.0 的覆辙（当时是把资源全投在颜色、遗漏了运动敏感度），本次必须避开同一个陷阱：<b>不要把"检测触觉"写进产品能力清单</b>。项圈可以检测与触觉相关的身体事件，不能检测触觉感受。这个措辞差异决定了产品是可验证的，还是会被证伪的。第 4.2 节给出完整的边界分析。</p>
+      </div>
+    </section>
+
+    <section id="s-scope">
+      <h2><span class="num">1</span>研究问题与方法</h2>
+      <p class="lede">本章界定研究的边界与判据。后续所有结论都受这里的范围约束——尤其是"在范围内／不在范围内"两栏。</p>
+
+      <h3 id="s-scope-rq">1.1 研究问题</h3>
+      <p><b>主研究问题（RQ）</b>：带摄像头与传感器的宠物项圈，在多大程度上能够检测（a）宠物的健康状况，（b）宠物的视觉感受，（c）宠物的触觉感受？这三个通道各自的科学依据、工程约束与证据强度如何？</p>
+      <p>该问题拆为五个子问题：</p>
+      <ol>
+        <li><b>SQ1 感官差异</b>——犬猫的视觉与触觉世界与人类差异有多大？哪些差异有可量化的实验参数？</li>
+        <li><b>SQ2 认识论鸿沟</b>——从"宠物感知到什么"能否推出"宠物是否舒适／是否痛苦"？学界如何处理这一距离？</li>
+        <li><b>SQ3 影像有效性</b>——摄像头录下的画面能在多大程度上代表宠物真正看到的东西？有哪些硬约束？</li>
+        <li><b>SQ4 传感效度</b>——心率、呼吸、行为、活动量的非侵入式测量精度与验证状况如何？</li>
+        <li><b>SQ5 产品现状</b>——是否存在同时具备摄像头与健康传感的产品？各产品的真实测量能力与验证程度如何？</li>
+      </ol>
+
+      <h3 id="s-scope-bounds">1.2 范围边界</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:50%">在范围内</th><th style="width:50%">不在范围内</th></tr></thead>
+          <tbody>
+            <tr><td>项圈／胸背带形态的可穿戴设备</td><td><b>VR／AR 沉浸式代入（v1.0 主题，本版不再作为方案）</b></td></tr>
+            <tr><td>摄像头（第一视角影像采集）</td><td>固定式室内摄像头（Furbo 等，非可穿戴）</td></tr>
+            <tr><td>心率、呼吸、体温、活动量、行为、发声传感</td><td>纯兽医临床诊断设备（除非与消费级产品衔接）</td></tr>
+            <tr><td>视觉感知与触觉感知的科学研究</td><td>实验动物的侵入式神经记录（仅作方法学参照）</td></tr>
+            <tr><td>佩戴舒适度与动物福利约束</td><td>畜牧业、工作犬专业作业装备</td></tr>
+            <tr><td>家猫、家犬（<i>Felis catus</i> / <i>Canis familiaris</i>）</td><td>游戏化虚拟宠物、电子宠物</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <div class="ct">边界含义</div>
+        <p>本报告评估的是<b>项圈这一形态本身的能力边界</b>，而非推荐任何具体产品用于医疗诊断。任何消费级宠物设备的读数都不构成兽医诊断依据。</p>
+      </div>
+
+      <h3 id="s-scope-method">1.3 方法与证据分级</h3>
+      <p>本研究为<b>二手研究（secondary research）</b>：基于公开可获取的学术文献与厂商官方资料进行证据综合，不涉及任何一手实验或动物被试。</p>
+      <p>每条结论按下列层级标注证据强度。层级是<b>领域相对</b>的——某来源若达到其所在领域公认的金标准，即使设计层级不高，也可评为"强"。</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:20%">标注</th><th style="width:80%">含义</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge b-strong">强</span></td><td>系统综述／元分析；或多项独立研究结论一致，且方法透明、样本可查</td></tr>
+            <tr><td><span class="badge b-mid">中</span></td><td>单项对照实验或观察性研究；结论合理但缺乏独立重复</td></tr>
+            <tr><td><span class="badge b-weak">弱</span></td><td>专家意见、小样本研究、或仅有厂商自述与媒体报道支撑</td></tr>
+            <tr><td><span class="badge b-peer">同行评审</span></td><td>来源类型标记，与强度正交</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout risk">
+        <div class="ct">IRON RULE · 灰区即排除</div>
+        <p>凡无法确认其真实存在的文献、产品参数或链接，一律不写入本报告。宁可写"未找到可靠来源"，也不以"难以核实"的模糊表述保留。厂商参数与厂商宣称一律与独立验证分开陈述。</p>
+      </div>
+
+      <h3 id="s-scope-limits">1.4 局限性声明</h3>
+      <ul>
+        <li><b>非系统性综述。</b>未做 PRISMA 全流程登记与双人独立筛选。</li>
+        <li><b>通用网络搜索不可用。</b>本次检索期间 web_search 返回余额不足错误，Bing 中文区域搜索结果与查询无关（返回英语考试、聚合物等无关内容）。因此产品侧调研依赖<b>厂商官网直抓</b>与 PubMed 直连，<b>覆盖面可能不完整</b>——尤其可能存在本报告未发现的、同时具备摄像头与健康传感的新产品。这一条是本次最重要的方法学限制。</li>
+        <li><b>中文数据库检索受限。</b>CNKI、万方需机构登录，中文文献覆盖不完整。</li>
+        <li><b>厂商数据以自述为主。</b>宠物消费级设备普遍缺乏第三方同行评审验证。</li>
+        <li><b>检索截止日期：2026-10-02。</b>产品价格与在售状态变动频繁。</li>
+      </ul>
+    </section>
+
+    <section id="s-academic">
+      <h2><span class="num">2</span>学界研究</h2>
+      <p class="lede">本章回答：宠物的视觉与触觉世界与人类差多远、摄像机能否承载它、以及生理指标能否代表健康状况。</p>
+
+      <h3 id="s-ac-senses">2.1 宠物的感官世界：视觉与触觉</h3>
+
+      <h4>视觉 · 色彩：二色视觉，不是黑白</h4>
+      <p>犬与猫均为<b>二色视觉（dichromatic）</b>，而非流传甚广的"只能看黑白"。犬的视锥光色素类型已被直接测定，支持二色视觉结论；猫的光谱敏感度研究显示其视锥分为"蓝"与"绿"两类，峰值敏感波长约 454 nm 与 561 nm。<span class="badge b-strong">强</span></p>
+      <p class="refs">来源：<a href="https://pubmed.ncbi.nlm.nih.gov/8424924/">Photopigments of dogs and foxes and their implications for canid vision. Vis Neurosci. 1993;10(1):173-80.</a> ｜ <a href="https://pubmed.ncbi.nlm.nih.gov/3625560/">Loop MS, Millican CL, Thomas SR. <i>Photopic spectral sensitivity of the cat.</i> J Physiol. 1987;382:537-53.</a></p>
+
+      <h4>视觉 · 闪烁融合频率：对摄像头帧率的硬约束</h4>
+      <p>临界闪烁融合频率（critical flicker fusion frequency, CFF）决定一个物种能把多快的变化看成"连续画面"。</p>
+      <ul>
+        <li><b>猫</b>：正常猫单眼 CFF 测得为 <b>58 Hz</b>；单眼剥夺猫的剥夺眼为 30 Hz、非剥夺眼为 40 Hz。<span class="badge b-strong">强</span></li>
+        <li><b>犬</b>：行为学测定（条件性抑制范式，4 只比格犬）显示犬能辨别的闪烁速率<b>远高于</b>早期 ERG 数据所提示的水平。<span class="badge b-mid">中</span>（样本量小）</li>
+      </ul>
+      <p>Miller 与 Murphy 的经典综述给出总体判断：犬的视觉系统在双眼重叠度、色彩知觉、调节范围与视锐度上不及人类，但在暗光工作能力、视网膜响应速度（闪烁融合）、视野范围、灰度分辨能力上<b>超过</b>人类。<span class="badge b-strong">强</span></p>
+      <p class="refs">来源：<a href="https://pubmed.ncbi.nlm.nih.gov/7493905/">Miller PE, Murphy CJ. <i>Vision in dogs.</i> J Am Vet Med Assoc. 1995;207(12):1623-34.</a> ｜ <a href="https://pubmed.ncbi.nlm.nih.gov/7138645/">Loop MS, Frey TJ. <i>Critical flicker frequency in monocularly deprived cats.</i> Behav Brain Res. 1982;6(2):185-94.</a> ｜ <a href="https://pubmed.ncbi.nlm.nih.gov/2813532/">Coile DC, Pollitz CH, Smith JC. <i>Behavioral determination of critical flicker fusion in dogs.</i> Physiol Behav. 1989;45(6):1087-92.</a></p>
+      <div class="callout warn">
+        <div class="ct">对摄像头产品的直接影响</div>
+        <p>猫的 CFF 约 58 Hz，与人类视觉上限同量级。消费级摄像头普遍为 30 fps。这意味着<b>摄像头录下的画面在时间维度上不等于猫的视觉体验</b>——它记录的是"人类可观看的环境影像"，而非"宠物所见"。若产品宣称"还原宠物视角"，这是一个可被直接证伪的点。犬的 CFF 精确值因测定方法（ERG 与行为学）差异较大，本报告不给单一数字。</p>
+      </div>
+
+      <h4>触觉 · 面部触须是独立的感觉器官 <span class="badge b-peer">同行评审</span></h4>
+      <p>这是本版新增的内容，也是与项圈形态关系最紧的一项发现。</p>
+      <ul>
+        <li><b>解剖与生理事实</b>：犬的面部触须（vibrissae）是<b>独立触觉感觉器官</b>的组成部分。每根硬而长的触须都配有自身<b>高度神经支配的专用毛囊</b>，其结构与猫的胡须非常相似。作者明确表示<b>未发现任何科学证据</b>表明该器官在家犬中不发达或已退化。<span class="badge b-strong">强</span></li>
+        <li><b>功能证据</b>：虽然触须的重要性在犬中尚未被科学充分证明，但可观察到<b>犬对触须被触碰有敏感反应</b>，且触须承担保护功能，包括<b>保护眼睛</b>。</li>
+        <li><b>福利与法律后果</b>：从解剖与生理上已证明触须属于感觉器官、且与体毛明显不同；<b>失去触须则该感觉器官失去功能</b>。因此出于美容目的的修剪"完全不是美容措施，而构成暂时性截肢"。使感觉器官失效造成动物的暂时性身体损伤，属相当程度的伤害。<b>据此，德国、奥地利、瑞士的动物福利法禁止出于美观修剪家犬触须。</b></li>
+      </ul>
+      <p class="refs">来源：<a href="https://pubmed.ncbi.nlm.nih.gov/32557495/">Döring D, Bartels A, Erhard MH. <i>[The importance of the tactile hairs in domestic dogs and the problem of trimming these from an animal welfare perspective].</i> Tierarztl Prax Ausg K Kleintiere Heimtiere. 2020;48(3):186-195.</a>（德文，LMU 慕尼黑）</p>
+
+      <h4>触觉 · 触须在盲犬导航中的作用：一个结果混合的实验</h4>
+      <p>一项初步研究为 14 只不可逆失明犬在面部两侧各延长 5–6 根触须（以精选的成年猪毛附着），并在操作前后进行迷宫测试；其中 3 只在延长物全部脱落后复测。</p>
+      <div class="callout warn">
+        <div class="ct">结果必须如实报告，它并不干净</div>
+        <ul style="margin-bottom:0">
+          <li><b>碰撞次数</b>：延长触须后中位数<b>显著更高</b>（5, IQR 2.25），延长物脱落后为 4（IQR 7.50），而延长前为 1（IQR 1），p = 0.021。</li>
+          <li><b>用时</b>：延长前（25.6, IQR 8.98）与脱落后显著高于延长后（22.8, IQR 8.55），p = 0.04。</li>
+        </ul>
+        <p style="margin-top:10px">即：<b>延长触须后走得更快，但碰撞更多。</b>作者的结论措辞是"可能改善"（possibly improves）障碍物定位与生活质量。</p>
+      </div>
+      <p>本报告据此的判断：该研究<b>证明触须在盲犬触觉感知中起重要作用</b>，但"延长触须能改善导航"这一具体主张<b>未被其自身数据支持</b>——碰撞增加与用时减少是相互抵消的。引用时不应省略碰撞数据。<span class="badge b-mid">中</span>（初步研究，样本 14）</p>
+      <p class="refs">来源：<a href="https://pubmed.ncbi.nlm.nih.gov/38427268/">de Sampaio MOB, Montiani-Ferreira F, et al. <i>Supplemental vibrissal extensions as an alternative to improve the tactile sensitivity of blind dogs - a preliminary approach investigation.</i> Vet Res Commun. 2024;48(3):1907-1914.</a></p>
+
+      <h4>触觉 · 猫的触须神经支配与犬猫物种差异</h4>
+      <p>一项共聚焦显微研究系统比较了大鼠与猫的上唇触须毛囊-窦复合体（follicle-sinus complexes, FSCs）的神经支配，在三维上清晰区分出<b>至少 8 种不同的末梢</b>（Merkel 末梢、环状与纵向 lanceolate 末梢、club-like ringwulst 末梢、reticular 末梢、spiny 末梢、被囊末梢等）。</p>
+      <p>关键差异：大鼠中支配环窦处 Merkel 细胞的每根神经纤维通常终止为单个较小末梢簇，而<b>猫中则以 en passant 方式终止为若干大簇</b>；大鼠的 reticular 末梢平行于触须分布且区域重叠，猫的则垂直分布且区域界限紧密。猫的海绵窦存在大鼠缺失的 corpuscular 末梢。作者结论：尽管 FSCs 基本结构相似，<b>这些神经支配差异提示两个物种具有不同的触觉能力与知觉</b>，可能与其不同的触须探索行为有关。<span class="badge b-mid">中</span></p>
+      <p class="refs">来源：<a href="https://pubmed.ncbi.nlm.nih.gov/12115682/">Ebara S, Kumamoto K, Matsuura T, Mazurkiewicz JE, Rice FL. <i>Similarities and differences in the innervation of mystacial vibrissal follicle-sinus complexes in the rat and cat: a confocal microscopic study.</i> J Comp Neurol. 2002;449(2):103-19.</a></p>
+
+      <h4>触觉 · 皮肤机械感受器</h4>
+      <p>经典电生理研究以猫、犬、猴、浣熊与人类为比较对象，检验了恒定力与恒定位移两种刺激方式对皮肤机械感受器反应的影响，以及重复刺激下皮肤力学性质的变化。<span class="badge b-mid">中</span>（年代较早，1982）</p>
+      <p class="refs">来源：<a href="https://pubmed.ncbi.nlm.nih.gov/6279791/">Pubols BH Jr. <i>Factors affecting cutaneous mechanoreceptor response. I &amp; II.</i> J Neurophysiol. 1982;47(3):515-29 &amp; 530-42.</a></p>
+
+      <h4>听觉与嗅觉：本报告未取得可比强度的证据</h4>
+      <div class="callout">
+        <div class="ct">诚实声明</div>
+        <p>犬猫听觉频率上限与嗅觉受体数量这两项，本轮检索<b>未能取得与本页其他条目同等强度的同行评审来源</b>。它们广泛存在于科普与厂商材料，但本报告不以厂商材料充当科学证据，故不给出具体数值。</p>
+      </div>
+
+      <h3 id="s-ac-epistemic">2.2 从"感知"到"感受"：认识论的鸿沟</h3>
+      <p>即使我们精确知道猫看到的是 58 Hz 以上的连续画面、犬分辨不出红绿，仍有一个无法靠参数跨越的鸿沟：<b>知道动物感知到什么，不等于知道它是否舒适或痛苦。</b></p>
+      <p>动物情绪的意识体验<b>无法被直接测量</b>，只能通过神经、行为与生理指标间接推断——这是当前动物情绪研究公认的方法论边界。这一表述出自一篇高被引的整合性理论框架论文，该文并提出 valence–arousal（效价-唤醒）维度框架用于组织离散情绪状态。<span class="badge b-strong">强</span></p>
+      <p class="refs">来源：<a href="https://pubmed.ncbi.nlm.nih.gov/20685706/">Mendl M, Burman OHP, Paul ES. <i>An integrative and functional framework for the study of animal emotion and mood.</i> Proc R Soc B. 2010;277(1696):2895-2904.</a></p>
+      <p><b>对产品的直接含义</b>：项圈测得的全部内容都是<b>指标</b>，不是<b>感受</b>。产品可以合法地宣称"检测到心率上升、呼吸加快、活动增加"，但不能宣称"检测到宠物感到不适"。这一措辞边界是本报告反复强调的核心。</p>
+
+      <h4>最贴近本命题的实证研究</h4>
+      <div class="callout ok">
+        <div class="ct">关键发现</div>
+        <p>Glanville C, Ortmeyer H, Hemsworth P, Hemsworth L, Coleman G. <b>"Can owners recognize their dog's welfare state? Novel insights from a 'Smart Collar'"</b>（主人能否识别自家狗的福利状态？来自智能项圈的启示），第 55 届国际应用动物行为学学会（ISAE）大会论文集，2022，p.14。</p>
+        <p>该研究把"主人能否判断自家宠物福利状态"作为研究问题，并用<b>智能项圈数据作为对照</b>。这正是本产品命题的科学版本——它说明"主人的主观判断是否准确"是一个已被学术界严肃对待的问题。<span class="badge b-mid">中</span></p>
+        <p class="refs">题录来源：<a href="https://petpace.com/scientific-publications/">PetPace Scientific Publications</a>。本报告<b>仅取得题录，未读到全文</b>，故不引述其具体结论。</p>
+      </div>
+
+      <h3 id="s-ac-translation">2.3 感官转译做到了哪一步</h3>
+      <p>把宠物感官"翻译"给人类的既有工具，几乎全部集中在<b>颜色</b>这一层。这一结论对本产品依然适用：如果要用摄像头画面让主人理解宠物所见，能做的转译只有色彩变换。</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>转译路径</th><th>实现内容</th><th>覆盖的感官维度</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td>视觉模拟 App</td><td>实时相机/照片的色彩变换，模拟犬猫鸟蜂色觉</td><td>仅颜色</td><td>在售</td></tr>
+            <tr><td>宠物专用屏幕内容</td><td>为犬类视觉调整色彩的电视/流媒体</td><td>颜色 + 听觉（自述）</td><td>在售（DOGTV、腾讯宠物TV）</td></tr>
+            <tr><td>触觉转译</td><td><b>未发现任何面向宠物触觉的转译产品或研究</b></td><td>—</td><td>空白</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>值得注意的是，这一领域的开发者对自己的局限相当诚实。支持 Apple visionOS 的动物视觉模拟 App <b>Animal POV</b> 在官方说明中主动声明：所呈现的是"视觉近似，而非精确表现"，并明确列出<b>不涵盖</b>运动敏感度、深度知觉与神经处理。</p>
+      <div class="callout">
+        <div class="ct">这一点为何重要</div>
+        <p>该声明恰好点出本章的核心发现：犬猫视觉的优势项是<b>运动侦测与暗光</b>，而非颜色。一个只做色彩变换的模拟器，转译的恰恰是犬猫<u>不擅长</u>的那一维，遗漏了它们<u>真正擅长</u>的那一维。同样地，一个颈部项圈摄像头转译的是"环境画面"，而遗漏了宠物真正的信息通道——嗅觉，以及位于面部的触觉。<span class="badge b-mid">中</span></p>
+      </div>
+      <p class="refs">来源：<a href="https://apps.apple.com/cn/app/animal-pov/id6756701337">Animal POV — App Store 页面（含官方局限声明与所引科学依据）</a></p>
+
+      <h3 id="s-ac-biometrics">2.4 生理与行为指标能否代表"健康状况"</h3>
+      <p>这是产品的"健康"一端。结论是：<b>指标确实与应激、疼痛相关，但消费级设备的测量精度存在独立研究层面的实质质疑。</b></p>
+
+      <h4>哪些指标有证据支撑</h4>
+      <ul>
+        <li><b>心率变异性（HRV）</b>被用作自主神经系统应激反应的指标。一项以搜救犬为对象的研究明确"测量心率变异性作为自主神经系统对压力的反应指标"，并结合任务绩效分析。<span class="badge b-mid">中</span>
+          <br><span class="refs">来源：<a href="https://pubmed.ncbi.nlm.nih.gov/40125328/">Dickinson S, Feuerbacher EN. <i>Frustration and its impact on search and rescue canines.</i> Front Vet Sci. 2025;12:1546412.</a></span></li>
+        <li><b>人与犬的应激指标存在同步。</b>Sundman 等发现犬与其主人的长期应激水平是同步的（Scientific Reports, 2019）。<span class="badge b-mid">中</span></li>
+        <li><b>环境光照与时间会调节猫的行为与皮质醇。</b>一项 2025 年发表于 iScience 的研究直接检验收容所中光照质量与时间对猫行为与皮质醇的影响——这是"环境参数 → 生理/行为输出"链条中最干净的一项证据。<span class="badge b-mid">中</span></li>
+      </ul>
+      <p class="refs">来源：<a href="https://petpace.com/scientific-publications/">PetPace Scientific Publications（论文列表页，含上述两项题录）</a></p>
+
+      <h4>反证：能测 ≠ 测得准</h4>
+      <div class="callout risk">
+        <div class="ct">关键反证</div>
+        <p>《美国兽医研究杂志》（AJVR）2024 年一项研究标题即为结论：<b>"市售可穿戴健康监测设备在追踪犬的能量摄入与消耗方面不可靠"</b>。</p>
+        <p class="refs">来源：<a href="https://pubmed.ncbi.nlm.nih.gov/38109848/">Commercially available wearable health monitor in dogs is unreliable for tracking energy intake and expenditure. Am J Vet Res. 2024;85(3). doi:10.2460/ajvr.23.10.0242. PMID 38109848</a>（原文 PDF 需订阅，未能读取正文细节）</p>
+        <p>这条证据的价值在于：它来自同行评审期刊，而非竞品攻击。它确立了本报告的一条判断原则——<b>厂商"能测心率/呼吸"的宣称，与"测得准"是两个不同层级的主张</b>，后者需要独立验证。</p>
+      </div>
+
+      <h4>厂商侧确实提交过验证证据，但性质需分辨</h4>
+      <p>头部厂商 PetPace 公开列出了使用其设备数据的同行评审论文，其中包含直接针对测量精度的研究：</p>
+      <ul>
+        <li>Belda B, Enomoto M, Case BC, Lascelles BDX. <i>Initial evaluation of PetPace activity monitor.</i> Vet J. 2018;237:63-68.</li>
+        <li>Görisch E. <i>Comparison of the 'PetPace' smart health-monitoring collar to a Holter-ECG in terms of accuracy of heart rate and heart rate variability measurement.</i> 维也纳兽医大学学位论文，2020。</li>
+        <li>Rowlison de Ortiz A, et al. <i>Initial exploration of the discriminatory ability of the PetPace collar…</i> Front Pain Res. 2022;3:949877.</li>
+      </ul>
+      <div class="callout warn">
+        <div class="ct">证据性质须分辨</div>
+        <p>上述研究标题多含 "Initial"（初步），且由厂商在其官网页面上汇总呈现。这<b>不等于</b>造假——把它们列出是值得肯定的透明做法——但读者应注意：其一，厂商选择性汇总存在发表偏倚的可能；其二，其中一项是<b>学位论文</b>而非期刊论文，均未经本报告独立核验全文。<span class="badge b-mid">中</span></p>
+      </div>
+      <p class="refs">来源：<a href="https://petpace.com/scientific-publications/">PetPace Scientific Publications</a>（厂商汇总页）</p>
+
+      <h3 id="s-ac-embodiment">2.5 摄像头影像能否代表"宠物所见"</h3>
+      <p class="lede">本版把 v1.0 的"VR 具身"一节改写为摄像头有效性的核查。v1.0 关于虚拟具身与视角转换的文献综述<b>已不再适用于本产品</b>（产品不做 VR 代入），但其核心界线依然成立：<b>改变人类观察者的体验，不等于改变动物的状态。</b></p>
+      <p>摄像头方案面临三个具体约束：</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:22%">约束</th><th style="width:38%">问题</th><th>本报告的证据状况</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>时间分辨率</b></td>
+              <td>消费级摄像头多为 30 fps，而猫的 CFF 约 58 Hz</td>
+              <td><span class="badge b-strong">强</span> 猫 CFF 有实测数据（Loop &amp; Frey 1982）。<b>结论：录下的画面不等于猫的时间体验</b></td>
+            </tr>
+            <tr>
+              <td><b>视野与朝向</b></td>
+              <td>项圈摄像头朝前或朝下，而犬的视野远宽于人类</td>
+              <td><span class="badge b-weak">未核实</span> 犬视野常引 240°–250°，但本报告<b>未能取得一手来源</b>，故不使用该数字</td>
+            </tr>
+            <tr>
+              <td><b>通道覆盖</b></td>
+              <td>宠物环境评估高度依赖嗅觉；摄像头完全不承载该通道</td>
+              <td><span class="badge b-mid">中</span> 嗅觉受体基因组学研究确认犬具大规模 OR 基因家族（<i>Genome Biology</i> 2005），但具体功能基因数与嗅球比例<b>未核实</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout risk">
+        <div class="ct">直接回答 SQ3</div>
+        <p><b>摄像头能记录"宠物所处的环境"，但不能代表"宠物所见"。</b>它在时间维度（帧率低于 CFF）、空间维度（视野与朝向不同）与通道维度（无嗅觉）三个层面都不等价。这不是工程调优能完全解决的问题，而是生理差异决定的边界。</p>
+        <p>同时，本报告<b>未找到任何研究</b>测试"主人通过宠物视角影像提升了对宠物状态的判断准确度"。唯一的直接相关实证是 Glanville 等（2022）用智能项圈检验主人的判断能力（见 2.2）。</p>
+      </div>
+
+      <h3 id="s-ac-verdict">2.6 学界小结</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:34%">命题</th><th style="width:14%">证据强度</th><th>判定</th></tr></thead>
+          <tbody>
+            <tr><td>犬猫视觉与人类存在系统性差异</td><td><span class="badge b-strong">强</span></td><td>成立。色彩、闪烁融合、暗光、视野均有同行评审数据</td></tr>
+            <tr><td>犬猫在运动敏感度与暗光上优于人类</td><td><span class="badge b-strong">强</span></td><td>成立</td></tr>
+            <tr><td><b>犬的面部触须是独立感觉器官</b></td><td><span class="badge b-strong">强</span></td><td><b>成立</b>。解剖与生理已证明；修剪在德奥瑞受法律禁止</td></tr>
+            <tr><td><b>触觉器官位于面部与爪垫，不在颈部</b></td><td><span class="badge b-strong">强</span></td><td><b>成立</b>。这是项圈形态的根本约束</td></tr>
+            <tr><td>延长触须可改善盲犬导航</td><td><span class="badge b-mid">中</span></td><td><b>结果混合</b>：碰撞增加但用时减少，作者措辞为"可能"</td></tr>
+            <tr><td>犬猫触觉能力存在物种差异</td><td><span class="badge b-mid">中</span></td><td>成立（神经支配形态证据）</td></tr>
+            <tr><td>生理/行为指标与应激、疼痛相关</td><td><span class="badge b-mid">中</span></td><td>部分成立，但均为间接推断</td></tr>
+            <tr><td>消费级设备测量精度可靠</td><td><span class="badge b-weak">弱</span></td><td><b>被同行评审研究直接质疑</b>（AJVR 2024）</td></tr>
+            <tr><td>摄像头影像能代表宠物所见</td><td><span class="badge b-weak">弱</span></td><td><b>不成立</b>。三个维度均不等价</td></tr>
+            <tr><td><b>颈部项圈能检测宠物的触觉感受</b></td><td><span class="badge b-weak">无</span></td><td><b>物理上不成立</b>。传感器位置与感觉器官位置错配</td></tr>
+            <tr><td>项圈读数可代表"感受"或作诊断</td><td><span class="badge b-weak">无</span></td><td><b>不成立</b>。动物情绪体验不可直接测量（Mendl 2010）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="s-industry">
+      <h2><span class="num">3</span>业界产品</h2>
+      <p class="lede">本章盘点真实在售的产品，并回答一个核心问题：<b>有没有产品同时做到摄像头与健康传感？</b>答案是没有。凡未能核实的参数与价格，一律标注"未找到可靠来源"。</p>
+
+      <h3 id="s-in-global">3.1 传感器型项圈：健康监测</h3>
+
+      <h4>Dinbeat UNO <span class="badge b-peer">厂商官网核实</span></h4>
+      <p>本报告发现的<b>传感器最完整</b>的宠物可穿戴产品。</p>
+      <ul>
+        <li><b>厂商 / 国家</b>：Dinbeat（西班牙），定位"The pet centric company"</li>
+        <li><b>形态</b>：多参数胸背带（arnés multiparamétrico），非项圈</li>
+        <li><b>测量指标</b>：官网明确列出<b>心电图（ECG）、心率、呼吸频率、体温、活动、体位、发声（vocalizaciones）</b>七项。厂商强调可在<b>未镇静</b>状态下实时监测</li>
+        <li><b>目标用户</b>：<b>兽医专业级</b>（"Desarrollado para uso profesional veterinario"），用于住院监护、居家监测、常规检查、康复与焦虑治疗随访</li>
+        <li><b>平台</b>：云端平台 pro.dinbeat.com，配套 iOS / Android App，实时告警</li>
+        <li><b>销售模式</b>：<b>B2B，演示预约 + 报价制</b>，官网不公开定价，也<b>未公开 API 或数据导出接口</b>——未找到可靠来源</li>
+        <li><b>状态</b>：在售（专业渠道）</li>
+        <li><b>链接</b>：<a href="https://dinbeat.com/">dinbeat.com</a></li>
+      </ul>
+      <div class="callout">
+        <div class="ct">为什么这款最相关</div>
+        <p>它同时具备两点对本产品方向至关重要的能力：① 传感器覆盖最全（含 ECG 与呼吸频率）；② <b>它测量发声</b>——这意味着它能与声学环境数据形成一对可验证的因果配对（环境噪声 ↔ 宠物发声），而第二份调研报告已指出噪声应激是最有可测量证据链的通道。</p>
+      </div>
+
+      <h4>PetPace 智能健康项圈 <span class="badge b-peer">官网核实</span></h4>
+      <ul>
+        <li><b>厂商 / 国家</b>：PetPace（美国，官网 Copyright © 2026）</li>
+        <li><b>形态</b>：项圈（犬用与猫用分别有型号）</li>
+        <li><b>测量指标</b>：脉搏（pulse）、心率变异性（HRV）、呼吸（respiration）、体温、活动量、睡眠、热量、姿势，以及 GPS 与安全区。厂商强调"活动追踪不是健康监测"，并自称是<b>唯一测量真实生命体征</b>的项圈。<span class="badge b-weak">厂商宣称</span></li>
+        <li><b>规格（官网）</b>：三种尺寸，重 60 g / 90 g / 100 g；48×28×23 mm（小号）或 60×32×24 mm；充电 1.5 小时至 80%；电池 3.8 V 520 mAh（不可更换）；BT4.2 + 4G LTE Cat-M1 + WiFi 2.4；GPS；防护 IP66 + IP68</li>
+        <li><b>精度与验证</b>：厂商称其 AI 健康评分为"临床验证"、由 10 年临床研究支撑，并提供论文列表页（见 2.4）。本报告<b>未独立核验</b>这些论文全文。<span class="badge b-mid">厂商提供证据，未独立核验</span></li>
+        <li><b>价格</b>：存在月度/年度订阅方案，但本次抓取<b>未取得确切价格数字</b>——未找到可靠来源</li>
+        <li><b>链接</b>：<a href="https://petpace.com/">petpace.com</a> ｜ <a href="https://petpace.com/specs/">规格页</a> ｜ <a href="https://petpace.com/scientific-publications/">论文列表</a></li>
+      </ul>
+
+      <h4>Tractive <span class="badge b-peer">官网核实</span></h4>
+      <ul>
+        <li><b>厂商</b>：Tractive（奥地利）；<b>形态</b>：项圈式追踪器（犬用与猫用）</li>
+        <li><b>测量指标</b>：以 GPS 定位与健康追踪为核心，产品线含 DOG 6、DOG 6 XL、DOG 6 XL Adventure（按体重分档，标称续航最高 6 周）</li>
+        <li><b>价格 / 订阅</b>：本次抓取<b>未取得确切数字</b>——未找到可靠来源</li>
+        <li><b>链接</b>：<a href="https://tractive.com/">tractive.com</a></li>
+      </ul>
+
+      <h3 id="s-in-china">3.2 摄像头型项圈：视觉记录</h3>
+      <p class="lede">这类产品是 v1.0 报告的核心发现，在新方向下它们的角色变成"视觉通道的现成硬件"。<b>注意：以下产品均不测量心率或呼吸。</b></p>
+
+      <h4>优克联 PetCam 宠物第一视角智能相机 <span class="badge b-peer">CES 2026 发布</span></h4>
+      <ul>
+        <li><b>厂商</b>：优克联（uCloudlink）× 联合影像（联合发布），CES 2026（2026 年 1 月 6–9 日）</li>
+        <li><b>定位</b>：厂商明确强调这是<b>第一视角，而不是"被监控的视角"</b>——"它不是一个'盯着宠物'的摄像头，而是一次从毛孩子视角出发的陪伴记录"</li>
+        <li><b>规格（供应商公布）</b>：1920×1080 全高清；2.7 μm 大像素；广角视野以贴近宠物真实活动视角；工作温度 −10 ℃ 至 60 ℃；轻量化佩戴</li>
+        <li><b>隐私设计取向</b>：不做高位广域监控、不侵入家庭隐私空间</li>
+        <li><b>健康传感</b>：<b>无</b>。不测心率、呼吸或体温</li>
+        <li><b>注意</b>：规格来自<b>供应链侧（视觉模组供应商）宣传物料</b>，非第三方实测</li>
+        <li><b>链接</b>：<a href="https://www.iotworld.com.cn/html/News/202601/ab7046720cc110b1.shtml">物联网世界报道（CES 2026）</a></li>
+      </ul>
+
+      <h4>庆视互联 CW-01 智能可穿戴宠物相机 <span class="badge b-peer">芯片厂商官方方案页</span></h4>
+      <ul>
+        <li><b>厂商</b>：深圳市庆视互联科技；主控芯片北京君正 T33ZN</li>
+        <li><b>规格</b>：约 100 g，72.5×43.5×24.5 mm，卡扣固定于项圈；120° 广角；思特威 SC235HAI 传感器；1080P30 / 640×360 15FPS；<b>EIS 电子防抖</b>（针对宠物跑动抖动）；4G 全网通 + GPS/AGPS；电子围栏；运动轨迹回放；双向语音；IP67；2000 mAh（宣称续航 3–5 天）</li>
+        <li><b>健康传感</b>：<b>无</b></li>
+        <li><b>状态</b>：在售（2026 年 7 月官方发布）</li>
+        <li><b>注意</b>：规格来自芯片供应商客户案例稿，属供应链侧物料，<b>未见独立评测</b></li>
+        <li><b>链接</b>：<a href="https://www.ingenic.com.cn/news-detail/nid-1089.html">君正官方方案解析页</a></li>
+      </ul>
+
+      <h4>其他已核实存在的摄像头型产品</h4>
+      <ul>
+        <li><b>Vbestlife 宠物项圈相机</b>：1080P、120° 广角，定位记录仪，普遍缺少实时远程查看与防抖——<a href="https://www.amazon.co.jp/dp/B0DF5V5R9Q/">Amazon.co.jp</a></li>
+        <li><b>Kentfaith 4G POV 犬项圈相机</b>：4G 1080P 第一视角直播、双向音频、前后安装胸背带——<a href="https://www.kentfaith.it/review_553380">商品页</a></li>
+        <li><b>GoPro Fetch 犬用胸背带</b>：此类别最早、最知名的产品，<b>已停产/停售</b>——<a href="https://www.coolblue.de/en/product/512008/gopro-fetch-dog-harness.html">Coolblue 页面标注 Never available again</a></li>
+      </ul>
+      <p>这三者与上述两款共同说明："宠物 POV + 定位"在 2025–2026 已形成一个小品类，供给充分但<b>全部不含健康传感</b>。</p>
+
+      <h3 id="s-in-matrix">3.3 产品对比矩阵</h3>
+      <p>下表按<b>形态 × 能力</b>组织，以回答"摄像头与传感器是否合一"。仅列本报告亲自核实到官方页面的产品。</p>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>产品</th><th>厂商 / 国家</th><th>形态</th><th>摄像头</th><th>心率</th><th>呼吸</th><th>体温</th><th>活动/行为</th><th>发声</th><th>验证</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><b>Dinbeat UNO</b></td><td>Dinbeat / 西班牙</td><td>胸背带</td><td>✗</td><td>✓ ECG</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>兽医专业级</td><td>在售（B2B）</td></tr>
+            <tr><td><b>PetPace</b></td><td>PetPace / 美国</td><td>项圈</td><td>✗</td><td>✓ HRV</td><td>✓</td><td>✓</td><td>✓</td><td>✗</td><td>厂商论文列表，未独立核验</td><td>在售</td></tr>
+            <tr><td><b>Tractive</b></td><td>Tractive / 奥地利</td><td>项圈</td><td>✗</td><td>未核实</td><td>未核实</td><td>未核实</td><td>✓</td><td>✗</td><td>未核实</td><td>在售</td></tr>
+            <tr><td><b>优克联 PetCam</b></td><td>优克联 / 中国</td><td>第一视角相机</td><td>✓ 1080P</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>供应商物料</td><td>CES 2026 发布</td></tr>
+            <tr><td><b>庆视互联 CW-01</b></td><td>庆视互联 / 中国</td><td>项圈相机</td><td>✓ 1080P30+EIS</td><td>✗</td><td>✗</td><td>✗</td><td>✓ 轨迹</td><td>✗</td><td>芯片厂商方案页</td><td>在售</td></tr>
+            <tr><td><b>Vbestlife</b></td><td>白牌</td><td>项圈相机</td><td>✓ 1080P</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>—</td><td>在售</td></tr>
+            <tr><td><b>Kentfaith 4G POV</b></td><td>Kentfaith</td><td>项圈/胸背带</td><td>✓ 1080P</td><td>✗</td><td>✗</td><td>✗</td><td>✓ GPS</td><td>✗</td><td>—</td><td>在售</td></tr>
+            <tr><td><b>GoPro Fetch</b></td><td>GoPro</td><td>胸背带</td><td>✓（需自配相机）</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>—</td><td><b>已停产</b></td></tr>
+            <tr><td><b>Furbo 360</b></td><td>Furbo / 台湾</td><td>固定摄像头</td><td>✓</td><td>✗</td><td>✗</td><td>✗</td><td>✓ AI</td><td>✓ 音频</td><td>—</td><td>在售（需订阅）</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <div class="ct">读表须知</div>
+        <p>表中"✓"仅代表<b>厂商宣称该功能存在</b>，不代表本报告验证了其测量精度。结合 2.4 节的 AJVR 反证，任何"✓ 心率/呼吸"都应被视为待验证主张。<b>最关键的一列是"摄像头"与"心率/呼吸"从未在同一行同时出现</b>——这就是下一节要展开的核心空白。</p>
+      </div>
+
+      <h3 id="s-in-vr">3.4 中国市场的健康监测设备</h3>
+      <p class="lede">这些不是项圈，但它们是"用设备监测宠物健康"这一需求在中国市场的实际落点，对本产品的竞争定位有参考价值。</p>
+
+      <h4>CATLINK 智能猫砂盆 <span class="badge b-peer">官网核实</span></h4>
+      <ul>
+        <li><b>厂商</b>：CATLINK（上海，中国）</li>
+        <li><b>形态</b>：智能猫砂盆（非可穿戴），另有喂食器、饮水机、摄像头、净味器</li>
+        <li><b>健康监测</b>：官网称"创新健康检测系统，搭载多猫识别模组，全方面捕捉猫咪行为数据"，并称已为全球超 <b>220,000+</b> 只猫咪、<b>300,000+</b> 注册用户提供健康数据分析，覆盖 42 个国家与地区，在日本、韩国、泰国市场份额第一 <span class="badge b-weak">厂商宣称</span></li>
+        <li><b>具体指标与精度</b>：官网未给出可核验的指标清单或验证数据——<b>未找到可靠来源</b></li>
+        <li><b>链接</b>：<a href="https://www.catlink.cn/">catlink.cn</a></li>
+      </ul>
+
+      <h4>PETKIT 小佩 <span class="badge b-peer">官网核实</span></h4>
+      <ul>
+        <li><b>厂商</b>：PETKIT 小佩（中国）；<b>产品线</b>：自动猫砂盆、智能喂食器、饮水机</li>
+        <li><b>测量指标</b>：官网标题未体现心率或呼吸监测——<b>未见其定位为生物识别产品的证据</b></li>
+        <li><b>链接</b>：<a href="https://www.petkit.com/">petkit.com</a></li>
+      </ul>
+
+      <h4>腾讯视频「宠物TV」 <span class="badge b-peer">平台官方发布</span></h4>
+      <p>虽非项圈产品，但它是"为宠物设计内容"这一思路在中国唯一成规模的落地。已上线试运营（2026 年 3 月），引入国际专业宠物内容库 <b>DogTV</b> 等资源，24 小时不间断直播，犬猫内容分区（狗＝陪伴/安抚/放松；猫＝感官探索/动态追踪/捕猎兴趣激发）。其自述数据（非独立研究）称超过 72% 的狗会主动关注电视或电脑屏幕。<span class="badge b-weak">厂商单方面口径</span></p>
+      <p class="refs">来源：<a href="https://vv.lmtw.com/mzs/content/detail/id/252345">流媒体网报道（含官方发布全文）</a></p>
+
+      <h3 id="s-in-gap">3.5 关键空白：摄像头与传感器从未合一</h3>
+      <div class="callout risk">
+        <div class="ct">本报告最重要的产品结论</div>
+        <p>在已核实的全部在售产品中，<b>没有任何一款同时具备摄像头与健康传感</b>。市场清晰地分成两半：</p>
+        <div class="grid g2" style="margin-top:14px">
+          <div class="card">
+            <h4>带摄像头 → 不带健康传感</h4>
+            <p>PetCam、CW-01、Vbestlife、Kentfaith、GoPro Fetch。全部只做影像记录 + 定位。</p>
+          </div>
+          <div class="card">
+            <h4>带健康传感 → 不带摄像头</h4>
+            <p>Dinbeat UNO、PetPace、Tractive。全部只做生命体征 + 活动。</p>
+          </div>
+        </div>
+        <p style="margin-top:14px">这个分离不是市场疏忽，而是<b>工程约束的真实反映</b>：摄像头模组与多参数生物传感同时上颈，会叠加体积、功耗、发热与佩戴舒适度四重压力。CW-01 已重约 100 g，而 PetPace 大号项圈也是 100 g——两者合一会显著超过宠物的舒适佩戴阈值。</p>
+      </div>
+
+      <h4>本报告明确判定"未发现成熟产品"的类别</h4>
+      <ul>
+        <li><b>同时具备摄像头与心率/呼吸传感的项圈</b>——未发现</li>
+        <li><b>检测宠物触觉感受的设备</b>——未发现任何产品或研究，且 4.2 节论证其在颈部形态下不成立</li>
+        <li><b>宠物触觉转译工具</b>——未发现</li>
+        <li><b>面部触须或爪垫接触式传感器</b>——未发现（这可能是唯一能真正测量触觉的位置，但涉及福利与依从性问题）</li>
+      </ul>
+    </section>
+
+    <section id="s-synthesis">
+      <h2><span class="num">4</span>综合洞察</h2>
+
+      <h3 id="s-sy-core">4.1 核心判断</h3>
+      <p>把第 2、3 章合起来看，<b>三个通道的技术就绪度差异极大</b>，而产品的核心难点不在硬件，在于不要宣称做不到的事。</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:26%">产品能力</th><th style="width:18%">就绪度</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>摄像头记录环境影像</td><td><span class="badge b-strong">已就绪</span></td><td>1080P + EIS 防抖已量产（CW-01、PetCam）</td></tr>
+            <tr><td>心率 / 呼吸 / 体温 / 活动监测</td><td><span class="badge b-strong">已就绪</span></td><td>Dinbeat UNO 含 ECG 与呼吸频率；但精度需独立验证</td></tr>
+            <tr><td>发声监测</td><td><span class="badge b-strong">已就绪</span></td><td>Dinbeat UNO 已具备；可与环境噪声形成因果配对</td></tr>
+            <tr><td>记录"宠物所见"的影像</td><td><span class="badge b-mid">部分就绪</span></td><td>能记录环境，但帧率低于 CFF、视野不同、无嗅觉通道</td></tr>
+            <tr><td>摄像头 + 健康传感合一</td><td><span class="badge b-weak">未就绪</span></td><td>无任何产品做到；受体积/功耗/发热/舒适度四重约束</td></tr>
+            <tr><td>检测宠物触觉感受</td><td><span class="badge b-weak">不成立</span></td><td><b>传感器位置与感觉器官位置错配</b>，非工程可解</td></tr>
+            <tr><td>推断"感受"或作诊断</td><td><span class="badge b-weak">不成立</span></td><td>动物情绪体验不可直接测量（Mendl 2010）</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="s-sy-loop">4.2 颈部项圈的固有边界</h3>
+      <p>这是本版报告新增的核心分析，也是最重要的产品判断。</p>
+      <div class="callout risk">
+        <div class="ct">通道与传感器位置的根本错配</div>
+        <p>宠物的触觉感觉器官位于<b>面部（触须）与四肢末端（爪垫）</b>，而项圈佩戴在<b>颈部</b>。颈部项圈与触觉器官之间没有生理通路：</p>
+        <ul>
+          <li><b>项圈能做的</b>：通过惯性测量单元检测<b>身体运动事件</b>——抓挠、摩擦、甩头、碰撞、躺卧姿势变化。这些是触觉行为的<u>结果</u>，不是触觉<u>感受</u>本身。</li>
+          <li><b>项圈做不到的</b>：测得宠物被触碰时的感受、触须接触物体时的信息、爪垫的压力分布。这些发生的位置离项圈太远。</li>
+        </ul>
+        <p><b>因此产品措辞必须区分</b>：「检测与触觉相关的身体事件」（可验证、可交付）vs「检测触觉感受」（无法验证、会被证伪）。这与此前 v1.0 识别出的错误同构——当时是把视觉转译只做到颜色而遗漏了运动敏感度；这次的区别在于，那个是遗漏，这个在物理上就不可能。</p>
+      </div>
+      <div class="callout ok">
+        <div class="ct">若要真正测量触觉，唯一的路径</div>
+        <p>把传感器放到触觉器官所在的位置：面部触须区域的接触传感器，或爪垫压力传感。但这立刻引入两个新问题：① <b>福利与法律</b>——触须在德奥瑞受法律保护，任何接触或干扰触须的设计都需通过动物伦理审查；② <b>佩戴依从性</b>——宠物极难接受面部或足部长期佩戴设备。这两点使"检测触觉感受"在可预见的未来不具产品可行性。</p>
+      </div>
+
+      <h4>摄像头同样有位置问题</h4>
+      <p>项圈摄像头的朝向决定了它拍到的是"宠物前方或下方的地面"，而犬的视野远宽于此。结合 2.5 节的三个约束，摄像头的准确定位应是<b>「环境影像记录仪」</b>，而非"宠物视角相机"。这个定位差异同样影响可宣称的能力边界。</p>
+
+      <h3 id="s-sy-gap">4.3 证据落差：宣传与证据之间的距离</h3>
+      <p>本报告在核查中反复遇到同一个模式：<b>技术能力被当作效果证据使用。</b></p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:30%">常见宣称</th><th>证据现状</th></tr></thead>
+          <tbody>
+            <tr><td>"能监测心率、呼吸、体温"</td><td>功能存在可核实（Dinbeat UNO 最全）；<b>精度</b>被 AJVR 2024 独立研究质疑，厂商验证文献多为 "Initial"</td></tr>
+            <tr><td>"第一视角，从毛孩子视角出发"</td><td>厂商营销语言。技术上帧率低于猫 CFF、视野与宠物不同、无嗅觉通道</td></tr>
+            <tr><td>"检测宠物健康状态"</td><td>可检测<b>指标</b>；不能检测或诊断"健康状态"本身。需明确"提示"与"诊断"的界限</td></tr>
+            <tr><td>"检测触觉／情绪感受"</td><td>无任何产品或研究支持；颈部形态下物理不成立</td></tr>
+            <tr><td>"科学设计，为犬猫优化"</td><td>设计原则可能有科学依据（如二色视觉）；<b>效果</b>普遍缺乏第三方随机对照验证</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="s-sy-risk">4.4 风险与伦理</h3>
+      <ul>
+        <li><b>感觉器官保护（法律红线）。</b>犬的面部触须是独立感觉器官，出于美观修剪在德国、奥地利、瑞士被动物福利法认定为"暂时性截肢"并禁止。任何佩戴式设备的设计都必须避免压迫、摩擦或遮挡面部触须；项圈厂商应在结构设计上明确留出面部无干涉区域。<span class="badge b-strong">强</span></li>
+        <li><b>佩戴应激风险。</b>设备重量是真实的福利变量。目前带摄像头产品已重约 100 g，带多参数传感的大号项圈也约 100 g；两者合一将显著超重。应以体重比例设定上限并做佩戴适应性评估，而非仅看功能清单。</li>
+        <li><b>医疗越界风险。</b>消费级设备的心率、呼吸读数可能被主人当作健康判断依据。本报告重申：这<b>不构成兽医诊断依据</b>。若做健康提示，必须明确边界与转诊路径。Dinbeat 之所以走兽医专业级渠道，正是因为其数据需要专业解读。</li>
+        <li><b>摄像头隐私风险。</b>佩戴在宠物身上的摄像头会进入家庭空间。值得肯定的是，PetCam 的厂商将"不做高位广域监控、不侵入家庭隐私空间"作为明确设计原则——该风险已被产品方识别。</li>
+        <li><b>拟人化偏差风险。</b>主人容易把人类的感受投射给宠物。检索到关于拟人化与拟人中心主义如何影响伴侣动物生活质量判断的同行评审研究（<i>Animal Welfare</i>, Cambridge），提示这一风险已被学术界确认存在。<span class="badge b-mid">中</span>
+          <br><span class="refs">来源：<a href="https://www.cambridge.org/core/journals/animal-welfare/article/abs/anthropomorphism-and-anthropocentrism-as-influences-in-the-quality-of-life-of-companion-animals/32751CE3057E1290F429BED936CA70AD">Anthropomorphism and anthropocentrism as influences in the quality of life of companion animals. Animal Welfare (Cambridge)</a></span></li>
+        <li><b>证据的诚实性风险。</b>本报告本身即为 AI 辅助生成。在这样一个"厂商宣称多于独立验证"的领域，AI 生成内容若不加甄别地复述厂商话术，会放大而非缓解信息污染。这也是本报告坚持"灰区即排除"并逐条标注证据强度的原因。</li>
+      </ul>
+    </section>
+
+    <section id="s-conclusion">
+      <h2><span class="num">5</span>结论与建议</h2>
+
+      <h3>对产品方向的直接回答</h3>
+      <div class="callout">
+        <div class="ct">一句话结论</div>
+        <p>「摄像头 + 传感器项圈检测健康状况」<b>在技术上成立且已有两半成熟方案</b>，真正的机会在于把两者合一；但「检测视觉触觉感受」这一半，<b>视觉只能做到"环境影像 + 色彩近似"，触觉在颈部形态下物理不成立</b>——这部分必须从产品能力清单中移除，或改为诚实的能力描述。</p>
+      </div>
+
+      <h3>建议按此顺序推进</h3>
+      <ol>
+        <li><b>把"触觉感受"改写为"触觉相关身体事件"。</b>项圈可交付的是：抓挠频次与时长、甩头、摩擦、碰撞冲击、姿势改变。这些是 IMU 能测且可验证的。改写措辞不会削弱产品，反而让它站得住——这是本报告最重要的建议。</li>
+        <li><b>摄像头定位为"环境影像记录"，并诚实标注帧率边界。</b>不要在宣传中使用"还原宠物视角"。若要做色彩近似（犬二色视觉 429/555 nm 一级），可以在 App 中作为可选滤镜，并引用 Animal POV 式的局限声明。</li>
+        <li><b>健康传感对齐 Dinbeat UNO 的能力上限，但走消费级成本路线。</b>优先顺序：心率/HRV → 呼吸 → 体温 → 活动/姿势。发声监测值得优先纳入，因为它能与环境声学形成一对<b>可验证的因果配对</b>，而这正是第二份调研报告指出的、最有可测量证据链的通道。</li>
+        <li><b>把"摄像头 + 传感合一"当作核心技术攻关点，而非功能叠加。</b>四重约束（体积、功耗、发热、佩戴舒适度）需要系统级设计：考虑分体式（颈部传感 + 轻量摄像头）、间歇性摄像（非连续录制以省电降温）、或摄像头仅在事件触发时工作。参考 v1.0 报告中联合影像为 PetCam 做系统级功耗与可靠性设计的思路。</li>
+        <li><b>任何"提示"都要有对照，任何"感受"都不要宣称。</b>本报告识别出的最大行业问题是"把技术能力当效果证据"。若产品要主张健康提示的有效性，应准备自己的对照数据。这既是科学要求，也是在一个充斥厂商话术的市场中的差异化优势。</li>
+      </ol>
+
+      <h3>本报告的已知不足</h3>
+      <ul>
+        <li><b>通用网络搜索不可用</b>，产品侧调研依赖厂商官网直抓。因此<b>可能存在本报告未发现的、已同时具备摄像头与健康传感的新产品</b>。这是最重要的一条限制，建议后续用可用渠道复核 3.5 节的空白结论。</li>
+        <li>非系统性综述，未做 PRISMA 全流程登记与双人独立筛选。</li>
+        <li>CNKI、万方等中文数据库需机构登录，中文文献覆盖不完整。</li>
+        <li>多条厂商页面（Whistle、FitBark 正文、Sure Petcare Animo、AJVR 原文 PDF）未能取得内容，相关字段标注"未核实"而非填充推测值。</li>
+        <li>Glanville 等（2022）这一最贴近命题的研究，本报告<b>仅取得题录，未读到全文</b>；若要据以决策，应优先获取全文。</li>
+        <li>听觉与嗅觉的关键参数（犬猫听觉频率上限、嗅觉受体数量、犬视野范围）本次<b>未能取得同等强度的同行评审来源</b>，故未给出具体数值。</li>
+      </ul>
+    </section>
+
+    <section id="s-refs">
+      <h2><span class="num">参考文献</span></h2>
+      <p class="lede">以下为本报告实际取得并引用的来源。每条均标注类型；标注"仅题录"者表示本报告未能读取全文。</p>
+
+      <h3>A. 学界文献</h3>
+      <ol class="refs">
+        <li id="r1">Miller PE, Murphy CJ. <i>Vision in dogs.</i> J Am Vet Med Assoc. 1995;207(12):1623-34. 综述. <a href="https://pubmed.ncbi.nlm.nih.gov/7493905/">PMID 7493905</a></li>
+        <li id="r2">Coile DC, Pollitz CH, Smith JC. <i>Behavioral determination of critical flicker fusion in dogs.</i> Physiol Behav. 1989;45(6):1087-92. <a href="https://pubmed.ncbi.nlm.nih.gov/2813532/">PMID 2813532</a></li>
+        <li id="r3">Loop MS, Frey TJ. <i>Critical flicker frequency in monocularly deprived cats.</i> Behav Brain Res. 1982;6(2):185-94. <a href="https://pubmed.ncbi.nlm.nih.gov/7138645/">PMID 7138645</a>（正常猫单眼 CFF 58 Hz）</li>
+        <li id="r4">Loop MS, Frey TJ. <i>Critical flicker fusion in Siamese cats.</i> Exp Brain Res. 1981;43(1):65-8. <a href="https://pubmed.ncbi.nlm.nih.gov/7250258/">PMID 7250258</a></li>
+        <li id="r5">Loop MS, Millican CL, Thomas SR. <i>Photopic spectral sensitivity of the cat.</i> J Physiol. 1987;382:537-53. <a href="https://pubmed.ncbi.nlm.nih.gov/3625560/">PMID 3625560</a></li>
+        <li id="r6"><i>Photopigments of dogs and foxes and their implications for canid vision.</i> Vis Neurosci. 1993;10(1):173-80. <a href="https://pubmed.ncbi.nlm.nih.gov/8424924/">PMID 8424924</a></li>
+        <li id="r7"><b>Döring D, Bartels A, Erhard MH.</b> <i>[The importance of the tactile hairs in domestic dogs and the problem of trimming these from an animal welfare perspective].</i> Tierarztl Prax Ausg K Kleintiere Heimtiere. 2020;48(3):186-195. 德文，LMU 慕尼黑. <a href="https://pubmed.ncbi.nlm.nih.gov/32557495/">PMID 32557495</a></li>
+        <li id="r8"><b>de Sampaio MOB, Montiani-Ferreira F, Mello FR, et al.</b> <i>Supplemental vibrissal extensions as an alternative to improve the tactile sensitivity of blind dogs - a preliminary approach investigation.</i> Vet Res Commun. 2024;48(3):1907-1914. <a href="https://pubmed.ncbi.nlm.nih.gov/38427268/">PMID 38427268</a>（结果混合：碰撞增加、用时减少）</li>
+        <li id="r9"><b>Ebara S, Kumamoto K, Matsuura T, Mazurkiewicz JE, Rice FL.</b> <i>Similarities and differences in the innervation of mystacial vibrissal follicle-sinus complexes in the rat and cat: a confocal microscopic study.</i> J Comp Neurol. 2002;449(2):103-19. <a href="https://pubmed.ncbi.nlm.nih.gov/12115682/">PMID 12115682</a></li>
+        <li id="r10"><b>Pubols BH Jr.</b> <i>Factors affecting cutaneous mechanoreceptor response. I &amp; II.</i> J Neurophysiol. 1982;47(3):515-29, 530-42. <a href="https://pubmed.ncbi.nlm.nih.gov/6279791/">PMID 6279791</a></li>
+        <li id="r11">Mendl M, Burman OHP, Paul ES. <i>An integrative and functional framework for the study of animal emotion and mood.</i> Proc R Soc B. 2010;277(1696):2895-2904. <a href="https://pubmed.ncbi.nlm.nih.gov/20685706/">PMID 20685706</a></li>
+        <li id="r12"><i>Commercially available wearable health monitor in dogs is unreliable for tracking energy intake and expenditure.</i> Am J Vet Res. 2024;85(3). doi:10.2460/ajvr.23.10.0242. <a href="https://pubmed.ncbi.nlm.nih.gov/38109848/">PMID 38109848</a>（原文需订阅，仅题录）</li>
+        <li id="r13">Dickinson S, Feuerbacher EN. <i>Frustration and its impact on search and rescue canines.</i> Front Vet Sci. 2025;12:1546412. <a href="https://pubmed.ncbi.nlm.nih.gov/40125328/">PMID 40125328</a></li>
+        <li id="r14">Belda B, Enomoto M, Case BC, Lascelles BDX. <i>Initial evaluation of PetPace activity monitor.</i> Vet J. 2018;237:63-68.（经厂商列表获知，未独立取得全文）</li>
+        <li id="r15">Görisch E. <i>Comparison of the 'PetPace' smart health-monitoring collar to a Holter-ECG…</i> 学位论文，维也纳兽医大学，2020.（经厂商列表获知）</li>
+        <li id="r16">Rowlison de Ortiz A, et al. <i>Initial exploration of the discriminatory ability of the PetPace collar…</i> Front Pain Res. 2022;3:949877.（经厂商列表获知）</li>
+        <li id="r17">Sundman A, et al. <i>Long-term stress levels are synchronized in dogs and their owners.</i> Sci Rep. 2019;9:1-7.（经厂商列表获知）</li>
+        <li id="r18">Ortmeyer H, Katzel L. <i>Effects of Proximity between Companion Dogs and Their Caregivers on Heart Rate Variability Measures in Older Adults.</i> Int J Environ Res Public Health. 2020;17(8):2674.（经厂商列表获知）</li>
+        <li id="r19">Glanville C, Ortmeyer H, Hemsworth P, Hemsworth L, Coleman G. <i>Can owners recognize their dog's welfare state? Novel insights from a "Smart Collar".</i> Proc. 55th Congress of the ISAE, 2022, p.14. <b>仅题录</b>——未读到全文，未引述其结论。</li>
+        <li id="r20">Yaw AM, Gardella ME, Jacobs J, Hoffmann HM. <i>Light quality and time in shelter modulate behavior and cortisol in the domestic cat (Felis catus).</i> iScience. 2025;28(6):112709.（经厂商列表获知）</li>
+        <li id="r21">Aghapour M, Bockstahler B. <i>State of the Art and Future Prospects of Virtual and Augmented Reality in Veterinary Medicine: A Systematic Review.</i> Animals. 2022;12(24):3517.（v1.0 遗留，本版仅作背景）<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9774422/">PMC9774422</a></li>
+        <li id="r22">Pyasik M, Ciorli T, Pia L. <i>Full body illusion and cognition: A systematic review of the literature.</i> Neurosci Biobehav Rev. 2022;143:104926.（v1.0 遗留；本版产品已不做 VR，仅作"观察者体验 ≠ 动物状态"的界线依据）<a href="https://pubmed.ncbi.nlm.nih.gov/36341941/">PMID 36341941</a></li>
+        <li id="r23"><i>Anthropomorphism and anthropocentrism as influences in the quality of life of companion animals.</i> Animal Welfare (Cambridge University Press). <a href="https://www.cambridge.org/core/journals/animal-welfare/article/abs/anthropomorphism-and-anthropocentrism-as-influences-in-the-quality-of-life-of-companion-animals/32751CE3057E1290F429BED936CA70AD">摘要页</a></li>
+        <li id="r24"><i>The dog and rat olfactory receptor repertoires.</i> Genome Biology. 2005;6(10):R83. <a href="https://doi.org/10.1186/gb-2005-6-10-r83">DOI</a>（本报告未取得摘要，具体基因数未核实）</li>
+      </ol>
+
+      <h3>B. 产品与厂商资料</h3>
+      <ol class="refs" start="25">
+        <li id="r25"><b>Dinbeat UNO 官网</b>（含七项测量指标与兽医专业级定位）. <a href="https://dinbeat.com/">dinbeat.com</a>（查询日期 2026-10-02）</li>
+        <li id="r26">PetPace 官网. <a href="https://petpace.com/">petpace.com</a> ｜ <a href="https://petpace.com/specs/">技术规格页</a> ｜ <a href="https://petpace.com/scientific-publications/">论文列表页</a>（查询日期 2026-10-02）</li>
+        <li id="r27">Tractive 官网. <a href="https://tractive.com/">tractive.com</a>（查询日期 2026-10-02）</li>
+        <li id="r28">优克联 PetCam 宠物第一视角智能相机，CES 2026 发布报道. <a href="https://www.iotworld.com.cn/html/News/202601/ab7046720cc110b1.shtml">物联网世界</a>（2026-01-14）</li>
+        <li id="r29">庆视互联 CW-01 智能可穿戴宠物相机，北京君正方案解析. <a href="https://www.ingenic.com.cn/news-detail/nid-1089.html">ingenic.com.cn</a>（供应链侧物料）</li>
+        <li id="r30">Vbestlife 宠物项圈相机. <a href="https://www.amazon.co.jp/dp/B0DF5V5R9Q/">Amazon.co.jp</a></li>
+        <li id="r31">Kentfaith 4G POV 犬项圈相机. <a href="https://www.kentfaith.it/review_553380">Kentfaith 商品页</a></li>
+        <li id="r32">GoPro Fetch 犬用胸背带（停售）. <a href="https://www.coolblue.de/en/product/512008/gopro-fetch-dog-harness.html">Coolblue 商品页（标注 Never available again）</a></li>
+        <li id="r33">Furbo 360° Dog Camera 产品页（固定式，非可穿戴）. <a href="https://furbo.com/us/products/furbo-360-dog-camera">furbo.com</a></li>
+        <li id="r34">CATLINK 官网（含健康检测系统与多猫识别模组表述）. <a href="https://www.catlink.cn/">catlink.cn</a></li>
+        <li id="r35">PETKIT 官网. <a href="https://www.petkit.com/">petkit.com</a></li>
+        <li id="r36">腾讯视频「宠物TV」上线报道. <a href="https://vv.lmtw.com/mzs/content/detail/id/252345">流媒体网</a>（2026-03）</li>
+        <li id="r37">DOGTV 官方 Science 页. <a href="https://www.dogtv.com/science/">dogtv.com/science</a></li>
+        <li id="r38">Animal POV（支持 visionOS 的动物视觉模拟 App，含官方局限声明）. <a href="https://apps.apple.com/cn/app/animal-pov/id6756701337">App Store</a></li>
+        <li id="r39">SiiPet PawTrack AI Camera. <a href="https://siipet.com/products/pawtrack-camera">siipet.com</a></li>
+        <li id="r40">FitBark 官网. <a href="https://www.fitbark.com/">fitbark.com</a>（正文未加载，未列参数）</li>
+        <li id="r41">PetChatz 停运迹象（日本用户博客，2025-04-28）. <a href="https://omglife333.hatenablog.com/entry/2025/04/28/163129">链接</a>（<b>非官方公告</b>，故标注"疑似"）</li>
+      </ol>
+
+      <h3>C. 行业与背景资料</h3>
+      <ol class="refs" start="42">
+        <li id="r42">《2026 年中国宠物行业白皮书》发布报道（央视网，2026-01-05）. <a href="https://business.cctv.com/2026/01/05/ARTIdmv2AWmVeRVodaZYLOvQ260105.shtml">CCTV</a>（未取得全文）</li>
+        <li id="r43">Li Y, Qu JG, Fu H. <i>Me, pet, and robot: How home-based surveillance robot constructed different types of telepresence.</i> New Media &amp; Society（SAGE），2026. <a href="https://journals.sagepub.com/doi/10.1177/13548565251345603">期刊页</a></li>
+        <li id="r44">Insta360 + 农场猫第一视角（用户自制案例，非产品）. <a href="https://petapixel.com/2023/07/19/man-straps-insta360-to-his-farm-cat-after-wondering-what-he-gets-up-to/">PetaPixel</a>（2023-07-19）</li>
+      </ol>
+
+      <div class="callout warn">
+        <div class="ct">来源可信度提示</div>
+        <p>B、C 两类中的厂商页面、供应链物料与媒体报道，<b>均为当事方自述</b>，不构成独立验证。读者若需据以决策，应优先获取 A 类文献原文，尤其是 <b>#7（触须福利与法律）</b>、<b>#8（盲犬触须实验，结果混合）</b>、<b>#12（AJVR 反证）</b>与 <b>#19（Glanville 等）</b>。</p>
+      </div>
+    </section>
+
+    <section id="s-appendix">
+      <h2><span class="num">附录</span>检索策略与判据</h2>
+      <p class="lede">本节记录检索如何执行，以便读者判断覆盖度并复现。</p>
+
+      <h3>检索时间与渠道</h3>
+      <ul>
+        <li><b>检索截止</b>：2026-10-02。</li>
+        <li><b>学术渠道</b>：PubMed（含 MEDLINE 导出格式直取题录）、PMC、期刊官网。</li>
+        <li><b>产业渠道</b>：厂商官网与产品页直抓。</li>
+        <li><b class="changed">不可用渠道（本次重要限制）</b>：web_search 返回余额不足错误；Bing 中文/英文区域搜索结果与查询无关（返回英语等级考试、聚合物等无关内容）；Google Scholar、ACM DL、Cambridge Core、MDPI、ScienceDirect 返回 403/429。CNKI、万方需机构登录。</li>
+      </ul>
+
+      <h3>检索式（本版新增部分）</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:30%">主题</th><th>关键词组合</th></tr></thead>
+          <tbody>
+            <tr><td><b>触觉 · 触须</b></td><td><code>dog vibrissae tactile sensitivity</code> · <code>cat whisker tactile discrimination behaviour</code></td></tr>
+            <tr><td><b>触觉 · 机械感受器</b></td><td><code>dog somatosensory mechanoreceptor skin touch</code></td></tr>
+            <tr><td>犬猫视觉</td><td><code>dog colour vision dichromatic cone photoreceptor</code> · <code>"flicker fusion" AND (dog OR cat OR canine OR feline)</code></td></tr>
+            <tr><td>生理传感效度</td><td><code>dog heart rate variability stress wearable</code> · <code>accelerometer validity activity monitor dog behaviour classification</code></td></tr>
+            <tr><td>动物情绪推断边界</td><td><code>animal emotion mood integrative functional framework</code></td></tr>
+            <tr><td>主人判断能力</td><td><code>dog welfare state owner recognition smart collar</code></td></tr>
+            <tr><td>产品</td><td><code>pet collar camera health monitor heart rate</code>（结果不可用，改由厂商官网直抓）</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>纳入与排除标准</h3>
+      <div class="grid g2">
+        <div class="card">
+          <h4>纳入</h4>
+          <ul style="margin-bottom:0">
+            <li>同行评审论文、综述、系统综述优先；预印本需标注</li>
+            <li>2023 年之后发布者优先，奠基性经典研究不受此限</li>
+            <li>产品须为真实可购买或已正式发布，且有官方页面可查</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>排除</h4>
+          <ul style="margin-bottom:0">
+            <li>无法确认其存在来源的文献（灰区即排除）</li>
+            <li>纯营销稿、以新闻稿充当技术说明的材料</li>
+            <li>需登录而无法访问、无法核实内容的来源</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>产品参数采集规则</h3>
+      <ul>
+        <li>规格与价格以<b>厂商官方页面</b>为第一来源，电商信息仅作交叉参考。</li>
+        <li>厂商宣称一律标注为"厂商宣称"，与独立验证分栏陈述；无第三方验证者明确写"未见独立验证"。</li>
+        <li>价格标注币种与查询日期；未能查到可靠价格者写"未找到可靠来源"，不以估算值填充。</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer>
+    <p style="margin-bottom:10px"><b>AI 使用声明</b>　本报告的检索、来源整理与文稿起草由 AI 辅助研究工具完成，采用多路并行检索与交叉核验流程。所有引用来源均经过逐条可访问性核验；无法确认存在性的来源一律剔除。报告的选题、范围界定与最终判断由使用者负责。</p>
+    <p style="margin-bottom:10px"><b>免责声明</b>　本报告为信息综合与可行性评估，不构成兽医诊断或治疗建议。任何消费级宠物设备的心率、呼吸读数均不得作为临床决策依据；宠物健康问题请咨询执业兽医。</p>
+    <p style="margin-bottom:0"><b>报告版本</b>　v2.0（项圈多模态感知）· 生成于 2026-10-02 · 检索截止 2026-10-02 · 方法论：二手研究 + 证据分级 · 前一版 v1.0 主题为 VR 视角代入，方向已调整</p>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  var bar=document.getElementById('progress');
+  function onScroll(){
+    var h=document.documentElement;
+    var max=h.scrollHeight-h.clientHeight;
+    bar.style.width=(max>0?(h.scrollTop/max*100):0)+'%';
+  }
+  document.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+
+  var links=[].slice.call(document.querySelectorAll('nav.toc a'));
+  var targets=links.map(function(a){return document.querySelector(a.getAttribute('href'));}).filter(Boolean);
+  if(!('IntersectionObserver' in window)||!targets.length) return;
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(!e.isIntersecting) return;
+      links.forEach(function(l){l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id);});
+    });
+  },{rootMargin:'-10% 0px -75% 0px'});
+  targets.forEach(function(t){io.observe(t);});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "@camp/simulator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "带已知真值的仿真数据生成器 · DeviceAdapter 接口实现",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test test/",
+    "generate": "node src/cli.ts"
+  },
+  "dependencies": {
+    "@camp/core": "workspace:*"
+  }
+}

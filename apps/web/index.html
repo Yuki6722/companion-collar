@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<title>项圈 · 伴侣视角</title>
+<meta name="description" content="按证据等级可视化猫狗感知差异，并核查居家资源是否符合权威指南。" />
+
+<!--
+  无打包器方案：用浏览器原生 import map 解析 workspace 包的裸标识符。
+  tsc 编译后保留 `@camp/*` 裸导入，由这里的映射指到编译产物。
+  这样避免引入打包器及其原生二进制依赖（Vite 7 的 rolldown/lightningcss 在本环境安装失败）。
+-->
+<script type="importmap">
+{
+  "imports": {
+    "@camp/core": "./packages/core/src/index.js",
+    "@camp/simulator": "./packages/simulator/src/index.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+<script type="module" src="./apps/web/src/main.js"></script>
+</body>
+</html>

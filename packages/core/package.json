@@ -1,0 +1,14 @@
+{
+  "name": "@camp/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "感知参数模型 · 证据登记 · 五大支柱规则 · 分析层",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test test/"
+  }
+}

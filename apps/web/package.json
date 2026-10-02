@@ -1,0 +1,16 @@
+{
+  "name": "@camp/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "静态站：宠物档案 → 感知参数 → 视角对比 → 资源缺口",
+  "scripts": {
+    "dev": "node ../../scripts/dev-server.mjs",
+    "build": "node ../../scripts/build-web.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@camp/core": "workspace:*",
+    "@camp/simulator": "workspace:*"
+  }
+}

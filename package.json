@@ -1,0 +1,25 @@
+{
+  "name": "companion-collar",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "项圈 + 伴侣视角：3 天 Camp 交付。宠物档案（品种/体型/年龄）驱动的感知参数可视化 + 居家资源缺口核查。",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "check:claims": "node scripts/check-claims.mjs",
+    "verify": "pnpm typecheck && pnpm test && pnpm check:claims",
+    "dev": "pnpm --filter @camp/web dev",
+    "build": "pnpm --filter @camp/web build",
+    "preview": "pnpm --filter @camp/web preview",
+    "sim:generate": "pnpm --filter @camp/simulator generate"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "typescript": "^5.9.3"
+  }
+}

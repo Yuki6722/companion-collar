@@ -1,0 +1,13 @@
+# 统一换行，保证跨机器协作 diff 稳定
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.zip binary
+*.pdf binary
+
+# 三份研究报告作为文档统计
+docs/research/*.html linguist-documentation
+docs/research/*.md   linguist-documentation
