@@ -175,7 +175,8 @@ export interface CameraPreset {
 
 export const CAMERA_PRESETS: ReadonlyArray<CameraPreset> = [
   { id: 'overview', label: '全景', position: [6.1, 3.05, 6.25], target: [0.0, 0.9, -0.3] },
-  { id: 'living', label: '客厅', position: [-1.4, 1.75, 1.9], target: [2.6, 1.1, 0.2] },
+  // 客厅机位从沙发**前方**（东侧）看回来：既拍到沙发正面，也带出茶几、地毯与电视柜
+  { id: 'living', label: '客厅', position: [3.05, 1.55, -1.55], target: [1.15, 0.55, 0.6] },
   { id: 'kitchen', label: '厨房', position: [0.6, 1.75, 0.4], target: [-1.4, 1, 2.5] },
   { id: 'bedroom', label: '睡眠区', position: [-0.2, 1.8, 0.6], target: [-2.7, 0.8, -1.8] },
   { id: 'catZone', label: '猫区', position: [1.15, 1.45, -0.55], target: [2.6, 1.05, -2.25] },

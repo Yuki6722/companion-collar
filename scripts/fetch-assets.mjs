@@ -39,7 +39,6 @@ const HARD_LIMIT = 25e6;
  * 床架与落地灯用程序化几何做得足够像，而它们吃掉近三分之一预算。
  */
 const MODELS = [
-  'sofa_03',
   'coffee_table_round_01',
   'vintage_wooden_drawer_01',
   'potted_plant_02',

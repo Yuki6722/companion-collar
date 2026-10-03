@@ -46,12 +46,14 @@ export interface ModelPlacement {
  * `rotY` 依据各模型的原始朝向来定，最终以截图核对为准（见 docs/design/03-home-scene-stage1.md）。
  */
 export const MODEL_PLACEMENTS: ReadonlyArray<ModelPlacement> = [
-  { id: 'sofa', x: SOFA.x, z: SOFA.z, rotY: -Math.PI / 2, fitTo: SOFA.widthZ },
   { id: 'coffeeTable', x: COFFEE_TABLE.x, z: COFFEE_TABLE.z, rotY: 0, fitTo: 0.95 },
   { id: 'sideboard', x: TV_CABINET.x, z: TV_CABINET.z, rotY: -Math.PI / 2, fitTo: 1.6 },
   { id: 'plant', x: PLANT.x, z: PLANT.z, rotY: 0.5, fitTo: 1, decorative: true },
   { id: 'pendant', x: ISLAND.x, z: ISLAND.z, rotY: 0, fitTo: 0.6, y: 1.72, decorative: true },
 ];
+
+/** 沙发朝向：本地 +Z 转到世界 +X，也就是**正对东墙的电视**。 */
+const SOFA_FACING = Math.PI / 2;
 
 export interface FurnitureResult {
   /** 各扫描模型对应的程序化占位组；模型到货后隐藏 */
@@ -67,6 +69,7 @@ export function buildFurniture(root: THREE.Group, mats: MaterialLibrary): Furnit
   buildNightstand(g, mats);
   buildWardrobe(g, mats);
   buildModernShelf(g, mats);
+  buildModernSofa(g, mats);
   // 电视柜是「边柜」扫描模型的占位件：先用程序化柜体，模型到货后替换
   placeholders.set('sideboard', buildTvWall(g, mats));
   buildRug(g, mats);
@@ -349,8 +352,6 @@ function buildWallArt(parent: THREE.Group, mats: MaterialLibrary): void {
  */
 function buildPlaceholder(id: string, mats: MaterialLibrary): THREE.Group | null {
   switch (id) {
-    case 'sofa':
-      return placeholderSofa(mats);
     case 'coffeeTable':
       return placeholderCoffeeTable(mats);
     case 'plant':
@@ -358,40 +359,96 @@ function buildPlaceholder(id: string, mats: MaterialLibrary): THREE.Group | null
     case 'pendant':
       return placeholderPendant(mats);
     // sideboard 的占位件就是程序化的电视柜（见 buildTvWall）；
-    // 置物架是程序化常驻件（见 buildModernShelf），不是占位件
+    // 沙发与置物架是程序化常驻件（见 buildModernSofa / buildModernShelf），不是占位件
     default:
       return null;
   }
 }
 
-function placeholderSofa(mats: MaterialLibrary): THREE.Group {
+/**
+ * 现代简约布艺沙发（程序化常驻件）。
+ *
+ * 为什么不用 CC0 扫描件：库里的四个沙发（`sofa_03` 深色木框 + 织锦靠垫、
+ * `Sofa_01` 奶油色雕花腿、`sofa_02` 黑皮切斯特菲尔德、`painted_wooden_sofa` 灰漆木长凳）
+ * 全是复古款，与这套浅橡木/柚木的柜体放不到一起。沙发形体是「低矮方正的软体块」，
+ * 程序化能把它控制到与柜体同一套语言：米灰布面、方正的座块与靠垫、细金属脚。
+ *
+ * 本地朝向：**前面朝 +Z**，再绕 Y 转 `SOFA_FACING`（+90°）正对东墙电视。
+ */
+function buildModernSofa(parent: THREE.Group, mats: MaterialLibrary): void {
   const g = group('sofa');
-  const cloth = mats.plain('sofaFabric');
-  const wood = mats.plain('woodWarm');
-  const depth = SOFA.depthX;
-  const width = SOFA.widthZ;
+  const fabric = mats.plain('sofaFabric');
+  const legMat = mats.plain('metalDark');
+  const pillowA = mats.plain('cushion');
+  const pillowB = mats.plain('rug');
 
-  addMesh(g, roundedBox(depth, 0.24, width, 0.06, cloth), 0, 0.3, 0, { name: 'sofa-seat' });
-  addMesh(g, roundedBox(0.22, 0.62, width, 0.06, cloth), -depth / 2 + 0.11, 0.5, 0, { name: 'sofa-back' });
-  for (const dz of [-width / 2 + 0.11, width / 2 - 0.11]) {
-    addMesh(g, roundedBox(depth - 0.06, 0.5, 0.22, 0.06, cloth), 0, 0.45, dz, { name: 'sofa-arm' });
-  }
+  const widthX = SOFA.widthZ; // 2.15：本地 X 是沙发宽度，旋转后沿世界 Z
+  const depthZ = SOFA.depthX; // 0.90：本地 Z 是坐深，旋转后沿世界 X
+  const halfW = widthX / 2;
+
+  // 细金属脚（低矮款：脚高 0.12，整体重心低）
   for (const [dx, dz] of [
-    [-depth / 2 + 0.08, -width / 2 + 0.1],
-    [depth / 2 - 0.08, -width / 2 + 0.1],
-    [-depth / 2 + 0.08, width / 2 - 0.1],
-    [depth / 2 - 0.08, width / 2 - 0.1],
+    [-halfW + 0.14, -depthZ / 2 + 0.12],
+    [halfW - 0.14, -depthZ / 2 + 0.12],
+    [-halfW + 0.14, depthZ / 2 - 0.12],
+    [halfW - 0.14, depthZ / 2 - 0.12],
   ] as const) {
-    addMesh(g, new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.02, 0.14, 10), wood), dx, 0.07, dz, {
+    addMesh(g, new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.12, 14), legMat), dx, 0.06, dz, {
       name: 'sofa-leg',
     });
   }
-  // 靠垫
-  const cushion = mats.plain('cushion');
-  for (const dz of [-0.55, 0.55]) {
-    addMesh(g, roundedBox(0.22, 0.3, 0.34, 0.07, cushion), 0.1, 0.55, dz, { name: 'sofa-cushion', rotY: dz * 0.2 });
+
+  // 基座：方正的一块，前面略收，形成「悬浮」观感
+  addMesh(g, roundedBox(widthX, 0.2, depthZ, 0.03, fabric), 0, 0.22, 0.015, { name: 'sofa-base' });
+
+  // 座垫三块：留出细缝，是现代款的标志性做法
+  for (const [i, dx] of [-0.7, 0, 0.7].entries()) {
+    addMesh(
+      g,
+      roundedBox(0.68, 0.17, depthZ - 0.14, 0.055, fabric),
+      dx,
+      0.4,
+      0.05 + (i === 1 ? 0.01 : 0),
+      { name: `sofa-seat-${i}` },
+    );
   }
-  return g;
+
+  // 靠背：矮而平的一块，高度只到 0.74
+  addMesh(g, roundedBox(widthX, 0.42, 0.16, 0.03, fabric), 0, 0.53, -depthZ / 2 + 0.08, {
+    name: 'sofa-back',
+  });
+  // 靠背垫三块，微微后仰（比默认直立更像现代款的松散靠垫）
+  for (const [i, dx] of [-0.7, 0, 0.7].entries()) {
+    const cushion = addMesh(
+      g,
+      roundedBox(0.66, 0.34, 0.15, 0.055, fabric),
+      dx,
+      0.54,
+      -depthZ / 2 + 0.22,
+      { name: `sofa-back-cushion-${i}` },
+    );
+    cushion.rotation.x = -0.1;
+  }
+
+  // 扶手：与座面齐平的矮方块
+  for (const sx of [-1, 1]) {
+    addMesh(
+      g,
+      roundedBox(0.18, 0.3, depthZ, 0.03, fabric),
+      sx * (halfW - 0.09),
+      0.47,
+      0.015,
+      { name: 'sofa-arm' },
+    );
+  }
+
+  // 两只抱枕：一深一浅，避免整块布面太平
+  addMesh(g, roundedBox(0.4, 0.36, 0.14, 0.07, pillowA), -0.62, 0.62, -0.2, { name: 'sofa-pillow-a' });
+  addMesh(g, roundedBox(0.36, 0.32, 0.13, 0.07, pillowB), 0.66, 0.6, -0.2, { name: 'sofa-pillow-b' });
+
+  g.position.set(SOFA.x, 0, SOFA.z);
+  g.rotation.y = SOFA_FACING;
+  parent.add(g);
 }
 
 function placeholderCoffeeTable(mats: MaterialLibrary): THREE.Group {

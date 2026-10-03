@@ -78,7 +78,6 @@ check(
   (first.slots?.placeholdersLeft ?? 0) === 0,
   `placeholdersLeft=${first.slots?.placeholdersLeft}`,
 );
-check('沙发槽位是真模型', first.slots?.sofa === 'model', String(first.slots?.sofa));
 check('边柜槽位是真模型', first.slots?.sideboard === 'model', String(first.slots?.sideboard));
 
 if (agitated) {

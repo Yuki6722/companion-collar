@@ -24,6 +24,15 @@
 - `apps/web/public/styles.css`、`scripts/dev-server.mjs` 的 `POST /__selftest` 端点（仅本地预览）。
 
 ### Changed
+- **家具风格统一为现代简约**（截图核对后逐件替换，取舍记录见设计文档 §4）：
+  - 边柜：`painted_wooden_cabinet`（做旧白 + 锈迹）→ `vintage_wooden_drawer_01`（柚木抽屉柜）；
+  - 置物架：`Shelf_01`（风化灰蓝金属）→ 程序化浅橡木开架（薄侧板 + 薄隔板 + 无背板）；
+  - 沙发：`sofa_03`（深色木框 + 织锦靠垫）→ 程序化现代低矮布艺款（米灰亚麻、方正座块、
+    细金属脚），并**正对东墙电视**（原先朝向反了，沙发是背对电视的）；
+  - CC0 库里没有现代款沙发与开架，因此这两件改为程序化：**扫描件负责材质真实，程序化负责风格可控**。
+  - 织纹按物件尺寸调强度：同一个 256px 织纹贴图铺在 2 m 宽的沙发上会读成「灯芯绒」，
+    现按面宽压低法线强度与织格尺寸（沙发/床品/地毯/猫毯分别取值）。
+- 资产总量 13.09 → **10.56 MB**（少两个扫描模型目录）；客厅机位改到沙发前方，能拍到沙发正面。
 - `apps/web` 从单页骨架改为**两屏 + hash 路由**：家居场景 / 工程自检；骨架自检内容迁移到 `screens/status.ts`。
 - `scripts/build-web.mjs` 新增 three vendoring：把 `three.module.js`/`three.core.js` 与**递归解析**出的
   addon 依赖复制到 `dist/vendor/three/`，由 import map 指向同源路径（运行时零外链）。

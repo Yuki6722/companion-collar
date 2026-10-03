@@ -161,11 +161,19 @@ export class MaterialLibrary {
         roughness: 0.72,
         metalness: 0,
       });
-    const cloth = (color: string, seed: number, thread = 4): THREE.MeshStandardMaterial =>
+    const cloth = (
+      color: string,
+      seed: number,
+      thread = 4,
+      normalScale = 1,
+    ): THREE.MeshStandardMaterial =>
       new THREE.MeshStandardMaterial({
         ...maps(fabricTextures(color, seed, 256, thread)),
         roughness: 0.94,
         metalness: 0,
+        // 织纹的起伏强度按物件尺寸调：同一个 256px 贴图铺在 2 m 宽的沙发上，
+        // 默认强度会读成「灯芯绒」，所以沙发/床品这类大面要压低法线强度与织格尺寸。
+        normalScale: new THREE.Vector2(normalScale, normalScale),
       });
 
     switch (id) {
@@ -176,15 +184,16 @@ export class MaterialLibrary {
       case 'woodDark':
         return wood('#6b4a30', '#43291a', 203);
       case 'sofaFabric':
-        return cloth('#9aa39b', 204, 5);
+        // 米灰色亚麻：与浅橡木、柚木柜体共处一套语言
+        return cloth('#b3ab9c', 204, 2, 0.35);
       case 'rug':
-        return cloth('#cdbba3', 205, 6);
+        return cloth('#cdbba3', 205, 4, 0.85);
       case 'bedding':
-        return cloth('#eee7dd', 206, 5);
+        return cloth('#eee7dd', 206, 3, 0.45);
       case 'cushion':
-        return cloth('#c8a27a', 207, 5);
+        return cloth('#c8a27a', 207, 3, 0.6);
       case 'catCarpet':
-        return cloth('#e0d8c8', 208, 3);
+        return cloth('#e0d8c8', 208, 2, 0.5);
       case 'metal':
         return new THREE.MeshStandardMaterial({
           ...maps(metalTextures(209, 256)),

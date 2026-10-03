@@ -9,7 +9,6 @@
 
 | 类型 | 资产 | 来源页 | 包含文件 | 说明 |
 |---|---|---|---|---|
-| model | `sofa_03` | [sofa_03](https://polyhaven.com/a/sofa_03) | sofa_03_1k.gltf<br>sofa_03.bin<br>textures/sofa_03_nor_gl_1k.jpg<br>textures/sofa_03_diff_1k.jpg<br>textures/sofa_03_rough_1k.jpg<br>textures/sofa_03_diff_1k.jpg | 5 个附属文件（缓冲 + 贴图） |
 | model | `coffee_table_round_01` | [coffee_table_round_01](https://polyhaven.com/a/coffee_table_round_01) | coffee_table_round_01_1k.gltf<br>coffee_table_round_01.bin<br>textures/coffee_table_round_01_nor_gl_1k.jpg<br>textures/coffee_table_round_01_diff_1k.jpg<br>textures/coffee_table_round_01_arm_1k.jpg | 4 个附属文件（缓冲 + 贴图） |
 | model | `vintage_wooden_drawer_01` | [vintage_wooden_drawer_01](https://polyhaven.com/a/vintage_wooden_drawer_01) | vintage_wooden_drawer_01_1k.gltf<br>vintage_wooden_drawer_01.bin<br>textures/vintage_wooden_drawer_01_nor_gl_1k.jpg<br>textures/vintage_wooden_drawer_01_diff_1k.jpg<br>textures/vintage_wooden_drawer_01_arm_1k.jpg | 4 个附属文件（缓冲 + 贴图） |
 | model | `potted_plant_02` | [potted_plant_02](https://polyhaven.com/a/potted_plant_02) | potted_plant_02_1k.gltf<br>potted_plant_02.bin<br>textures/potted_plant_02_pot_nor_gl_1k.jpg<br>textures/potted_plant_02_pot_diff_1k.jpg<br>textures/potted_plant_02_pot_rough_1k.jpg<br>textures/potted_plant_02_leaves_nor_gl_1k.jpg<br>textures/potted_plant_02_leaves_diff_1k.jpg<br>textures/potted_plant_02_leaves_rough_1k.jpg | 7 个附属文件（缓冲 + 贴图） |
