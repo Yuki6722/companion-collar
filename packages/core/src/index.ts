@@ -13,3 +13,5 @@ export * from './drift.ts';
 export * from './profile.ts';
 export * from './home.ts';
 export * from './claims.ts';
+// 行为层：词汇、证据参数登记表、节律、时间线引擎（含猫的锚点能力契约）
+export * from './behavior/index.ts';
