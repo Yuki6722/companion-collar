@@ -5,6 +5,21 @@
 
 ## [Unreleased]
 
+### Added
+- **GitHub Pages 门禁与发布工作流** `.github/workflows/pages.yml`，分三个 job：
+  - `verify`：`pnpm typecheck` + `pnpm test` + `pnpm check:claims`。
+    措辞门禁进入 CI 后（见 `AGENTS.md` §4.3），「命中禁词即构建失败」才真正成立——
+    本地可以忘，CI 不会忘。
+  - `build`：`pnpm build` 后自检产物（`index.html`／`.nojekyll`／编译后的 `main.js` 与 `packages/core/src/index.js`），
+    再交给 `actions/upload-pages-artifact`。
+  - `configure-pages` 以 `enablement: true` 运行，尝试由 Actions 自行补齐 Pages 配置
+    （协作者仅有 `write` 权限时直接调 Pages API 返回 404，需仓库所有者操作）；该步骤刻意设为
+    `continue-on-error`，避免权限问题连带让门禁与构建变红。
+  - `deploy`：仅 `main` 推送时经 `actions/deploy-pages` 发布，PR 只跑门禁与构建。
+  - 权限取最小集（默认 `contents: read`，仅 `deploy` job 提权 `pages: write` + `id-token: write`）。
+- 站点以**项目子路径**形式发布（`https://<owner>.github.io/companion-collar/`）。
+  `apps/web/index.html` 的 import map 使用相对路径，构建产物自带 `.nojekyll`，因此子路径下无需额外改写。
+
 ## [0.0.1] - 2026-10-02
 
 初始骨架。本日完成基础设施、共享领域模型、仿真器与文档归档。

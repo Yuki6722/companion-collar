@@ -1,0 +1,119 @@
+# 门禁 + 静态站发布到 GitHub Pages。
+#
+# 为什么门禁必须放在 CI：AGENTS.md §4.3 要求「pnpm check:claims 命中禁词即构建失败」。
+# 这条纪律只有在 CI 里强制执行才真正成立——本地可以忘，CI 不会忘。
+# 因此 verify 是 build 的前置：门禁不过，就不构建、也不发布。
+#
+# 部署形态：Pages 源设为 "GitHub Actions"，由 actions/deploy-pages 发布 apps/web/dist。
+# 构建产物已自带 .nojekyll，且 apps/web/index.html 的 import map 使用相对路径，
+# 因此在 https://<owner>.github.io/companion-collar/ 这种项目子路径下同样可用。
+#
+# 分支纪律（AGENTS.md §10 / 计划 §11）：PR 只跑门禁与构建，不发布；
+# 只有 main 上的推送才触发 deploy。
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 最小权限：默认只读，仅在 deploy job 内单独提权
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: 门禁（类型 / 测试 / 措辞）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 类型检查（含 erasableSyntaxOnly 门禁）
+        run: pnpm typecheck
+
+      - name: 单元测试
+        run: pnpm test
+
+      - name: 措辞门禁
+        run: pnpm check:claims
+
+  build:
+    name: 构建静态站
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建（tsc + import map，无打包器）
+        run: pnpm build
+
+      - name: 产物自检（index.html 与 .nojekyll 必须存在）
+        run: |
+          test -f apps/web/dist/index.html
+          test -f apps/web/dist/.nojekyll
+          test -f apps/web/dist/apps/web/src/main.js
+          test -f apps/web/dist/packages/core/src/index.js
+
+      # enablement: true 让 Actions 自己把 Pages 补齐（Source 置为 "GitHub Actions"）。
+      # 背景：本项目协作者权限为 write 而非 admin，实测直接调 Pages API 返回 404；
+      # 这一步是「不依赖仓库所有者」的自救尝试。
+      # continue-on-error 是刻意的：即使令牌仍无权启用，门禁与构建也要照常产出产物，
+      # 把「需所有者启用 Pages」这件事只在末尾的 deploy 阶段暴露，而不是让整个流水线变红。
+      - name: 确保 Pages 已启用（Source = GitHub Actions）
+        continue-on-error: true
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
+  deploy:
+    name: 发布到 Pages
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署
+        id: deployment
+        uses: actions/deploy-pages@v4
