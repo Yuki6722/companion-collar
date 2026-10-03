@@ -417,6 +417,11 @@ export class HomeScene {
     return this.statusVisible;
   }
 
+  /** 自检用：猫头顶状态标签的当前文案。 */
+  catLabelText(): string {
+    return this.catStatus?.text() ?? '';
+  }
+
   /**
    * 切换到机位预设。
    *

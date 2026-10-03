@@ -30,6 +30,14 @@ export interface SceneSnapshot {
   catAnchor?: string;
   catHour?: number;
   catIncident?: string | null;
+  /**
+   * 猫头顶状态标签的当前文案。
+   *
+   * 为什么把它放进快照：状态标签是**渲染层**的产出，而它的内容来自行为词汇表。
+   * 只断言 `catActivity` 无法发现「标签没挂上」或「标签没跟着突发切换」这两类故障，
+   * 而这两类恰好是肉眼可见、却最难在无头环境里自动发现的问题。
+   */
+  catLabel?: string;
   issues: string[];
   /** 槽位状态：区分「资产没到」与「资产到了没换上」 */
   slots?: Record<string, string | number>;
@@ -126,6 +134,7 @@ export function summarize(snap: SceneSnapshot): string {
     `catAnchor=${snap.catAnchor ?? 'none'}`,
     `catHour=${Number(snap.catHour ?? 0).toFixed(2)}`,
     `catIncident=${snap.catIncident ?? 'none'}`,
+    `catLabel=${snap.catLabel || 'none'}`,
     `tailFreq=${Number(snap.catPose.tailFreq ?? 0).toFixed(2)}`,
     `earFlatten=${Number(snap.catPose.earFlatten ?? 0).toFixed(2)}`,
     `pupil=${Number(snap.catPose.pupilScale ?? 0).toFixed(2)}`,

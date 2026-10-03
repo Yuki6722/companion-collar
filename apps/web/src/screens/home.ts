@@ -184,6 +184,7 @@ export function mountHomeScreen(host: HTMLElement): () => void {
           catAnchor: behavior?.anchorId ?? 'none',
           catHour: behavior ? Number(behavior.hourOfDay.toFixed(2)) : 0,
           catIncident: behavior?.incident ?? null,
+          catLabel: scene?.catLabelText() ?? '',
           issues: (report?.issues ?? []).map((i) => `${i.id}: ${i.reason}`),
           slots: {
             sideboard: scene?.slotState('sideboard') ?? 'none',

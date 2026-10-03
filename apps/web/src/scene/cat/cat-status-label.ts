@@ -102,6 +102,14 @@ export class CatStatusLabel {
     this.root.style.transform = `translate(-50%, -100%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
   }
 
+  /** 便于自检断言：当前文案（`主标题 · 副标题`），未设置时为空串。 */
+  text(): string {
+    const name = this.nameNode.textContent ?? '';
+    const detail = this.detailNode.textContent ?? '';
+    if (!name) return '';
+    return detail ? `${name} · ${detail}` : name;
+  }
+
   dispose(): void {
     this.root.remove();
   }

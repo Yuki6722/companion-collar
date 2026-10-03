@@ -151,6 +151,21 @@ if (withIncident) {
   console.log('  · 日志里没有突发快照，跳过突发断言');
 }
 
+// ---------------------------------------------------------------- 头顶状态标签
+
+// 徽章文本里带 `catLabel=`（见 selftest.ts 的 summarize），未挂载时为 none。
+const withLabel = records.find((r) => typeof r.catLabel === 'string' && r.catLabel !== 'none');
+if (withLabel) {
+  check('猫头顶状态标签已挂载且有文案', withLabel.catLabel.length > 0, withLabel.catLabel);
+  check(
+    '状态标签在突发期间切成动作名',
+    !withIncident || (withIncident.catLabel ?? '').includes('呼吸'),
+    `catLabel=${withIncident?.catLabel}`,
+  );
+} else {
+  console.log('  · 日志里没有状态标签字段，跳过（可能是旧版页面）');
+}
+
 if (failures.length > 0) {
   console.error(`\n✗ 场景自检未通过：${failures.length} 项`);
   process.exit(1);
