@@ -27,6 +27,7 @@ export type {
   CatIncidentKind,
   CatPosture,
   IncidentDef,
+  IncidentMotion,
 } from './vocabulary.ts';
 
 // 参数登记表与操作化常量

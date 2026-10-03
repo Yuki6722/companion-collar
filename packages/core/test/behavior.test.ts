@@ -426,6 +426,55 @@ test('突发边界文案：必须明确「不构成」，且禁词只能出现�
   assert.match(INCIDENT_BOUNDARY_NOTE, /不构成/);
 });
 
+test('突发动作配方必须让每种突发「在画面上看得出来」', () => {
+  // 背景：第一版突发只换姿势、没有身体动作，于是「抽搐」在画面上就是一只趴着不动的猫
+  // ——标签写着抽搐、身体毫无变化。这条断言就是防止那种情况再发生：
+  // 每种突发至少要通过一个通道产生可见变化。
+  const TREMOR_VISIBLE = 0.004; // 米：约躯干高度的 4%，低于此读不出抖动
+  const BREATH_VISIBLE = 0.004; // 米：呼吸幅度相对基准的净变化
+  const RIGID_VISIBLE = 0.4;
+
+  for (const kind of INCIDENT_KINDS) {
+    const m = INCIDENT_DEFS[kind].motion;
+    assert.ok(m, `突发 ${kind} 缺少动作配方`);
+    const channels = {
+      tremor: m.tremorAmp * 1.5 >= TREMOR_VISIBLE,
+      breath: Math.abs(m.breathAmpAdd) >= BREATH_VISIBLE || m.breathFreqScale <= 0.85 || m.breathFreqScale >= 1.5,
+      rigidity: m.rigidity >= RIGID_VISIBLE,
+    };
+    assert.ok(
+      channels.tremor || channels.breath || channels.rigidity,
+      `突发「${INCIDENT_DEFS[kind].label}」三个通道都不够可见 —— 点了会像没反应：${JSON.stringify(m)}`,
+    );
+  }
+});
+
+test('突发动作幅度不能大到「猫在膨胀」', () => {
+  // 躯干半径约 0.1 m、体长仅约 0.3 m。幅度取大一点更「明显」，但越线就变成别的动作了。
+  // 渲染层另有 MAX_BREATH_AMP 兜底，这里守住配方本身不给出离谱的数值。
+  for (const kind of INCIDENT_KINDS) {
+    const m = INCIDENT_DEFS[kind].motion;
+    assert.ok(m.tremorAmp <= 0.06, `突发「${INCIDENT_DEFS[kind].label}」抖动幅度 ${m.tremorAmp} m 过大`);
+    assert.ok(
+      m.breathAmpAdd <= 0.03 && m.breathAmpAdd >= -0.02,
+      `突发「${INCIDENT_DEFS[kind].label}」呼吸幅度增量 ${m.breathAmpAdd} m 越界`,
+    );
+    assert.ok(m.limbJitter <= 0.8, `突发「${INCIDENT_DEFS[kind].label}」四肢抽动过大`);
+    assert.ok(m.rigidity >= 0 && m.rigidity <= 1, `突发「${INCIDENT_DEFS[kind].label}」僵直系数应在 0–1`);
+    assert.ok(m.earFlatten >= 0 && m.earFlatten <= 1, `突发「${INCIDENT_DEFS[kind].label}」耳压系数应在 0–1`);
+  }
+});
+
+test('「僵直不动」与「抽搐」的表达方式必须相反', () => {
+  // 这是两个最容易被混为一谈的突发：一个靠**剧烈抖动**、一个靠**完全不动**。
+  // 若哪天有人把 freezing 也加上抖动，它就退化成了另一个「抽搐」。
+  const seizure = INCIDENT_DEFS.seizure.motion;
+  const freezing = INCIDENT_DEFS.freezing.motion;
+  assert.ok(seizure.tremorAmp > 0.02, '抽搐应有明显抖动');
+  assert.equal(freezing.tremorAmp, 0, '僵直不动不应有抖动');
+  assert.ok(freezing.rigidity > seizure.rigidity, '僵直不动的僵直程度应高于抽搐');
+});
+
 test('突发种类与定义一一对应', () => {
   for (const kind of INCIDENT_KINDS) {
     const def = INCIDENT_DEFS[kind];

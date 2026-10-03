@@ -166,6 +166,19 @@ if (withLabel) {
   console.log('  · 日志里没有状态标签字段，跳过（可能是旧版页面）');
 }
 
+// 突发必须**真的改变姿势参数**，否则就是「标签在报、身体没动」——
+// 这正是最初「点了抽搐没反应」的故障形态，必须由断言拦住。
+if (withIncident) {
+  const calmSnap = autoSnaps.find((r) => !r.catIncident) ?? first;
+  const breathDuring = withIncident.catPose.breathFreq ?? 0;
+  const breathBefore = calmSnap.catPose.breathFreq ?? 0;
+  check(
+    '突发期间姿势参数确实被改变',
+    breathDuring > breathBefore * 1.3,
+    `breathFreq ${breathBefore}（平常）→ ${breathDuring}（呼吸急促中）`,
+  );
+}
+
 if (failures.length > 0) {
   console.error(`\n✗ 场景自检未通过：${failures.length} 项`);
   process.exit(1);

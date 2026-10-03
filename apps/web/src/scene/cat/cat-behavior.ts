@@ -12,7 +12,7 @@
  *   2. 突发演示由用户手动触发或仿真注入，只演示**动作**，不命名任何状况；
  *   3. 时间线的推进由 wall clock 推导——后台降帧不会让猫「卡在半路」。
  */
-import { ACTIVITY_DEFS, CAT_ANCHOR_LABELS, activityAt, incidentAt } from '@camp/core';
+import { ACTIVITY_DEFS, CAT_ANCHOR_LABELS, INCIDENT_DEFS, activityAt, incidentAt } from '@camp/core';
 import type {
   CatActivityId,
   CatBehaviorSegment,
@@ -174,6 +174,11 @@ export class CatBehaviorRuntime {
       // 只有头部动作能把它们区分开。
       this.controller.snapPoseFor(seg.posture, true);
       this.controller.setActivityMotion(ACTIVITY_MOTION[seg.activity] ?? null);
+      // 突发必须给出一套**身体动作**，否则「抽搐」在画面上就是一只趴着不动的猫
+      // （标签写着抽搐、身体毫无变化——这正是「点了突发没反应」的原因）。
+      this.controller.setIncidentMotion(
+        seg.incidentKind ? INCIDENT_DEFS[seg.incidentKind]?.motion ?? null : null,
+      );
     }
 
     if (this.plan) {

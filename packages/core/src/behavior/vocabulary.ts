@@ -230,7 +230,65 @@ export interface IncidentDef {
   demoDurationS: number;
   /** 触发后强制移动到哪类锚点；null 表示原地 */
   anchorCapability: CatAnchorCapability | null;
+  /**
+   * **渲染动作配方**：让突发在画面上真的看得出来。
+   *
+   * ⚠️ 为什么必须有这个字段：突发覆盖层只把活动换成 `resting`/`hiding`，
+   * 如果只给一个普通趴卧姿势，那么「抽搐」在画面上就是**一只趴着不动的猫**——
+   * 标签写着「抽搐」而身体毫无变化，这正是「点了没反应」的根本原因。
+   * 突发必须在姿态之外给出一套**身体动作**，两者缺一不可。
+   *
+   * 全部为 `0` 表示「刻意几乎不动」（`freezing` 就靠这个与其它状态区分：
+   * 它要传达的恰恰是「长时间静止」，因此不能靠抖动来表达）。
+   */
+  motion: IncidentMotion;
 }
+
+/**
+ * 突发的身体动作幅度。渲染层按这些值驱动抖动 / 呼吸 / 抽动。
+ *
+ * ⚠️ 边界：这些是**动画幅度**，不是任何生理量的测量值，也不表示猫在感受什么。
+ * 它们的作用只有一个——让「抽搐」「呼吸急促」这类动作在画面上可被识别。
+ *
+ * ⚠️ 取值纪律：`breathAmpAdd` 与 `tremorAmp` 都是**米**，而躯干半径只有约 0.1 m、
+ * 体长仅约 0.3 m。幅度取大一点看起来「更明显」，但会立刻变成「猫在膨胀」而不是
+ * 「猫在急促呼吸」。渲染层另有一道上限（`MAX_BREATH_AMP`）兜底。
+ */
+export interface IncidentMotion {
+  /** 躯干高频抖动幅度（米）。抽搐的主要表现 */
+  tremorAmp: number;
+  /** 抖动频率（次/秒） */
+  tremorFreq: number;
+  /** 四肢抽动幅度（弧度） */
+  limbJitter: number;
+  /** 躯干随机偏转幅度（弧度） */
+  bodyTwist: number;
+  /** 呼吸幅度增量（米）：直接加在基准 `breathAmp` 上，**不是倍数** */
+  breathAmpAdd: number;
+  /** 呼吸频率倍数（1 = 不改变） */
+  breathFreqScale: number;
+  /** 耳位后压增量（0–1） */
+  earFlatten: number;
+  /**
+   * 肌肉僵直程度（0–1）：1 表示四肢完全僵直、身体拉平。
+   *
+   * `freezing` 用它表态——静止本身要与「放松趴着」有区别，
+   * 靠的是**僵直**而不是动作。
+   */
+  rigidity: number;
+}
+
+/** 全身僵直：freezing 用它与「放松趴着」区分开。 */
+const RIGID: IncidentMotion = {
+  tremorAmp: 0,
+  tremorFreq: 0,
+  limbJitter: 0,
+  bodyTwist: 0,
+  breathAmpAdd: 0,
+  breathFreqScale: 1,
+  earFlatten: 0.85,
+  rigidity: 1,
+};
 
 export const INCIDENT_DEFS: Readonly<Record<CatIncidentKind, IncidentDef>> = {
   seizure: {
@@ -240,6 +298,20 @@ export const INCIDENT_DEFS: Readonly<Record<CatIncidentKind, IncidentDef>> = {
     posture: 'lying',
     demoDurationS: 15,
     anchorCapability: null,
+    motion: {
+      // 关键就是「高频 + 大幅度抖动」：频率取 11 Hz 是为了明显快于呼吸（0.42 Hz）与步态，
+      // 一眼就能与「趴着不动」区分。幅度 0.038 m 约为躯干高度（0.115 m）的 1/3，
+      // 是「全身在抽」与「整体位移过大变成瞬移」之间的折中。
+      tremorAmp: 0.038,
+      tremorFreq: 11,
+      limbJitter: 0.55,
+      bodyTwist: 0.07,
+      // 呼吸只略微加快：抽搐的识别特征是抖动，不是「胸廓大幅起伏」
+      breathAmpAdd: 0.006,
+      breathFreqScale: 1.8,
+      earFlatten: 0.6,
+      rigidity: 0,
+    },
   },
   'labored-breathing': {
     kind: 'labored-breathing',
@@ -248,6 +320,20 @@ export const INCIDENT_DEFS: Readonly<Record<CatIncidentKind, IncidentDef>> = {
     posture: 'crouching',
     demoDurationS: 60,
     anchorCapability: null,
+    motion: {
+      // 这个突发**不靠抖动**表达，靠呼吸被放大。
+      // 但幅度不能用倍数：基准 breathAmp 只有 0.028–0.034 m，乘 3.4 倍会让躯干
+      // 缩放 15% 以上——那是「猫在膨胀」而不是「在喘」。因此给出的是**叠加量**，
+      // 且 0.016 m 已让胸廓变形接近翻倍，足够读出急促。
+      tremorAmp: 0.002, // 一点轻微颤动，避免读成「模型卡住了」
+      tremorFreq: 3.5,
+      limbJitter: 0.02,
+      bodyTwist: 0.005,
+      breathAmpAdd: 0.016,
+      breathFreqScale: 2.6,
+      earFlatten: 0.45,
+      rigidity: 0,
+    },
   },
   freezing: {
     kind: 'freezing',
@@ -256,6 +342,12 @@ export const INCIDENT_DEFS: Readonly<Record<CatIncidentKind, IncidentDef>> = {
     posture: 'crouching',
     demoDurationS: 60,
     anchorCapability: null,
+    // 靠**僵直**与更慢更浅的呼吸读出来，刻意不做任何抖动——静止本身就是它的特征。
+    motion: {
+      ...RIGID,
+      breathAmpAdd: -0.012,
+      breathFreqScale: 0.7,
+    },
   },
   withdrawal: {
     kind: 'withdrawal',
@@ -264,6 +356,17 @@ export const INCIDENT_DEFS: Readonly<Record<CatIncidentKind, IncidentDef>> = {
     posture: 'lying',
     demoDurationS: 90,
     anchorCapability: 'hide',
+    motion: {
+      // 位移由引擎负责（走到躲藏点）；到位后只是蜷伏，不需要额外动作
+      tremorAmp: 0,
+      tremorFreq: 0,
+      limbJitter: 0,
+      bodyTwist: 0,
+      breathAmpAdd: 0,
+      breathFreqScale: 0.9,
+      earFlatten: 0.7,
+      rigidity: 0.6,
+    },
   },
   vomit: {
     kind: 'vomit',
@@ -272,6 +375,17 @@ export const INCIDENT_DEFS: Readonly<Record<CatIncidentKind, IncidentDef>> = {
     posture: 'crouching',
     demoDurationS: 30,
     anchorCapability: null,
+    motion: {
+      // 干呕的读法靠**躯干俯仰反复起伏**（前低后高）与腹部抽动，而不是抖动
+      tremorAmp: 0.006,
+      tremorFreq: 2.2,
+      limbJitter: 0.05,
+      bodyTwist: 0.05,
+      breathAmpAdd: 0.012,
+      breathFreqScale: 1.6,
+      earFlatten: 0.5,
+      rigidity: 0.2,
+    },
   },
 };
 
