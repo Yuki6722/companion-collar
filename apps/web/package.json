@@ -12,5 +12,9 @@
   "dependencies": {
     "@camp/core": "workspace:*",
     "@camp/simulator": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/three": "0.186.0",
+    "three": "0.186.1"
   }
 }

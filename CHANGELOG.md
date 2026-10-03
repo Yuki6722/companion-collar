@@ -6,6 +6,37 @@
 ## [Unreleased]
 
 ### Added
+- **家居空间建模（第一阶段）**：`apps/web` 新增「家居场景」屏（默认首页）——
+  7.2×5.6×2.75 m 写实风格开间样板间，含猫爬架、饮水机、食盆、猫砂盆 ×2、猫窝、纸箱、抓板、
+  壁挂跳台与柜顶通道，以及床、衣柜、冰箱、开放式厨房、电视与电视柜、沙发、茶几、置物架、地毯、
+  落地灯等饲主家具。设计、资产许可与验证方式见 [`docs/design/03-home-scene-stage1.md`](docs/design/03-home-scene-stage1.md)，
+  截图见 `docs/design/shots/`。
+- **橘猫的两套手动演示状态**（平静舒适 / 激动不适）：参数化姿态、耳朵、尾巴、瞳孔、呼吸与动作幅度，
+  0.8 s 过渡且**可中途打断**。姿态与位置都由 wall clock 推导而非逐帧累加——否则后台标签降帧会卡住状态。
+  界面明确标注这是手动演示档位，**不是**系统对猫状态或情绪的推断。
+- `@camp/core/src/home.ts`：居家资源清单规则（`summarizeHomeResources`）——
+  把房间里的资源折算成 AAFP/ISFM 检查项，逐条带证据等级与来源；
+  **与房间内容无关的项固定 `unknown`**（界面显示「需你确认」），绝不因缺数据而默认合格；
+  指南未给米制阈值的判据（分离距离、离通道距离、可俯瞰高度）标为**操作化常量**并写明理由。
+  新增 11 项单测（`packages/core/test/home.test.ts`）。
+- `scripts/fetch-assets.mjs`：幂等抓取 CC0 资产（10.56 MB，含字节校验与许可清单生成）。
+- `scripts/smoke-scene.mjs`：场景自检断言——读取浏览器回传的快照，验证渲染、资产替换与状态切换。
+- `apps/web/public/styles.css`；`scripts/dev-server.mjs` 增加 `POST /__selftest` 端点（仅本地预览）。
+
+### Changed
+- `apps/web` 从单页骨架改为**两屏 + hash 路由**：家居场景 / 工程自检（原骨架自检内容迁到 `screens/status.ts`）。
+- `scripts/build-web.mjs` 增加 three vendoring：把 `three.module.js`/`three.core.js` 与**递归解析**出的
+  addon 依赖复制到 `dist/vendor/three/`，由 import map 指向同源路径（运行时零外链）。
+- 家具风格统一为现代简约（截图核对后逐件替换）：边柜 → 柚木抽屉柜；置物架 → 程序化浅橡木开架；
+  沙发 → 程序化现代低矮布艺款并**正对电视**。取舍记录见设计文档 §4。
+- `scripts/dev-server.mjs` 补齐 `.gltf/.glb/.bin/.hdr` MIME；`.gitattributes` 标注 3D 资产为二进制。
+
+### Verified
+- typecheck 3/3 通过（core / simulator / web）；静态站构建产出 106 个文件
+- 单元测试 **27/27** 通过（core profile 5 + home 11、simulator 11）
+- 措辞门禁通过；场景自检 11/11 通过（`scripts/smoke-scene.mjs`）
+
+### Added
 - **GitHub Pages 门禁与发布工作流** `.github/workflows/pages.yml`，分三个 job：
   - `verify`：`pnpm typecheck` + `pnpm test` + `pnpm check:claims`。
     措辞门禁进入 CI 后（见 `AGENTS.md` §4.3），「命中禁词即构建失败」才真正成立——

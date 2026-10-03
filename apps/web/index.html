@@ -4,8 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="light dark" />
-<title>项圈 · 伴侣视角</title>
-<meta name="description" content="按证据等级可视化猫狗感知差异，并核查居家资源是否符合权威指南。" />
+<title>项圈 · 伴侣视角 | 家居样板间</title>
+<meta name="description" content="日常家居空间建模：写实风格的样板间、猫的关键资源与两套手动演示状态；同时核查居家资源是否符合权威指南。" />
+<link rel="stylesheet" href="./styles.css" />
 
 <!--
   无打包器方案：用浏览器原生 import map 解析 workspace 包的裸标识符。
@@ -16,7 +17,9 @@
 {
   "imports": {
     "@camp/core": "./packages/core/src/index.js",
-    "@camp/simulator": "./packages/simulator/src/index.js"
+    "@camp/simulator": "./packages/simulator/src/index.js",
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/addons/"
   }
 }
 </script>

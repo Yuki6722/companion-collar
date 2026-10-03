@@ -7,6 +7,11 @@
 *.webp binary
 *.zip binary
 *.pdf binary
+*.bin binary
+*.hdr binary
+*.glb binary
+# glTF 是 JSON 文本，统一换行便于 diff
+*.gltf text eol=lf
 
 # 三份研究报告作为文档统计
 docs/research/*.html linguist-documentation

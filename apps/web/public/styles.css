@@ -1,0 +1,569 @@
+/*
+ * 家居样板间 UI 样式。
+ *
+ * 设计取向：暖中性色 + 半透明面板（宜家样板间的气质），信息层浮在场景之上但不遮挡视线。
+ * 移动端优先：3D 交互由 OrbitControls 处理触摸，UI 不拦截画布手势。
+ */
+
+:root {
+  --ink: #2f2a24;
+  --ink-soft: #5c5348;
+  --ink-faint: #7d7365;
+  --paper: #f6f2ec;
+  --panel: rgba(255, 255, 255, 0.9);
+  --line: rgba(47, 42, 36, 0.1);
+  --accent: #0f766e;
+  --warm: #b5651d;
+  --shadow: 0 10px 28px rgba(47, 42, 36, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: system-ui, 'PingFang SC', 'Microsoft YaHei', -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------------------------------------------------------------- 顶栏 */
+.topbar {
+  flex: 0 0 auto;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+  z-index: 10;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.brand-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warm);
+  align-self: center;
+}
+
+.brand-name {
+  letter-spacing: 0.02em;
+}
+
+.brand-note {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+
+.nav {
+  display: flex;
+  gap: 6px;
+}
+
+.nav-btn {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.nav-btn-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------- 场景 */
+.screen-host {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.scene-screen {
+  position: absolute;
+  inset: 0;
+}
+
+.scene-host {
+  position: absolute;
+  inset: 0;
+}
+
+.scene-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------- 热区标签 */
+.hotspot-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.hotspot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(28, 24, 20, 0.74);
+  color: #f8f3ea;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  transition: opacity 0.18s ease;
+  opacity: 0;
+}
+
+.hotspot-badge {
+  color: #ffd39a;
+  font-size: 10px;
+}
+
+/* ---------------------------------------------------------------- 浮层面板 */
+.hud-panels {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: min(310px, 40vw);
+  max-height: calc(100% - 28px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panel,
+.checklist {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.panel-title {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.panel-foot {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--ink-faint);
+  line-height: 1.5;
+}
+
+.state-row {
+  display: flex;
+  gap: 8px;
+}
+
+.state-btn {
+  flex: 1 1 0;
+  font: inherit;
+  font-size: 13.5px;
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.state-btn-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.state-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.boundary-note {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #7a4a12;
+  background: #fdf3e3;
+  border-left: 3px solid #b45309;
+  border-radius: 6px;
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset-btn {
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.preset-btn:hover {
+  background: #f1ece4;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 6px 0;
+}
+
+.quality-select {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+}
+
+.stats-line,
+.issue-line {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--ink-faint);
+  line-height: 1.5;
+}
+
+.issue-line:empty {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- 资源清单 */
+.checklist {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  bottom: 14px;
+  width: min(360px, 38vw);
+  overflow: auto;
+}
+
+.checklist-head {
+  margin-bottom: 8px;
+}
+
+.pillar {
+  border-top: 1px solid var(--line);
+  padding: 8px 0 4px;
+}
+
+.pillar-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.pillar-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+
+.check-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.check {
+  margin: 8px 0;
+}
+
+.check-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.check-status {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.check-status-ok {
+  background: #dff3e4;
+  color: #1c6b3a;
+}
+
+.check-status-gap {
+  background: #fbe3d8;
+  color: #a33c14;
+}
+
+.check-status-unknown {
+  background: #eee7dc;
+  color: #6b6257;
+}
+
+.check-req {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.check-actual {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.check-note {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  color: #8a7f70;
+  line-height: 1.45;
+}
+
+.tier {
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.tier-strong {
+  color: #0f766e;
+}
+
+.tier-moderate {
+  color: #7a6a12;
+}
+
+.tier-weak {
+  color: #8a5a12;
+}
+
+.tier-unverified,
+.tier-disputed {
+  color: #a33c14;
+}
+
+/* ---------------------------------------------------------------- 加载与降级 */
+.loading,
+.fatal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(246, 242, 236, 0.95);
+  z-index: 20;
+  transition: opacity 0.45s ease;
+}
+
+.loading-done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading[hidden],
+.fatal[hidden] {
+  display: none;
+}
+
+.loading-card {
+  width: min(430px, 88vw);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.progress-track {
+  height: 6px;
+  background: #e9e2d8;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--warm), var(--accent));
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.fatal {
+  z-index: 30;
+}
+
+/* 自检徽章：仅在 ?debug=1 时挂载，用于人工与自动化（dump-dom）核对 */
+.selftest {
+  position: fixed;
+  left: 8px;
+  bottom: 8px;
+  z-index: 40;
+  max-width: min(92vw, 900px);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(28, 24, 20, 0.82);
+  color: #f6f2ea;
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selftest[data-ok='false'] {
+  background: rgba(163, 60, 20, 0.9);
+}
+
+/* ---------------------------------------------------------------- 工程自检屏 */
+.status-screen {
+  height: 100%;
+  overflow: auto;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 20px 48px;
+  line-height: 1.75;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.status-title {
+  margin: 0 0 14px;
+  font-size: 28px;
+}
+
+.status-lead {
+  margin: 0 0 24px;
+  color: var(--ink-soft);
+}
+
+.status-list {
+  margin: 0 0 24px;
+  padding-left: 0;
+  list-style: none;
+}
+
+.status-list li {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+}
+
+.status-key {
+  color: var(--ink-faint);
+  min-width: 200px;
+}
+
+/* ---------------------------------------------------------------- 移动端 */
+@media (max-width: 900px) {
+  .hud-panels {
+    width: min(268px, 64vw);
+    left: 8px;
+    top: 8px;
+    gap: 8px;
+  }
+
+  .panel {
+    padding: 10px;
+  }
+
+  .checklist {
+    left: 8px;
+    right: 8px;
+    top: auto;
+    bottom: 8px;
+    width: auto;
+    max-height: 40vh;
+  }
+
+  .status-key {
+    min-width: 140px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hotspot,
+  .state-btn,
+  .progress-bar,
+  .loading {
+    transition: none;
+  }
+}
