@@ -20,6 +20,14 @@
 - 站点以**项目子路径**形式发布（`https://<owner>.github.io/companion-collar/`）。
   `apps/web/index.html` 的 import map 使用相对路径，构建产物自带 `.nojekyll`，因此子路径下无需额外改写。
 
+### Fixed
+- **测试脚本在 Node 24 下无法运行**：`packages/*/package.json` 的 `test` 由 `node --test test/`
+  改为 `node --test "test/*.test.ts"`。
+  症状：`Cannot find module '.../packages/core/test'`——Node 24 把目录参数当模块路径解析，
+  而非测试目录。CI 首跑（run #1）即在此处失败。
+  本地此前未暴露，是因为沙箱内按 `AGENTS.md` §6 的做法直接执行单个测试文件，绕开了目录参数。
+  glob 形式在本机与 Linux runner 上都能正确发现测试文件。
+
 ## [0.0.1] - 2026-10-02
 
 初始骨架。本日完成基础设施、共享领域模型、仿真器与文档归档。
