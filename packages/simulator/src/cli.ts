@@ -47,6 +47,14 @@ fs.mkdirSync(outDir, { recursive: true });
 const file = path.join(outDir, `${session.id}.json`);
 fs.writeFileSync(file, JSON.stringify(session, null, 2), 'utf8');
 
+// 行为时间线单独再落一份：它是给渲染用的输入（可能几千个区间），
+// 混在会话里会让逐帧调试时难以直接打开。
+let behaviorFile: string | null = null;
+if (session.behaviorTimeline) {
+  behaviorFile = path.join(outDir, `${session.id}.behavior.json`);
+  fs.writeFileSync(behaviorFile, JSON.stringify(session.behaviorTimeline, null, 2), 'utf8');
+}
+
 const hr = session.samples.map((s) => s.hrBpm ?? 0);
 const noise = session.samples.map((s) => s.noiseDbA ?? 0);
 console.log('场景      :', SCENARIOS[scenario].name);
@@ -58,4 +66,15 @@ console.log('心率范围  :', Math.min(...hr).toFixed(1), '–', Math.max(...hr
 console.log('噪声范围  :', Math.min(...noise).toFixed(1), '–', Math.max(...noise).toFixed(1), 'dB(A)');
 console.log('注入缺口  :', session.truth?.injectedGaps.join(', ') || '（无）');
 console.log('注入滞后  :', JSON.stringify(session.truth?.injectedLags));
+const tl = session.behaviorTimeline;
+if (tl) {
+  const top = Object.entries(tl.budgetS)
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    .slice(0, 4)
+    .map(([k, v]) => `${k} ${Math.round(((v ?? 0) / tl.durationS) * 100)}%`)
+    .join('、');
+  console.log('行为区间  :', tl.segments.length, '段 →', top);
+  console.log('行为突发  :', tl.incidents.length, '次（其中注入', tl.incidents.filter((i) => i.injected).length, '次）');
+}
 console.log('已写入    :', file);
+if (behaviorFile) console.log('行为时间线:', behaviorFile);

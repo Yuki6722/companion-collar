@@ -162,6 +162,32 @@ ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING
 
 **新增禁词只改 `claims.ts` 一处**，门禁与测试同时生效。该文件带 `claims-check:ignore-file` —— 它必须能写出禁词本身。
 
+### 5.5.6 `simulator` 对 core 的**运行时**导入也必须用相对路径（2026-10 补记）
+§5.5.4 只写了「`core` 不得反向导入」，**反过来的方向有同一个坑**，而且更隐蔽：
+
+```ts
+// ❌ 运行时导入会炸
+import { activityAt } from '@camp/core';
+// ✅ 相对路径
+import { activityAt } from '../../core/src/index.ts';
+```
+
+**症状**：`node packages/simulator/test/simulator.test.ts` 抛
+`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`，指向
+`packages/simulator/node_modules/@camp/core/src/index.ts`。
+
+**原因**：`@camp/core` 是 pnpm 在 `node_modules` 下建的**目录联接**，
+而 Node 24 的类型剥离（strip-only）**拒绝处理 `node_modules` 下的任何文件**。
+
+**为什么以前没暴露**：`simulator` 过去对 core 只有**类型**导入，类型会被整段剥掉，
+从不产生运行时模块请求。**一旦新增一个运行时函数导入（例如行为层的 `activityAt`），
+整条链路立刻失败。** web 侧不受影响，因为浏览器走 `index.html` 的 import map。
+
+**纪律**：`simulator` 源码中，凡是**运行时**用到 core 的一律走相对路径；
+仅类型导入可以保留 `@camp/core`（可读性更好，且会被剥掉）。
+`tsc` 经 node_modules 联接解析 `@camp/core`，`tsconfig.build.json` 按相对路径产出，
+浏览器经 import map 解析——三条路径互不冲突。
+
 ---
 
 ## 6. 命令

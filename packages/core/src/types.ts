@@ -4,6 +4,11 @@
  * 约定：**凡面向用户展示的参数值，都必须带 EvidenceTag**。
  * 这是「只宣称可证伪的事」这条纪律的类型层保障——没有证据标签的参数无法通过类型检查。
  */
+import type {
+  CatBehaviorIncident,
+  CatBehaviorSegment,
+  CatBehaviorTimeline,
+} from './behavior/contract.ts';
 
 // ---------------------------------------------------------------- 基础枚举
 
@@ -177,6 +182,12 @@ export interface Sample {
   ambientTempC?: number;
   humidityPct?: number;
   lightLux?: number;
+  /**
+   * 行为层给出的活动与锚点。仅当会话由仿真器生成且行为层开启时存在。
+   * 有它，才能断言「抓挠事件一定落在抓挠段内」这类因果一致性。
+   */
+  activityId?: string;
+  anchorId?: string;
 }
 
 export type SimEventKind =
@@ -201,6 +212,13 @@ export interface Session {
   events: SimEvent[];
   /** 仿真真值，仅 source === 'simulator' 时存在。用于验证分析层。 */
   truth?: SimTruth;
+  /**
+   * 行为时间线。仿真器生成、`apps/web` 消费（驱动猫的位移与姿势）。
+   *
+   * 与真值分开的理由：真值是「给验证用的答案」，时间线是「给渲染用的输入」；
+   * 读者不同、生命周期也不同（截图上只需要时间线）。
+   */
+  behaviorTimeline?: CatBehaviorTimeline;
 }
 
 export interface SimTruth {
@@ -212,6 +230,21 @@ export interface SimTruth {
   injectedLags: Record<string, number>;
   seed: number;
   scenario: string;
+  /** 行为层真值：时间线本身 + 主动注入的突发（供回归断言） */
+  behavior?: {
+    seed: number;
+    timeScale: number;
+    segments: readonly CatBehaviorSegment[];
+    incidents: readonly CatBehaviorIncident[];
+    budgetS: Partial<Record<string, number>>;
+  };
+  /**
+   * 主动注入的突发演示（仅 `injected === true` 的那些）。
+   *
+   * ⚠️ 这是仿真真值，不是对猫的判断。它用来断言「注入的突发被还原」，
+   * 不构成任何「识别到异常」的宣称。
+   */
+  injectedIncidents?: CatBehaviorIncident[];
 }
 
 // ---------------------------------------------------------------- 设备抽象
