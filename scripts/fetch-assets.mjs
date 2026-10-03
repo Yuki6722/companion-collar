@@ -41,8 +41,7 @@ const HARD_LIMIT = 25e6;
 const MODELS = [
   'sofa_03',
   'coffee_table_round_01',
-  'Shelf_01',
-  'painted_wooden_cabinet',
+  'vintage_wooden_drawer_01',
   'potted_plant_02',
   'modern_ceiling_lamp_01',
 ];

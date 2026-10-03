@@ -39,8 +39,7 @@ export interface AssetReport {
 export const MODEL_MANIFEST: ReadonlyArray<{ id: string; file: string }> = [
   { id: 'sofa', file: 'models/sofa_03/sofa_03_1k.gltf' },
   { id: 'coffeeTable', file: 'models/coffee_table_round_01/coffee_table_round_01_1k.gltf' },
-  { id: 'shelf', file: 'models/Shelf_01/Shelf_01_1k.gltf' },
-  { id: 'sideboard', file: 'models/painted_wooden_cabinet/painted_wooden_cabinet_1k.gltf' },
+  { id: 'sideboard', file: 'models/vintage_wooden_drawer_01/vintage_wooden_drawer_01_1k.gltf' },
   { id: 'plant', file: 'models/potted_plant_02/potted_plant_02_1k.gltf' },
   { id: 'pendant', file: 'models/modern_ceiling_lamp_01/modern_ceiling_lamp_01_1k.gltf' },
 ];

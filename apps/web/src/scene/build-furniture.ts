@@ -48,7 +48,6 @@ export interface ModelPlacement {
 export const MODEL_PLACEMENTS: ReadonlyArray<ModelPlacement> = [
   { id: 'sofa', x: SOFA.x, z: SOFA.z, rotY: -Math.PI / 2, fitTo: SOFA.widthZ },
   { id: 'coffeeTable', x: COFFEE_TABLE.x, z: COFFEE_TABLE.z, rotY: 0, fitTo: 0.95 },
-  { id: 'shelf', x: SHELF_UNIT.x, z: SHELF_UNIT.z, rotY: -Math.PI / 2, fitTo: 1.25 },
   { id: 'sideboard', x: TV_CABINET.x, z: TV_CABINET.z, rotY: -Math.PI / 2, fitTo: 1.6 },
   { id: 'plant', x: PLANT.x, z: PLANT.z, rotY: 0.5, fitTo: 1, decorative: true },
   { id: 'pendant', x: ISLAND.x, z: ISLAND.z, rotY: 0, fitTo: 0.6, y: 1.72, decorative: true },
@@ -67,6 +66,7 @@ export function buildFurniture(root: THREE.Group, mats: MaterialLibrary): Furnit
   buildBed(g, mats);
   buildNightstand(g, mats);
   buildWardrobe(g, mats);
+  buildModernShelf(g, mats);
   // 电视柜是「边柜」扫描模型的占位件：先用程序化柜体，模型到货后替换
   placeholders.set('sideboard', buildTvWall(g, mats));
   buildRug(g, mats);
@@ -353,13 +353,12 @@ function buildPlaceholder(id: string, mats: MaterialLibrary): THREE.Group | null
       return placeholderSofa(mats);
     case 'coffeeTable':
       return placeholderCoffeeTable(mats);
-    case 'shelf':
-      return placeholderShelf(mats);
     case 'plant':
       return placeholderPlant(mats);
     case 'pendant':
       return placeholderPendant(mats);
-    // sideboard 的占位件就是程序化的电视柜（见 buildTvWall）
+    // sideboard 的占位件就是程序化的电视柜（见 buildTvWall）；
+    // 置物架是程序化常驻件（见 buildModernShelf），不是占位件
     default:
       return null;
   }
@@ -413,34 +412,74 @@ function placeholderCoffeeTable(mats: MaterialLibrary): THREE.Group {
   return g;
 }
 
-function placeholderShelf(mats: MaterialLibrary): THREE.Group {
-  const g = group('shelf');
-  const wood = mats.plain('woodLight');
-  const w = SHELF_UNIT.depthX;
-  const d = SHELF_UNIT.widthZ;
-  const h = SHELF_UNIT.h;
-  addMesh(g, box(w, h, 0.03, wood), 0, h / 2, -d / 2, { name: 'shelf-back' });
+/**
+ * 现代简约置物架（程序化常驻件）。
+ *
+ * 为什么不用 CC0 扫描件：Poly Haven 的两个开架（`Shelf_01`、`wooden_bookshelf_worn`）
+ * 都是做旧的灰蓝金属/风化木，放进这套暖色样板间里最扎眼。开架的形状极简单——
+ * 薄侧板 + 薄隔板 + 浅橡木——程序化反而完全可控，也不会掉到「旧货」的观感里。
+ */
+function buildModernShelf(parent: THREE.Group, mats: MaterialLibrary): void {
+  const g = group('shelf-unit');
+  parent.add(g);
+  const oak = mats.plain('woodLight');
+  const { x, z, depthX, widthZ, h } = SHELF_UNIT;
+  const panel = 0.026;
+
+  // 两块薄侧板：不做背板，保持通透
+  for (const dz of [-widthZ / 2 + panel / 2, widthZ / 2 - panel / 2]) {
+    addMesh(g, box(depthX, h, panel, oak), 0, h / 2, dz, { name: 'shelf-side' });
+  }
+  // 薄隔板
   const levels = 4;
   for (let i = 0; i <= levels; i++) {
-    addMesh(g, box(w, 0.035, d, wood), 0, 0.28 + (i * (h - 0.3)) / levels, 0, { name: `shelf-plank-${i}` });
+    const y = 0.08 + (i * (h - 0.16)) / levels;
+    addMesh(g, box(depthX - 0.01, 0.022, widthZ - panel * 2 - 0.01, oak), 0, y, 0, {
+      name: `shelf-board-${i}`,
+    });
   }
-  for (const dz of [-d / 2, d / 2]) {
-    addMesh(g, box(w, h, 0.025, wood), 0, h / 2, dz, { name: 'shelf-side' });
-  }
-  // 书：三种颜色随机摆几本，避免格子空得像样板
-  const bookMats = [mats.plain('bookA'), mats.plain('bookB'), mats.plain('bookC')];
-  for (let i = 0; i < 10; i++) {
-    const level = i % levels;
-    const shelfY = 0.28 + (level * (h - 0.3)) / levels;
-    const mat = bookMats[i % bookMats.length];
-    if (!mat) continue;
-    const count = 3 + (i % 4);
-    for (let k = 0; k < count; k++) {
-      const zz = -d / 2 + 0.1 + k * 0.038 + (i % 3) * 0.05;
-      addMesh(g, box(w * 0.7, 0.24, 0.03, mat), 0, shelfY + 0.14, zz, { name: 'book' });
+
+  // 陈设：竖立的书（书脊朝外）+ 一只陶碗 + 一叠平放的书，克制的摆法才像现代简约
+  const spines = [mats.plain('bookA'), mats.plain('bookB'), mats.plain('bookC')];
+  const rows: ReadonlyArray<{ level: number; startZ: number; count: number }> = [
+    { level: 1, startZ: -0.34, count: 7 },
+    { level: 2, startZ: 0.04, count: 5 },
+    { level: 3, startZ: -0.2, count: 6 },
+  ];
+  for (const row of rows) {
+    const y = 0.08 + (row.level * (h - 0.16)) / levels;
+    for (let i = 0; i < row.count; i++) {
+      const mat = spines[(row.level + i) % spines.length];
+      if (!mat) continue;
+      const hh = 0.21 + ((i * 7) % 5) * 0.012;
+      addMesh(
+        g,
+        box(0.15, hh, 0.03 + ((i * 3) % 3) * 0.006, mat),
+        0.005,
+        y + 0.011 + hh / 2,
+        row.startZ + i * 0.042,
+        { name: 'shelf-book' },
+      );
     }
   }
-  return g;
+  // 平放的一叠书
+  const flat = mats.plain('bookB');
+  for (let i = 0; i < 3; i++) {
+    addMesh(g, box(0.16, 0.026, 0.22, flat), 0, 0.08 + 3 * ((h - 0.16) / levels) + 0.024 + i * 0.026, 0.3, {
+      name: 'shelf-book-flat',
+    });
+  }
+  // 陶碗
+  addMesh(
+    g,
+    new THREE.Mesh(new THREE.SphereGeometry(0.075, 20, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mats.plain('ceramic')),
+    0,
+    0.08 + 2 * ((h - 0.16) / levels) + 0.075,
+    -0.36,
+    { name: 'shelf-bowl' },
+  );
+
+  g.position.set(x, 0, z);
 }
 
 function placeholderPlant(mats: MaterialLibrary): THREE.Group {

@@ -130,7 +130,6 @@ export function mountHomeScreen(host: HTMLElement): () => void {
           issues: (report?.issues ?? []).map((i) => `${i.id}: ${i.reason}`),
           slots: {
             sofa: scene?.slotState('sofa') ?? 'none',
-            shelf: scene?.slotState('shelf') ?? 'none',
             sideboard: scene?.slotState('sideboard') ?? 'none',
             plant: scene?.slotState('plant') ?? 'none',
             placeholdersLeft: scene?.placeholderCount() ?? 0,

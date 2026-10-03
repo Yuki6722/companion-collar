@@ -407,6 +407,11 @@ export class HomeScene {
       this.applyCount += 1;
     }
 
+    // 资产到货后立刻刷新一次统计：否则帧率一旦被浏览器降下来（后台标签、无头环境），
+    // 统计行会长时间停在「0 个扫描模型」，看起来像模型没换上。
+    // 同时清掉 statsEmitted，让下一帧用渲染后的真实三角面/绘制调用数再刷一次。
+    this.callbacks.onStats?.(this.getStats());
+    this.statsEmitted = false;
     this.callbacks.onAssets?.(assets.report);
   }
 
