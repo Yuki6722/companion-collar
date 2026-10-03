@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>宠物猫健康监测研究报告</title>
+<style>
+  :root{
+    --ink:#16181d; --ink-2:#3d434e; --muted:#6b7280; --line:#e4e7ec;
+    --bg:#fbfaf8; --card:#ffffff;
+    --teal:#0f766e; --teal-soft:#e6f4f1;
+    --amber:#b45309; --amber-soft:#fdf3e3;
+    --red:#b42318; --red-soft:#fdeceb;
+    --green:#15803d; --green-soft:#e9f6ec;
+    --blue:#1d4ed8; --blue-soft:#eaeffd;
+    --purple:#6d28d9; --purple-soft:#f1ebfe;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(16,24,40,.05),0 4px 14px -6px rgba(16,24,40,.10);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",-apple-system,sans-serif;
+    font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+  }
+  #progress{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--teal),var(--amber));z-index:100;transition:width .1s linear}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:236px minmax(0,1fr);gap:48px;align-items:start}
+  @media (max-width:1040px){.wrap{grid-template-columns:1fr;gap:0}}
+  nav.toc{position:sticky;top:28px;max-height:calc(100vh - 56px);overflow-y:auto;padding:24px 0 40px;font-size:13.5px}
+  @media (max-width:1040px){nav.toc{position:static;max-height:none;border-bottom:1px solid var(--line);margin-bottom:8px}}
+  nav.toc .toc-title{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 12px}
+  nav.toc a{display:block;color:var(--ink-2);text-decoration:none;padding:5px 10px;border-left:2px solid transparent;border-radius:0 6px 6px 0;line-height:1.45}
+  nav.toc a:hover{background:#f1f3f6;color:var(--ink)}
+  nav.toc a.sub{padding-left:22px;font-size:12.5px;color:var(--muted)}
+  nav.toc a.active{border-left-color:var(--teal);background:var(--teal-soft);color:var(--teal);font-weight:600}
+  header.masthead{grid-column:1/-1;padding:64px 0 36px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);font-weight:700;margin-bottom:14px}
+  h1{font-size:clamp(28px,4.2vw,42px);line-height:1.25;margin:0 0 16px;letter-spacing:-.02em;font-weight:800}
+  .subtitle{font-size:17px;color:var(--ink-2);max-width:64ch;margin:0 0 26px;line-height:1.7}
+  .meta-row{display:flex;flex-wrap:wrap;gap:8px 28px;font-size:13px;color:var(--muted)}
+  .meta-row b{color:var(--ink-2);font-weight:600}
+  main{padding:8px 0 96px;min-width:0}
+  section{padding:34px 0;border-bottom:1px solid var(--line);scroll-margin-top:24px}
+  section:last-of-type{border-bottom:none}
+  h2{font-size:25px;line-height:1.35;margin:0 0 6px;letter-spacing:-.01em;font-weight:750;scroll-margin-top:24px}
+  h2 .num{color:var(--teal);font-variant-numeric:tabular-nums;margin-right:10px;font-weight:800}
+  h3{font-size:18.5px;margin:34px 0 10px;font-weight:700;color:var(--ink);scroll-margin-top:24px}
+  h4{font-size:15.5px;margin:24px 0 8px;font-weight:700;color:var(--ink-2)}
+  p{margin:0 0 14px}
+  .lede{font-size:16.5px;color:var(--ink-2)}
+  ul,ol{margin:0 0 14px;padding-left:22px}
+  li{margin-bottom:7px}
+  a{color:var(--teal);text-decoration:none;border-bottom:1px solid rgba(15,118,110,.28)}
+  a:hover{border-bottom-color:var(--teal);background:var(--teal-soft)}
+  code{font-family:"Cascadia Mono",Consolas,monospace;font-size:.88em;background:#f1f3f6;padding:1px 5px;border-radius:4px}
+  .callout{border:1px solid var(--line);border-left:3px solid var(--teal);background:var(--card);border-radius:var(--radius);padding:16px 20px;margin:20px 0;box-shadow:var(--shadow)}
+  .callout.warn{border-left-color:var(--amber);background:var(--amber-soft)}
+  .callout.risk{border-left-color:var(--red);background:var(--red-soft)}
+  .callout.ok{border-left-color:var(--green);background:var(--green-soft)}
+  .callout .ct{font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px}
+  .callout p:last-child{margin-bottom:0}
+  .badge{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;line-height:1.6;vertical-align:middle}
+  .b-strong{background:var(--green-soft);color:var(--green)}
+  .b-mid{background:var(--amber-soft);color:var(--amber)}
+  .b-weak{background:var(--red-soft);color:var(--red)}
+  .b-peer{background:var(--blue-soft);color:var(--blue)}
+  .b-dispute{background:var(--purple-soft);color:var(--purple)}
+  .b-gray{background:#f1f3f6;color:var(--muted)}
+  .grid{display:grid;gap:16px}
+  .grid.g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .grid.g3{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 8px;font-size:15.5px;color:var(--ink)}
+  .card .kpi{font-size:27px;font-weight:800;color:var(--teal);line-height:1.2;letter-spacing:-.02em}
+  .card .kpi-label{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .card p{font-size:14px;color:var(--ink-2);margin-bottom:0}
+  .tablewrap{overflow-x:auto;margin:20px 0;border:1px solid var(--line);border-radius:var(--radius);background:var(--card)}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
+  th,td{text-align:left;padding:10px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f7f8fa;font-weight:700;color:var(--ink-2);font-size:12.5px;letter-spacing:.02em;white-space:nowrap;position:sticky;top:0}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fafbfc}
+  td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .refs{font-size:13.5px;color:var(--ink-2)}
+  .refs li{margin-bottom:11px;line-height:1.6;scroll-margin-top:24px}
+  .refs li:target{background:var(--amber-soft);border-radius:4px}
+  .tag{display:inline-block;font-size:11.5px;color:var(--muted);background:#f1f3f6;border-radius:4px;padding:1px 6px;margin-left:6px}
+  footer{grid-column:1/-1;border-top:1px solid var(--line);padding:28px 0 64px;font-size:13px;color:var(--muted)}
+  .rank{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:var(--teal);color:#fff;font-size:12px;font-weight:700;margin-right:6px}
+  .rank.r2{background:#0e7490}.rank.r3{background:var(--blue)}.rank.r4{background:var(--amber)}.rank.r5{background:var(--muted)}
+  @media print{
+    body{background:#fff;font-size:11pt}
+    nav.toc,#progress{display:none}
+    .wrap{display:block;max-width:none;padding:0}
+    section{page-break-inside:avoid;border-bottom:none;padding:16px 0}
+    a{color:#000;border:none}
+    .card,.callout,.tablewrap{box-shadow:none}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">研究报告 · 猫健康监测 · 2026-10-02</div>
+    <h1>宠物猫健康监测研究报告</h1>
+    <p class="subtitle">项圈、传感器与「猫版健康手环」的可行性。<br>
+    本报告核查一个问题：<strong>到底哪些指标能判断猫的健康状态，而这些指标又能不能装进一个项圈里。</strong>
+    答案有一个反直觉的部分。</p>
+    <div class="meta-row">
+      <span><b>2026-10-02</b></span>
+      <span>引用来源 <b>30+</b></span>
+      <span>方法论 <b>二手研究 + 证据分级</b></span>
+      <span>范围 <b>家猫（<i>Felis catus</i>）</b></span>
+    </div>
+  </header>
+
+  <nav class="toc" id="toc">
+    <p class="toc-title">目录</p>
+    <a href="#s-summary">摘要</a>
+    <a href="#s-scope">1 研究问题与方法</a>
+    <a href="#s-scope-rq" class="sub">1.1 研究问题</a>
+    <a href="#s-scope-bounds" class="sub">1.2 范围边界</a>
+    <a href="#s-scope-method" class="sub">1.3 方法与证据分级</a>
+    <a href="#s-scope-limits" class="sub">1.4 局限性声明</a>
+    <a href="#s-academic">2 学界研究</a>
+    <a href="#s-ac-ref" class="sub">2.1 猫的正常参考区间</a>
+    <a href="#s-ac-metrics" class="sub">2.2 哪些指标真正有用</a>
+    <a href="#s-ac-activity" class="sub">2.3 活动与睡眠监测验证</a>
+    <a href="#s-ac-oa" class="sub">2.4 骨关节炎：最被低估</a>
+    <a href="#s-ac-collar" class="sub">2.5 佩戴可行性与安全</a>
+    <a href="#s-ac-verdict" class="sub">2.6 学界小结</a>
+    <a href="#s-industry">3 业界产品</a>
+    <a href="#s-in-wearable" class="sub">3.1 可穿戴（项圈）</a>
+    <a href="#s-in-stationary" class="sub">3.2 固定式传感</a>
+    <a href="#s-in-consumable" class="sub">3.3 在家检测与耗材</a>
+    <a href="#s-in-matrix" class="sub">3.4 产品对比矩阵</a>
+    <a href="#s-in-gap" class="sub">3.5 格局判断</a>
+    <a href="#s-synthesis">4 综合洞察</a>
+    <a href="#s-sy-core" class="sub">4.1 核心判断</a>
+    <a href="#s-sy-analogy" class="sub">4.2 手环类比在哪里失效</a>
+    <a href="#s-sy-gap" class="sub">4.3 证据落差</a>
+    <a href="#s-sy-risk" class="sub">4.4 风险与伦理</a>
+    <a href="#s-conclusion">5 结论与建议</a>
+    <a href="#s-refs">参考文献</a>
+    <a href="#s-appendix">附录：检索策略</a>
+  </nav>
+
+  <main>
+
+    <section id="s-summary">
+      <h2><span class="num">摘要</span></h2>
+      <p class="lede">本报告核查一个具体问题：<b>像人类健康手环那样给猫做健康监测，可行吗？需要测什么、能测到什么？</b>核查结果有一个反直觉的部分——<b>猫最需要监测的指标，项圈一个都测不到。</b></p>
+
+      <div class="grid g3" style="margin:24px 0">
+        <div class="card">
+          <div class="kpi">91 / 100</div>
+          <div class="kpi-label">随机选取的猫（6月龄–20岁）中，影像学检查发现<b>至少一个肢体关节存在骨关节炎</b>的比例</div>
+        </div>
+        <div class="card">
+          <div class="kpi">71% / 67%</div>
+          <div class="kpi-label">猫 OA 最常见的表现是<b>跳跃能力下降</b>（71%）与<b>跳跃高度降低</b>（67%）——<b>而不是跛行</b></div>
+        </div>
+        <div class="card">
+          <div class="kpi">0</div>
+          <div class="kpi-label">能测<b>饮水量、猫砂盆使用、体重趋势、进食量</b>的项圈产品数量——这四项恰好是猫诊断价值最高的信号</div>
+        </div>
+      </div>
+
+      <h3>五条主要结论</h3>
+      <ol>
+        <li><b>「猫版健康手环」的类比在最关键处失效。</b>人类手环成立的前提是：最高价值的指标（心率、步数、睡眠）都能在<b>手腕这一个位置</b>测到。对猫则不成立——猫诊断价值最高的信号是<b>饮水量、猫砂盆使用、体重趋势、进食量</b>，它们发生在<b>水碗、猫砂盆、秤、食盆</b>，不在颈部的项圈上。所以猫的等效物不是手环，而是<b>固定式传感器网络 + 周期性在家检测</b>。</li>
+
+        <li><b>活动与睡眠监测在猫中已被同行评审验证，且能反映年龄相关变化。</b>一项开放获取研究（PLOS ONE 2020，61 只家养猫）用三轴加速度计 + 气压传感器测量，结论是：<b>活动量与跳跃次数随年龄显著下降，休息与睡眠时间显著上升</b>，且设备能准确区分"休息"与"睡眠"。性别无显著差异。<span class="badge b-strong">强</span></li>
+
+        <li><b>骨关节炎是猫最被低估的健康问题，而它的表现不是跛行。</b>影像学筛查显示 100 只随机猫中 91 只至少一个关节有 OA；6 岁以上 61%、14 岁以上 82%。但猫 OA 最常见的表现是<b>跳跃能力下降（71%）、跳跃高度降低（67%）</b>，此外还有活动减少、休息增多、动作僵硬、上下楼困难、进出猫砂盆困难、理毛减少、爪甲过度生长、抗拒被抱、食欲下降。<b>因为不跛行，主人很难识别</b>——这正是"客观活动监测"的价值所在。</li>
+
+        <li><b>项圈在猫身上有真实的可行性问题，不是偏好问题。</b>一项随机对照研究（JAVMA）专门分析了猫项圈的<b>失效时间</b>，随机分组中包含塑料卡扣项圈（176 只猫，32.7%）。同时猫的标准参考区间本身存在<b>来源冲突</b>：某兽医教育资源给出心率 120–140 bpm，而更常见的临床口径是 140–220 bpm。加上<b>就诊应激会抬高读数</b>，这意味着——<b>正因如此，在家里测得的静息基线比诊所读数更有价值</b>。</li>
+
+        <li><b>产品侧的重心已经不在项圈上。</b>面向猫的健康监测，成熟品类是<b>固定式</b>的：猫砂盆（称重、频次、时长、多猫识别）、微芯片识别的饮水机（<b>逐只猫的饮水量</b>）、智能喂食器、健康指示猫砂、在家尿检条。可穿戴侧（PetPace 猫版、Tractive Cat）能测心率、呼吸、体温、HRV、活动，但<b>对猫最高价值的四项指标依然空白</b>。</li>
+      </ol>
+
+      <div class="callout risk">
+        <div class="ct">最重要的判断</div>
+        <p>如果目标是做"猫的健康手环"，那么产品定义本身需要修正：<b>项圈应当是固定式传感网络的补充，而不是主体。</b>项圈不可替代的价值有三条：①<b>活动与跳跃</b>（OA 早筛的核心信号，且只有戴在身上才能测）②<b>心率/呼吸/体温</b>（诊所测不准，因为应激）③<b>离家时的行为事件</b>。而饮水、排泄、体重、进食，必须靠固定设备。</p>
+      </div>
+    </section>
+
+    <section id="s-scope">
+      <h2><span class="num">1</span>研究问题与方法</h2>
+
+      <h3 id="s-scope-rq">1.1 研究问题</h3>
+      <p><b>主研究问题（RQ）</b>：对家猫而言，哪些可测量的指标能够判断其健康状态？这些指标分别能在什么形态的设备上测得？现有产品的覆盖状况如何？</p>
+      <p>拆为五个子问题：</p>
+      <ol>
+        <li><b>SQ1 参考区间</b>——猫的心率、呼吸、体温等基础生理指标的正常范围是什么？有多少可核实来源？</li>
+        <li><b>SQ2 指标价值排序</b>——哪些指标对判断猫的健康状况<b>临床价值最高</b>？各自能提示什么问题？</li>
+        <li><b>SQ3 验证状况</b>——活动、睡眠等可穿戴指标在猫中是否经过同行评审验证？精度如何？</li>
+        <li><b>SQ4 形态适配</b>——每类指标分别在什么设备形态上可测？项圈能覆盖多少？</li>
+        <li><b>SQ5 产品现状</b>——市场上猫专用的健康监测产品有哪些？各自测什么、验证到什么程度？</li>
+      </ol>
+
+      <h3 id="s-scope-bounds">1.2 范围边界</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:50%">在范围内</th><th style="width:50%">不在范围内</th></tr></thead>
+          <tbody>
+            <tr><td>家猫（<i>Felis catus</i>）的健康状态监测</td><td>犬、其他伴侣动物（仅在必要处作对照）</td></tr>
+            <tr><td>可穿戴（项圈/胸背带）</td><td>诊断级临床检验设备（血检、影像）——仅作为"金标准"参照</td></tr>
+            <tr><td>固定式传感（猫砂盆、饮水机、喂食器、秤）</td><td>纯娱乐/社交类宠物产品</td></tr>
+            <tr><td>在家可用的检测耗材（尿检条、健康指示猫砂）</td><td>处方粮、药品与治疗方案</td></tr>
+            <tr><td>佩戴舒适度与动物福利约束</td><td>实验动物的侵入式记录（仅作方法学参照）</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <div class="ct">边界含义</div>
+        <p>本报告评估的是<b>指标与设备形态的匹配关系</b>，不推荐任何具体产品用于医疗决策。任何消费级宠物设备的读数都不构成兽医诊断依据。</p>
+      </div>
+
+      <h3 id="s-scope-method">1.3 方法与证据分级</h3>
+      <p>本研究为<b>二手研究（secondary research）</b>：基于公开可获取的学术文献与厂商官方资料进行证据综合，不涉及任何一手实验或动物被试。</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:22%">标注</th><th>含义</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge b-strong">强</span></td><td>同行评审研究，方法透明、样本量与实验条件可查；或多项独立证据一致</td></tr>
+            <tr><td><span class="badge b-mid">中</span></td><td>权威教育资源汇总、单项研究，或缺乏独立重复</td></tr>
+            <tr><td><span class="badge b-weak">弱</span></td><td>厂商自述、科普媒体、二手转述</td></tr>
+            <tr><td><span class="badge b-dispute">来源冲突</span></td><td>不同来源给出不一致数值——<b>本报告不给单一数字，只呈现范围与冲突双方</b></td></tr>
+            <tr><td><span class="badge b-weak">未核实</span></td><td>未能取得可靠一手来源——<b>不使用该数值</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout risk">
+        <div class="ct">IRON RULE · 灰区即排除</div>
+        <p>凡无法确认其真实存在的文献、产品参数或链接，一律不写入本报告。宁可写"未找到可靠来源"，也不以"难以核实"的模糊表述保留。厂商参数与独立验证一律分开陈述。</p>
+      </div>
+
+      <h3 id="s-scope-limits">1.4 局限性声明</h3>
+      <ul>
+        <li><b>非系统性综述。</b>未做 PRISMA 全流程登记与双人独立筛选。</li>
+        <li><b>多个关键数值存在来源冲突</b>（最典型是猫心率参考区间）。本报告按冲突处理，不给单一数字——但这意味着读者无法从本报告获得"一个确定的正常值"。</li>
+        <li><b>部分来源为兽医教育资源而非同行评审文献</b>（如 WikiVet 的正常值表），已逐条标注等级。</li>
+        <li><b>多条厂商页面为 JS 渲染，正文未能取得</b>（Litter-Robot、Felaqua、PrettyLitter 等）。相关产品只标注可核实的定位，不填具体参数。</li>
+        <li><b>中文文献与中文市场覆盖不完整</b>（CNKI、万方需机构登录）。</li>
+        <li><b>检索截止：2026-10-02。</b>产品价格与在售状态变动频繁。</li>
+      </ul>
+    </section>
+
+    <section id="s-academic">
+      <h2><span class="num">2</span>学界研究</h2>
+      <p class="lede">本章先钉住"正常值是多少"，再回答"哪些指标真正有用"，然后核查可穿戴指标在猫中的验证状况与佩戴可行性。</p>
+
+      <h3 id="s-ac-ref">2.1 猫的正常生理参考区间</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>指标</th><th>参考区间</th><th>单位</th><th>证据</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>心率</b></td>
+              <td>
+                <b>120–140</b>（WikiVet）<br>
+                <span style="color:var(--muted)">vs 临床常见口径 140–220</span>
+              </td>
+              <td>次/分</td>
+              <td><span class="badge b-dispute">来源冲突</span><br><span class="refs">见下方说明</span></td>
+            </tr>
+            <tr><td>收缩压</td><td>125–145</td><td>mmHg</td><td><span class="badge b-mid">中</span></td></tr>
+            <tr><td>舒张压</td><td>80–95</td><td>mmHg</td><td><span class="badge b-mid">中</span></td></tr>
+            <tr><td>平均压</td><td>100–110</td><td>mmHg</td><td><span class="badge b-mid">中</span></td></tr>
+            <tr><td><b>直肠温度</b></td><td>38.0–39.5（100.4–103.1 °F）</td><td>°C</td><td><span class="badge b-mid">中</span></td></tr>
+            <tr><td><b>静息呼吸频率</b></td><td>16–40</td><td>次/分</td><td><span class="badge b-mid">中</span></td></tr>
+            <tr><td>尿比重</td><td>1.020–1.040</td><td>—</td><td><span class="badge b-mid">中</span></td></tr>
+            <tr><td>最大尿渗透压</td><td>3000</td><td>mosmol/L</td><td><span class="badge b-mid">中</span></td></tr>
+            <tr><td>尿/血浆浓度比</td><td>10</td><td>—</td><td><span class="badge b-mid">中</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="refs">来源：<a href="https://en.wikivet.net/Feline_Physiology_-_WikiNormals">WikiVet, Feline Physiology — WikiNormals</a>（兽医教育资源，CC BY-NC-ND）。该页最后编辑于 2018-03-28，属汇总表性质，未逐项标注一次文献。</p>
+
+      <div class="callout warn">
+        <div class="ct">一处必须说明的来源冲突：猫的心率</div>
+        <p>WikiVet 的正常值表给出 <b>120–140 bpm</b>；而兽医临床与消费级产品材料中更常见的是 <b>140–220 bpm</b>。本报告在本次检索中<b>未能取得该数值的一手文献</b>来裁决这一差异，因此<b>不给单一数字</b>。</p>
+        <p>差异的可能来源包括：①测量场景（诊室 vs 家中）②是否已适应环境（猫的应激心率可远高于静息）③"静息"的操作性定义不同 ④设备与听诊方式差异。</p>
+        <p><b>对产品的含义</b>：这恰好说明<b>参考区间的绝对判断在猫身上特别不可靠</b>——一只在诊室里心率 200 的猫可能完全健康，而一只在家静息心率 160 的猫可能在正常范围内。因此<b>相对该猫自身基线变化</b>的检测方式，比对绝对阈值更站得住。这一点与另一份项目报告的结论一致：PetPace 自身的产品定位也是"基于你的宠物的个体基线，而不是平均值"。</p>
+      </div>
+
+      <h4>为什么"在家测"本身就有临床价值</h4>
+      <p>上一条冲突引出一个对本报告很重要的事实：<b>诊室测得的生命体征会被应激污染。</b>猫在兽医诊室的应激反应可显著抬高心率与呼吸频率，而这正是传统上"正常值范围"被批评的原因之一。可穿戴监测的核心价值不在于"测得更多"，而在于<b>在宠物的自然环境中、在它没有应激时</b>获取数据。<span class="badge b-mid">中</span></p>
+
+      <h3 id="s-ac-metrics">2.2 哪些指标真正有用：按临床价值排序</h3>
+      <p class="lede">这是本报告的核心表格。它回答"到底该测什么"，并标出每一项<b>能在什么形态的设备上测得</b>——最后两列是本报告全部结论的根据。</p>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th style="width:20%">指标</th><th style="width:26%">能提示什么</th><th style="width:20%">在哪测</th><th style="width:9%">项圈可测</th><th>证据</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="rank">1</span><b>饮水量</b></td>
+              <td>多饮是最早、最非特异的警示信号之一，可见于慢性肾病、糖尿病、甲亢、子宫蓄脓等</td>
+              <td>微芯片识别的饮水机、水碗秤</td>
+              <td><span class="badge b-weak">否</span></td>
+              <td><span class="badge b-mid">中</span>（临床共识；本项目未取得阈值的一手文献）</td>
+            </tr>
+            <tr>
+              <td><span class="rank r2">2</span><b>猫砂盆使用</b><br><span class="refs">频次 / 时长 / 单次重量</span></td>
+              <td>排尿排便频次与量的改变；猫砂盆外排泄；进出困难（OA）；便秘；下泌尿道问题</td>
+              <td>智能猫砂盆（称重 + 多猫识别）</td>
+              <td><span class="badge b-weak">否</span></td>
+              <td><span class="badge b-mid">中</span>（产品已商用；独立验证文献本项目未取得）</td>
+            </tr>
+            <tr>
+              <td><span class="rank r3">3</span><b>体重趋势</b></td>
+              <td>渐进性体重下降见于甲亢、慢性肾病、糖尿病、肿瘤、慢性疼痛；上升见于肥胖相关风险</td>
+              <td>宠物体重秤、猫砂盆内置秤、喂食器</td>
+              <td><span class="badge b-weak">否</span></td>
+              <td><span class="badge b-mid">中</span>（CKD 猫的体重下降已有专门研究）</td>
+            </tr>
+            <tr>
+              <td><span class="rank r4">4</span><b>活动量与跳跃</b></td>
+              <td><b>骨关节炎早筛的核心信号</b>：活动减少、跳跃次数与高度下降、休息与睡眠增多</td>
+              <td><b>项圈（三轴加速度计 + 气压传感器）</b></td>
+              <td><span class="badge b-strong">是</span></td>
+              <td><span class="badge b-strong">强</span>（PLOS ONE 2020，n=61 家养猫）</td>
+            </tr>
+            <tr>
+              <td><span class="rank r4">5</span><b>进食量</b></td>
+              <td>食欲下降或增加；甲亢典型为多食而体重下降；慢性肾病常为食欲下降</td>
+              <td>智能喂食器、食盆秤</td>
+              <td><span class="badge b-weak">否</span></td>
+              <td><span class="badge b-mid">中</span></td>
+            </tr>
+            <tr>
+              <td><span class="rank r4">6</span><b>休息 / 睡眠时长</b></td>
+              <td>睡眠时间随年龄上升属正常；但骤增可能提示疼痛或不适</td>
+              <td>项圈（加速度 + 气压）</td>
+              <td><span class="badge b-strong">是</span></td>
+              <td><span class="badge b-strong">强</span>（同上，可准确区分休息与睡眠）</td>
+            </tr>
+            <tr>
+              <td><span class="rank r5">7</span>心率 / HRV</td>
+              <td>唤醒水平、自主神经反应。HRV 降低常与应激相关</td>
+              <td>项圈（ECG 或 PPG）</td>
+              <td><span class="badge b-mid">是</span></td>
+              <td><span class="badge b-mid">中</span>（犬侧有 Holter-ECG 对照研究；<b>猫侧本项目未取得同等验证</b>）</td>
+            </tr>
+            <tr>
+              <td><span class="rank r5">8</span>呼吸频率</td>
+              <td>静息呼吸频率升高可见于胸腔积液、心衰、热应激、疼痛。 feline 心脏病的居家监测指标</td>
+              <td>项圈，或非接触（视频/雷达）</td>
+              <td><span class="badge b-mid">是</span></td>
+              <td><span class="badge b-mid">中</span></td>
+            </tr>
+            <tr>
+              <td><span class="rank r5">9</span>体温</td>
+              <td>发热、低体温。但体表温度 ≠ 核心温度，误差大</td>
+              <td>项圈（体表）／直肠（核心，需人工）</td>
+              <td><span class="badge b-mid">有限</span></td>
+              <td><span class="badge b-weak">弱</span>（体表温度的代表性本项目未取得验证文献）</td>
+            </tr>
+            <tr>
+              <td><span class="rank r5">10</span>发声</td>
+              <td>夜间嚎叫可见于甲亢、认知功能障碍、高血压、疼痛</td>
+              <td>项圈麦克风／室内麦克风</td>
+              <td><span class="badge b-mid">是</span></td>
+              <td><span class="badge b-weak">弱</span>（<b>不得做语义翻译</b>，见 §4.4）</td>
+            </tr>
+            <tr>
+              <td><span class="rank r5">11</span>理毛行为</td>
+              <td>过度理毛（应激、皮肤问题）或理毛减少（OA、不适、口腔疼痛）</td>
+              <td>摄像头／人工观察</td>
+              <td><span class="badge b-weak">否</span></td>
+              <td><span class="badge b-mid">中</span>（列于 OA 行为改变清单）</td>
+            </tr>
+            <tr>
+              <td><span class="rank r5">12</span>热量 / 能量消耗</td>
+              <td>—</td>
+              <td>—</td>
+              <td><span class="badge b-weak">否</span></td>
+              <td><span class="badge b-weak">已被证伪</span>：AJVR 2024 指出市售可穿戴在犬的能量摄入/消耗上<b>不可靠</b>。<b>本报告不建议将此列入产品能力</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout risk">
+        <div class="ct">这张表的读法</div>
+        <p>临床价值排序中<b>前三项（饮水、猫砂盆、体重）项圈全都测不到</b>；项圈能覆盖的是第 4、6、7、8、9、10 项——其中真正证据强的只有<b>活动/跳跃</b>与<b>休息/睡眠</b>两项。</p>
+        <p>这正是"猫版健康手环"类比失效的量化表达：<b>项圈覆盖了临床价值排序的后半段，而完全缺失了前半段。</b></p>
+      </div>
+
+      <h3 id="s-ac-activity">2.3 活动与睡眠监测的验证状况</h3>
+      <p>这是项圈在猫身上<b>唯一有强同行评审验证</b>的能力，因此值得单列。</p>
+      <div class="callout ok">
+        <div class="ct">关键研究：Plus Cycle® 猫用活动监测仪的验证</div>
+        <p class="refs">Yamazaki A, Edamura K, Tanegashima K, Tomo Y, Yamamoto M, Hirao H, Seki M, Asano K. <i>Utility of a novel activity monitor assessing physical activities and sleep quality in cats.</i> <b>PLOS ONE</b> 15(7): e0236795, 2020-07-31. 日本大学兽医学部。<a href="https://doi.org/10.1371/journal.pone.0236795">开放获取</a></p>
+        <p><b>设备</b>：内置<b>三轴加速度计 + 气压传感器</b>，专为猫狗设计（对比对象是此前用于猫的人用监测仪 Actical®）。</p>
+        <p><b>三步验证</b>：①与 Actical® 对比（n=10 健康猫）②健康猫测量精度验证（n=6）③家养猫的性别/年龄/昼夜影响（n=61）。</p>
+        <p><b>主要结果</b></p>
+        <ul style="margin-bottom:0">
+          <li>与 Actical® 在<b>总活动量</b>与<b>活动强度</b>上均呈强相关（p&lt;0.05）</li>
+          <li>对健康猫的身体活动可高精度量化</li>
+          <li><b>能非常准确地区分"休息"与"睡眠"状态</b></li>
+          <li>家养猫中<b>无性别显著差异</b></li>
+          <li><b>活动量与跳跃次数随年龄显著下降；休息与睡眠时间随年龄显著上升</b></li>
+        </ul>
+        <p style="margin-top:10px"><b>作者结论</b>：该设备可准确、客观地评估猫的身体活动与睡眠质量，<b>可用于管理猫的肌肉骨骼健康</b>。<span class="badge b-strong">强</span></p>
+      </div>
+
+      <div class="callout warn">
+        <div class="ct">该研究的利益冲突须披露</div>
+        <p>论文明确声明：设备由日本动物转诊医疗中心（JARMeC）借予日本大学；<b>JARMeC 正在就该设备申请专利</b>（JP2017-514095，状态 pending）；两位作者是 JARMeC 雇员。作者声明资助方未参与研究设计、数据分析与发表决定。</p>
+        <p>本报告据此判断：<b>该研究的方向性结论可用，但它同时是一项由设备方参与的研究</b>，独立重复的证据在本报告检索范围内<b>未取得</b>。这一点应在引用时保留。</p>
+      </div>
+
+      <h4>此前的验证基础更薄</h4>
+      <p>该论文指出：在它之前，<b>关于猫活动监测仪测量精度的报告只有一篇</b>，且所用设备是<b>为人开发的两轴加速度计</b>，因而<b>无法测量跳跃次数减少与睡眠时间</b>——而这两者恰是猫 OA 的常见信号。<span class="badge b-mid">中</span></p>
+      <p>另有独立研究以加速度计量化家猫活动（<i>Quantification of activity in domestic cats (Felis catus) by accelerometry</i>，Applied Animal Behaviour Science, 2015），本报告仅取得题录。<span class="badge b-mid">中</span></p>
+
+      <h3 id="s-ac-oa">2.4 骨关节炎：猫最被低估的健康问题</h3>
+      <p>这是本报告认为<b>最值得作为产品切入点</b>的临床问题，理由有三：患病率高、主人识别率低、而客观活动监测恰好能覆盖其核心表现。</p>
+
+      <h4>患病率：影像学证据</h4>
+      <ul>
+        <li>一项研究对 100 只随机选取的猫（6 月龄–20 岁）做影像学检查，<b>91 只</b>至少有一个肢体关节存在 OA</li>
+        <li>另一项研究报告：<b>6 岁以上 61%、14 岁以上 82%</b> 的猫至少一个关节有 OA</li>
+        <li>回归分析显示<b>年龄与 OA 的存在正相关</b></li>
+      </ul>
+      <p class="refs">数据来源：上述 PLOS ONE 2020 论文引言所引用的流行病学研究（该论文为开放获取，引言部分已核实）。<span class="badge b-strong">强</span></p>
+
+      <div class="callout risk">
+        <div class="ct">为什么主人发现不了：猫的 OA 不表现为跛行</div>
+        <p>论文明确指出：<b>与犬不同，猫 OA 最常见的临床表现不是跛行</b>。因此主人<b>很难识别</b>相关信号，也往往不知道自己的猫有 OA。</p>
+        <p><b>猫 OA 最常见的行为改变</b></p>
+        <div class="grid g2" style="margin-top:12px">
+          <div class="card">
+            <h4>跳跃相关</h4>
+            <ul style="margin-bottom:0">
+              <li>跳跃能力下降：<b>71%</b></li>
+              <li>跳跃高度降低：<b>67%</b></li>
+            </ul>
+          </div>
+          <div class="card">
+            <h4>其他行为改变</h4>
+            <ul style="margin-bottom:0">
+              <li>整体活动量减少</li>
+              <li>休息时间增多 / 睡眠时间增加</li>
+              <li>动作缓慢或僵硬</li>
+              <li>上下楼梯困难</li>
+              <li>进出猫砂盆困难</li>
+              <li>理毛减少或困难</li>
+              <li>爪甲过度生长</li>
+              <li>抗拒被抱</li>
+              <li>与人或其他宠物的互动减少</li>
+              <li>食欲下降</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <h4>已有的主观评估工具（说明"客观化"是真实需求）</h4>
+      <p>为早期识别猫 OA，学界已开发多个<b>主观</b>评分系统：feline musculoskeletal pain index (FMPI)、client-specific outcome measure (CSOM)、Montreal instrument for cat arthritis testing for use by caretaker (MI-CAT(C)) 与 by veterinarian (MI-CAT(V))。<span class="badge b-peer">同行评审</span></p>
+      <p>论文指出：<b>主观评估结果可能含糊，难以获得一致意见</b>，因此需要<b>客观</b>的行为改变测量方法——这正是一份"客观活动监测"的立项理由。<span class="badge b-mid">中</span></p>
+
+      <h4>另一个相关工具：Feline Grimace Scale（猫面部表情疼痛量表）</h4>
+      <p>猫的疼痛评估有专门的<b>面部表情量表</b>，且仍在被持续研究（维度结构、各动作单元的重要性、影响评估的变量）。<span class="badge b-peer">同行评审</span></p>
+      <p class="refs">来源：<a href="https://pubmed.ncbi.nlm.nih.gov/40998152/">Understanding the Feline Grimace Scale: A study of dimensional structure…</a> <i>The Veterinary Journal</i> 2025 Dec;314:106448. doi:10.1016/j.tvjl.2025.106448. PMID 40998152（本报告取得题录，未读取全文）</p>
+      <div class="callout">
+        <div class="ct">对产品的含义</div>
+        <p>猫的疼痛评估目前<b>主流路径是"看脸"与"看行为"</b>，而非"看生理读数"。这提示：项圈若能客观量化<b>跳跃与活动</b>，它补的是行为侧而非生理侧的短板——这也与上表的临床价值排序一致。</p>
+      </div>
+
+      <h3 id="s-ac-collar">2.5 佩戴可行性与安全</h3>
+      <p>猫戴项圈是一个独立于"测什么"的现实约束。</p>
+
+      <h4>项圈在猫身上的失效是真实存在的</h4>
+      <div class="callout warn">
+        <div class="ct">随机对照研究：猫项圈的失效时间</div>
+        <p class="refs"><i>Evaluation of collars and microchips for visual and permanent identification of pet cats.</i> <b>JAVMA</b> 237(4):387. doi:10.2460/javma.237.4.387. PMID 20707748. 被标注为 Randomized Controlled Trial。</p>
+        <p>该研究<b>专门分析了"项圈失效时间"</b>，并随机分配项圈类型——分组中包含<b>塑料卡扣项圈 176 只（32.7%）</b>。</p>
+        <p><b>本报告未能读取全文</b>（出版商页面返回 202），因此<b>不引述具体的失效比例与中位时间</b>。此处仅确认一个事实：<b>存在一项同行评审的随机对照研究，把"猫项圈会掉/会失效"当作需要量化的主要结局。</b><span class="badge b-mid">中</span></p>
+      </div>
+      <p>另有文献提到一种流传于猫主人与兽医之间的观念：<b>"猫不能戴项圈，或会被项圈所伤"</b>（该表述见于一篇会议论文集，本报告仅作现象记录，不作为结论）。<span class="badge b-weak">弱</span></p>
+
+      <h4>安全设计的含义</h4>
+      <ul>
+        <li><b>脱落力设计</b>是猫项圈的核心安全机制——但这与"设备别掉"的产品诉求直接冲突。一项把"失效时间"作为结局的 RCT 说明这个冲突是真实的。</li>
+        <li><b>重量与体积对猫的负担大于犬。</b>猫体重通常 3–6 kg，同样 100 g 的设备对猫的相对负担是犬的 3–6 倍。本报告在既往核查中已注意到：目前带摄像头的宠物穿戴设备与多参数传感项圈都约 100 g 量级。<span class="badge b-mid">中</span></li>
+        <li><b>面部感觉器官保护</b>：犬猫的面部触须是独立感觉器官，每根有高度神经支配的专用毛囊；出于美观修剪在德国、奥地利、瑞士受动物福利法禁止。佩戴设备应避免压迫或摩擦面部触须区。<span class="badge b-strong">强</span></li>
+      </ul>
+
+      <h3 id="s-ac-verdict">2.6 学界小结</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:38%">命题</th><th style="width:16%">证据</th><th>判定</th></tr></thead>
+          <tbody>
+            <tr><td>猫的活动与睡眠可被加速度计客观量化</td><td><span class="badge b-strong">强</span></td><td><b>成立</b>。且能区分休息与睡眠（PLOS ONE 2020）</td></tr>
+            <tr><td>活动/跳跃随年龄下降、休息/睡眠随年龄上升</td><td><span class="badge b-strong">强</span></td><td><b>成立</b>（n=61 家养猫）</td></tr>
+            <tr><td>猫 OA 患病率极高且常被漏诊</td><td><span class="badge b-strong">强</span></td><td><b>成立</b>。91/100 有影像学 OA；不表现为跛行</td></tr>
+            <tr><td>跳跃能力下降是猫 OA 的核心信号</td><td><span class="badge b-strong">强</span></td><td><b>成立</b>（71% / 67%）</td></tr>
+            <tr><td>主观评分工具已存在但一致性不足</td><td><span class="badge b-mid">中</span></td><td>成立，且构成"客观化"的立项理由</td></tr>
+            <tr><td>猫的心率参考区间有统一数值</td><td><span class="badge b-dispute">来源冲突</span></td><td><b>不成立</b>。120–140 与 140–220 并存，本报告不给单一数字</td></tr>
+            <tr><td>猫的饮水/排泄/体重可由项圈监测</td><td><span class="badge b-weak">无</span></td><td><b>物理上不成立</b>。这些事件不发生在颈部</td></tr>
+            <tr><td>项圈在猫身上会失效</td><td><span class="badge b-mid">中</span></td><td>有专门 RCT 量化失效时间（全文未取得）</td></tr>
+            <tr><td>猫用消费级穿戴的心率/呼吸精度可靠</td><td><span class="badge b-weak">弱</span></td><td><b>本报告未取得猫侧的独立验证</b>（犬侧有 Holter-ECG 对照）</td></tr>
+            <tr><td>可穿戴能可靠估算能量消耗</td><td><span class="badge b-weak">已被证伪</span></td><td><b>不成立</b>（AJVR 2024，犬侧）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="s-industry">
+      <h2><span class="num">3</span>业界产品</h2>
+      <p class="lede">本章按<b>设备形态</b>组织，而不是按品牌。这样才能看清"哪些指标被什么形态覆盖"。凡未能核实的参数与价格，一律标注"未找到可靠来源"。</p>
+
+      <h3 id="s-in-wearable">3.1 可穿戴（项圈）</h3>
+
+      <h4>PetPace 猫用智能项圈 <span class="badge b-peer">官网核实</span></h4>
+      <ul>
+        <li><b>厂商</b>：PetPace（美国）</li>
+        <li><b>测量指标</b>：官网猫版页面明确列出 <b>脉搏（Pulse）、体温（Temperature）、应激水平/HRV（Stress Level）、呼吸（Respiration）</b>，并提及收集生命体征、追踪位置、共享健康数据。犬版另有活动、睡眠、热量、姿势等</li>
+        <li><b>形态</b>：项圈，有独立的猫用型号与兽医/研究版本</li>
+        <li><b>验证状况</b>：厂商提供论文列表（含与 Holter-ECG 对照的心率/HRV 精度研究、活动监测初步评估）。<b>本报告未独立核验这些论文全文，也未找到猫侧的独立验证</b>。<span class="badge b-mid">厂商提供证据，未独立核验</span></li>
+        <li><b>链接</b>：<a href="https://petpace.com/cats/">petpace.com/cats</a></li>
+      </ul>
+
+      <h4>Tractive Cat（GPS 追踪器） <span class="badge b-peer">官网核实</span></h4>
+      <ul>
+        <li><b>厂商</b>：Tractive（奥地利）</li>
+        <li><b>形态</b>：猫用项圈式追踪器（含 Cat 6 Mini 等型号）</li>
+        <li><b>定位</b>：以 GPS 定位与安全区为核心，兼有健康/活动追踪表述。第三方评测机构（Wired）曾就 Cat 6 Mini 发表评测</li>
+        <li><b>价格</b>：本次抓取未取得确切数字——未找到可靠来源</li>
+        <li><b>链接</b>：<a href="https://tractive.com/">tractive.com</a></li>
+      </ul>
+
+      <h4>学术原型：KitBit 室内宠物佩戴项圈 <span class="badge b-peer">同行评审会议论文</span></h4>
+      <p>发表于 Animal-Computer Interaction 会议（ACI 2024），定位为<b>室内宠物</b>的仪器化项圈。本报告仅取得题录，未读全文。<span class="badge b-mid">中</span></p>
+      <p class="refs">来源：<i>KitBit: An Instrumented Collar for Indoor Pets.</i> Proceedings of the Tenth International Conference on Animal-Computer Interaction (2024). doi:10.1145/3637882.3637894</p>
+
+      <h4>ITRI × Amicoipet 智能宠物项圈</h4>
+      <p>据工研院（ITRI）消息，该智能宠物项圈曾在 Concours Lépine 获金奖。本报告<b>未能核实其具体测量指标</b>，故不列参数。<span class="badge b-weak">未核实</span></p>
+
+      <h3 id="s-in-stationary">3.2 固定式传感（猫健康的真正重心）</h3>
+      <p class="lede">这一类覆盖了 §2.2 表中项圈缺失的<b>前三项高价值指标</b>。</p>
+
+      <h4>Purina Petivity 猫用智能设备线 <span class="badge b-peer">官网核实</span></h4>
+      <p>本报告发现的<b>产品线最完整</b>的猫健康监测方案，且形态明确不在项圈上：</p>
+      <ul>
+        <li><b>Smart Litter Box Monitor（智能猫砂盆监测器）</b>——加装在现有猫砂盆下方，不替换猫砂盆</li>
+        <li><b>Smart Feeder for Cats（猫用智能喂食器）</b></li>
+        <li><b>Kidney Health Test for Cats（猫肾脏健康检测条）</b></li>
+        <li>Oral Health Test（口腔健康检测）、Gut Health Test / Microbiome Analysis Kit（肠道菌群检测）</li>
+      </ul>
+      <p>该智能猫砂盆监测系统曾被评为 2025 年度产品（Product of the Year 2025，据 Purina 新闻中心）。<span class="badge b-weak">厂商口径</span></p>
+      <p class="refs">来源：<a href="https://www.petivity.com/">petivity.com</a>（产品线核实）；<a href="https://newscenter.purina.com/2025-02-07-Purina-Petivity-Smart-Litter-Box-Monitor-System-Voted-Product-of-the-Year-2025">Purina 新闻中心</a>。<b>具体测量参数与精度未取得</b>——产品页为 JS 渲染。</p>
+
+      <h4>Sure Petcare Felaqua Connect（微芯片识别饮水机） <span class="badge b-peer">官网核实</span></h4>
+      <ul>
+        <li><b>厂商</b>：Sure Petcare / SureFlap（英国）</li>
+        <li><b>机制</b>：饮水机内置微芯片读取器，<b>识别是哪只猫在喝</b>，从而给出<b>逐只猫的饮水量</b></li>
+        <li><b>为何重要</b>：这恰好覆盖 §2.2 表中临床价值<b>排第一</b>的指标，且多猫家庭中"总量正常但某一只异常"是最容易被忽略的情形</li>
+        <li><b>同厂另有</b> Animo（活动与行为监测，项圈式）</li>
+        <li><b>链接</b>：<a href="https://www.surepetcare.com/en-us/felaqua-connect">Felaqua Connect</a></li>
+      </ul>
+
+      <h4>Whisker Litter-Robot 4 / 5（自动猫砂盆 + 洞察订阅） <span class="badge b-peer">官网核实</span></h4>
+      <ul>
+        <li><b>厂商</b>：Whisker（美国）</li>
+        <li><b>机制</b>：自动猫砂盆，配合 Insights 订阅提供使用洞察；具备称重能力（用于识别与追踪个体）</li>
+        <li><b>链接</b>：<a href="https://www.whisker.com/litter-robot-4-insights-bundle">Litter-Robot 4 Insights Bundle</a></li>
+        <li><b>价格与具体指标</b>：页面为 JS 渲染，<b>未取得</b>——未找到可靠来源</li>
+      </ul>
+
+      <h4>其他已核实的猫砂盆/喂食类产品</h4>
+      <ul>
+        <li><b>CATLINK（中国）</b>：智能猫砂盆，官网称"创新健康检测系统，搭载多猫识别模组，全方面捕捉猫咪行为数据"，并称已为全球超 220,000+ 只猫咪提供健康数据分析。<b>具体指标与精度未给出可核验清单。</b><span class="badge b-weak">厂商宣称</span> <a href="https://www.catlink.cn/">catlink.cn</a></li>
+        <li><b>PETKIT 小佩（中国）</b>：自动猫砂盆、智能喂食器、饮水机；官网未体现心率或呼吸监测。<a href="https://www.petkit.com/">petkit.com</a></li>
+        <li><b>PurrSong LavvieBot S</b>：智能猫砂盆（本报告仅确认产品存在）</li>
+      </ul>
+
+      <h3 id="s-in-consumable">3.3 在家检测与耗材</h3>
+
+      <h4>PrettyLitter（健康指示猫砂） <span class="badge b-peer">官网核实</span></h4>
+      <ul>
+        <li><b>机制</b>：订阅制猫砂，通过颜色变化提示尿液中的异常（如 pH 变化、血液），属<b>耗材型的健康指示</b>而非电子传感</li>
+        <li><b>定位</b>：官网以"Health Monitoring Cat Litter"表述，采用订阅配送模式</li>
+        <li><b>链接</b>：<a href="https://www.prettylitter.com/">prettylitter.com</a></li>
+        <li><b>精度与验证</b>：本次抓取为 JS 渲染页，<b>未取得</b>——未找到独立的验证文献</li>
+      </ul>
+
+      <h4>Petivity 肾脏健康检测条</h4>
+      <p>在家采集尿液并用检测条判读，属"把诊所检验搬到家里"的路径。本报告未取得其灵敏度/特异度数据。<span class="badge b-weak">未核实</span></p>
+
+      <h3 id="s-in-matrix">3.4 产品对比矩阵</h3>
+      <p>按<b>指标覆盖</b>组织。表中"✓"仅代表<b>厂商宣称该功能存在</b>，不代表本报告验证了精度。</p>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>产品 / 厂商</th><th>形态</th>
+              <th>饮水</th><th>排泄</th><th>体重</th><th>活动/跳跃</th><th>进食</th><th>心率/呼吸</th><th>体温</th><th>发声</th>
+              <th>验证</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Petivity</b><br><span class="refs">Purina</span></td><td>猫砂盆监测 + 喂食器 + 检测条</td>
+              <td>✗</td><td>✓</td><td>✓</td><td>✗</td><td>✓</td><td>✗</td><td>✗</td><td>✗</td>
+              <td>未独立核验</td>
+            </tr>
+            <tr>
+              <td><b>Felaqua Connect</b><br><span class="refs">Sure Petcare</span></td><td>微芯片饮水机</td>
+              <td>✓ 逐只</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td>
+              <td>未核实</td>
+            </tr>
+            <tr>
+              <td><b>Litter-Robot 4/5</b><br><span class="refs">Whisker</span></td><td>自动猫砂盆</td>
+              <td>✗</td><td>✓</td><td>✓ 称重</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td>
+              <td>未核实</td>
+            </tr>
+            <tr>
+              <td><b>CATLINK</b></td><td>智能猫砂盆</td>
+              <td>✗</td><td>✓</td><td>✓</td><td>部分</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td>
+              <td>无验证数据</td>
+            </tr>
+            <tr>
+              <td><b>PetPace 猫版</b></td><td>项圈</td>
+              <td>✗</td><td>✗</td><td>✗</td><td>✓</td><td>✗</td><td>✓</td><td>✓ 体表</td><td>✗</td>
+              <td>厂商论文列表</td>
+            </tr>
+            <tr>
+              <td><b>Tractive Cat</b></td><td>项圈</td>
+              <td>✗</td><td>✗</td><td>✗</td><td>✓</td><td>✗</td><td>未核实</td><td>未核实</td><td>✗</td>
+              <td>未核实</td>
+            </tr>
+            <tr>
+              <td><b>Sure Petcare Animo</b></td><td>项圈</td>
+              <td>✗</td><td>✗</td><td>✗</td><td>✓</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td>
+              <td>未核实</td>
+            </tr>
+            <tr>
+              <td><b>PrettyLitter</b></td><td>健康指示猫砂（耗材）</td>
+              <td>✗</td><td>✓ 尿液性状</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td>
+              <td>未核实</td>
+            </tr>
+            <tr>
+              <td><b>Plus Cycle®</b><br><span class="refs">JARMeC（研究用）</span></td><td>项圈（三轴加速度+气压）</td>
+              <td>✗</td><td>✗</td><td>✗</td><td><b>✓ 含跳跃</b></td><td>✗</td><td>✗</td><td>✗</td><td>✗</td>
+              <td><b>同行评审（PLOS ONE）</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <div class="ct">读表须知</div>
+        <p>没有任何单一产品覆盖全部高价值指标。<b>临床价值排序前三项（饮水、排泄、体重）只能由固定式设备覆盖</b>；项圈覆盖的是活动/跳跃与心率/呼吸/体温。<b>本表也说明了一个产品事实：目前没有把"固定式 + 可穿戴"打通的方案</b>——数据分散在各自 App 里。</p>
+      </div>
+
+      <h3 id="s-in-gap">3.5 格局判断：为什么猫健康监测的重心不在项圈</h3>
+      <div class="grid g3">
+        <div class="card">
+          <h4>指标位置决定形态</h4>
+          <p>饮水在水碗、排泄在猫砂盆、体重在秤上、进食在食盆。这些事件<b>物理上不经过颈部</b>，项圈无从测量。</p>
+        </div>
+        <div class="card">
+          <h4>猫的生理让项圈信号更弱</h4>
+          <p>猫每天睡眠 12–16 小时，活动信号被大幅压缩；且猫体型小，同样重量的设备相对负担是犬的数倍。</p>
+        </div>
+        <div class="card">
+          <h4>项圈有独特价值，但很窄</h4>
+          <p>只有它能量化<b>跳跃次数与高度</b>（猫 OA 的核心信号）与<b>无应激状态下的心率/呼吸</b>。这两点无可替代。</p>
+        </div>
+      </div>
+      <div class="callout">
+        <div class="ct">本报告明确判定"未发现成熟方案"的类别</div>
+        <ul style="margin-bottom:0">
+          <li><b>把固定式与可穿戴数据打通、输出单一"猫健康状态"视图的方案</b>——未发现</li>
+          <li><b>以跳跃量化作为猫 OA 早筛卖点并附同行评审验证的消费级产品</b>——未发现（验证停留在研究设备）</li>
+          <li><b>猫用项圈心率/呼吸精度的独立第三方验证</b>——未发现（犬侧有 Holter-ECG 对照研究）</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="s-synthesis">
+      <h2><span class="num">4</span>综合洞察</h2>
+
+      <h3 id="s-sy-core">4.1 核心判断</h3>
+      <p>把 §2.2 的指标价值表与 §3.4 的产品矩阵叠起来看，结论很清楚：<b>指标的位置决定了设备的形态，而现有产品各自只覆盖了一半。</b></p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:30%">能力</th><th style="width:16%">就绪度</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>猫砂盆使用监测（频次/时长/重量）</td><td><span class="badge b-strong">已就绪</span></td><td>多款商用产品；<b>但独立验证文献未取得</b></td></tr>
+            <tr><td>逐只猫的饮水监测</td><td><span class="badge b-strong">已就绪</span></td><td>微芯片识别饮水机已商用</td></tr>
+            <tr><td>体重趋势</td><td><span class="badge b-strong">已就绪</span></td><td>猫砂盆内置秤、宠物体重秤</td></tr>
+            <tr><td>活动与睡眠量化</td><td><span class="badge b-strong">已验证</span></td><td>PLOS ONE 2020 同行评审验证（含利益冲突披露）</td></tr>
+            <tr><td><b>跳跃次数与高度量化</b></td><td><span class="badge b-mid">研究阶段</span></td><td>研究设备已具备（气压传感器判别跳跃）；<b>消费级产品未见以此为卖点</b></td></tr>
+            <tr><td>猫心率/呼吸/HRV 的消费级精度</td><td><span class="badge b-weak">未验证</span></td><td>犬侧有 Holter-ECG 对照；<b>猫侧独立验证未取得</b></td></tr>
+            <tr><td>体表温度代表核心体温</td><td><span class="badge b-weak">未验证</span></td><td>本报告未取得验证文献</td></tr>
+            <tr><td>能量消耗估算</td><td><span class="badge b-weak">已证伪</span></td><td>AJVR 2024：市售可穿戴在犬的摄入/消耗上不可靠</td></tr>
+            <tr><td><b>固定式 + 可穿戴融合的单一健康视图</b></td><td><span class="badge b-weak">未就绪</span></td><td><b>无产品做到</b>——数据分散在各自 App</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="s-sy-analogy">4.2 「猫版健康手环」的类比在哪里失效</h3>
+      <p>这是本报告最核心的分析，也是给产品定义的最直接建议。</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:20%">维度</th><th style="width:40%">人类健康手环</th><th>猫</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>传感器位置</b></td>
+              <td>手腕<b>一个位置</b>就能覆盖核心指标</td>
+              <td><b>核心指标分散在四个位置</b>：水碗、猫砂盆、秤、食盆——不在颈部</td>
+            </tr>
+            <tr>
+              <td><b>最高价值指标</b></td>
+              <td>心率、步数、睡眠——都在手腕</td>
+              <td>饮水、排泄、体重、进食——<b>项圈一个都测不到</b></td>
+            </tr>
+            <tr>
+              <td><b>依从性</b></td>
+              <td>人愿意长期佩戴</td>
+              <td>猫的项圈需脱落力设计，<b>而"会掉"正是产品要避免的</b></td>
+            </tr>
+            <tr>
+              <td><b>参考区间</b></td>
+              <td>静息心率区间稳定且可查</td>
+              <td><b>参考区间本身有来源冲突</b>（120–140 vs 140–220），且诊室应激抬高读数</td>
+            </tr>
+            <tr>
+              <td><b>睡眠占比</b></td>
+              <td>约 1/3</td>
+              <td>约 12–16 小时，<b>活动信号被大幅压缩</b></td>
+            </tr>
+            <tr>
+              <td><b>体重相对负担</b></td>
+              <td>手环约 30 g / 70 kg</td>
+              <td>设备约 100 g / 4 kg —— <b>相对负担高一个数量级</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout risk">
+        <div class="ct">结论</div>
+        <p><b>猫的等效物不是手环，而是「固定式传感网络 + 周期性在家检测 + 一个补充性的项圈」。</b></p>
+        <p>若要沿用"手环"这个心智模型，应当明确它只对应猫健康监测的<b>一个子集</b>：活动/跳跃、睡眠、无应激心率与呼吸。把它当成完整方案，会漏掉猫最需要被发现的那些信号。</p>
+      </div>
+
+      <h3 id="s-sy-gap">4.3 证据落差：宣传与证据之间的距离</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:34%">常见宣称</th><th>证据现状</th></tr></thead>
+          <tbody>
+            <tr><td>"猫版健康手环，全面监测"</td><td>可监测的是活动、睡眠、心率、呼吸、体温；<b>临床价值最高的饮水/排泄/体重/进食不在覆盖范围内</b></td></tr>
+            <tr><td>"监测猫的健康状态"</td><td>可测<b>指标</b>；不能测或判断"健康状态"本身。<b>猫 OA 的官方路径仍是行为观察与面部表情量表</b></td></tr>
+            <tr><td>"活动监测可早期发现疾病"</td><td>方向有依据（OA 早筛），但<b>独立重复验证未取得</b>，且关键研究由设备方参与、含专利关联</td></tr>
+            <tr><td>"测心率、呼吸、体温"</td><td>功能存在可核实；<b>猫侧的精度验证本报告未取得</b>；体表温度与核心体温的关系未验证</td></tr>
+            <tr><td>"可估算热量消耗"</td><td><b>已被同行评审研究证伪</b>（AJVR 2024）</td></tr>
+            <tr><td>"翻译猫在说什么"</td><td>本报告沿既有结论：<b>不做语义翻译</b>——焦虑发声与发情声高度相似，标准化翻译可能造成危险误判</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="s-sy-risk">4.4 风险与伦理</h3>
+      <ul>
+        <li><b>漏诊风险（最重要）。</b>若产品让主人以为"手环没报警就是健康"，可能<b>降低</b>就医意愿。而猫 OA 的真实识别路径是行为观察——产品若只呈现生理读数，反而会掩盖它。</li>
+        <li><b>脱落与安全。</b>猫项圈需要脱落力设计以防勒伤，这与"设备不能掉"的产品诉求直接冲突。JAVMA 的 RCT 把"失效时间"作为主要结局，说明这是被认真对待的问题。</li>
+        <li><b>面部感觉器官保护。</b>犬猫面部触须是受法律保护的感觉器官（德、奥、瑞禁止出于美观修剪）。佩戴设计必须避开面部触须区。</li>
+        <li><b>多猫家庭的归属问题。</b>饮水与排泄数据只有在能<b>识别是哪只猫</b>时才有价值（微芯片或体重识别）。否则"总量正常"会掩盖个体异常——而 PDSA PAW 2024 显示，42% 的英国猫与其他猫同住，多猫家庭应激行为比例达 55–67%。</li>
+        <li><b>医疗越界。</b>消费级读数不构成兽医诊断依据。若做健康提示，必须明确边界与转诊路径。</li>
+        <li><b>拟人化偏差。</b>动物情绪的意识体验<b>不可直接测量</b>，只能通过神经、行为与生理指标间接推断（Mendl et al. 2010）。把"数据异常"表述为"猫不舒服"是不可证伪的越界。</li>
+      </ul>
+    </section>
+
+    <section id="s-conclusion">
+      <h2><span class="num">5</span>结论与建议</h2>
+
+      <h3>对「猫版健康手环」这个设想的直接回答</h3>
+      <div class="callout">
+        <div class="ct">一句话结论</div>
+        <p>这个设想<b>部分成立，但需要重新定义产品边界</b>：项圈能做好的是<b>活动与跳跃、睡眠、无应激心率与呼吸</b>——其中"跳跃"恰是猫最被低估疾病（骨关节炎）的核心信号，价值真实；但猫诊断价值最高的<b>饮水、排泄、体重、进食</b>四项，项圈<b>物理上测不到</b>，必须由固定式设备承担。</p>
+      </div>
+
+      <h3>建议按此顺序推进</h3>
+      <ol>
+        <li><b>不要做"猫版健康手环"，做"猫的居家健康监测网"。</b>项圈是其中一个节点，负责它独有的能力；固定式设备承担饮水、排泄、体重、进食。产品叙事应从一开始就是"网络"而不是"手环"——否则第一版就会被"那它怎么测喝水量"问倒。</li>
+        <li><b>把"跳跃"做成核心卖点。</b>理由最硬：猫 OA 患病率极高（91/100 有影像学证据）、<b>不表现为跛行</b>、而跳跃能力下降是最常见信号（71%）、现有主观量表一致性不足、且研究设备已验证气压传感器可判别跳跃。<b>这是本报告找到的唯一"高临床价值 + 项圈独有可测 + 已有验证路径"的交集。</b></li>
+        <li><b>只做相对自身基线的变化，不做绝对阈值判断。</b>依据是猫的心率参考区间本身存在来源冲突，且诊室应激会污染读数。展示"比你自己 4 周前高 1.2σ"，比展示"心率 180 偏高"更站得住。</li>
+        <li><b>多猫家庭必须解决"是哪只猫"。</b>用微芯片或体重识别做个体归属。没有归属的数据在多猫家庭里几乎没有价值——而 42% 的英国猫处于多猫家庭。</li>
+        <li><b>明确划掉三件事</b>：不做能量消耗估算（已被证伪）、不做声音语义翻译（可能危险误判）、不做"情绪判断"（不可证伪）。</li>
+        <li><b>把漏诊风险写进产品设计。</b>提示"建议关注"时必须同时给出<b>行为观察清单</b>（如跳跃高度、进出猫砂盆、理毛、爪甲），把主人引向兽医与行为观察，而不是让他停留在看数字。</li>
+      </ol>
+
+      <h3>本报告的已知不足</h3>
+      <ul>
+        <li><b>猫心率参考区间的冲突未解决。</b>本报告只呈现了冲突双方，未取得裁决所需的一手文献。</li>
+        <li><b>猫项圈 RCT 全文未取得</b>（出版商返回 202），因此未引述具体失效比例。</li>
+        <li><b>多条产品页为 JS 渲染</b>（Litter-Robot、Felaqua、PrettyLitter、Petivity 具体参数），相关字段标注"未核实"而非填充推测值。</li>
+        <li><b>猫侧项圈心率/呼吸的独立验证未取得</b>；犬侧有 Holter-ECG 对照研究，但不可直接外推。</li>
+        <li><b>饮水量的正常值与多饮阈值未取得一手文献</b>，故本报告未给出具体 ml/kg/日 数值。</li>
+        <li><b>中文文献与中文市场覆盖不完整</b>（CNKI、万方需机构登录）。</li>
+        <li>非系统性综述，未做 PRISMA 全流程登记与双人独立筛选。</li>
+      </ul>
+    </section>
+
+    <section id="s-refs">
+      <h2><span class="num">参考文献</span></h2>
+      <p class="lede">以下为本报告实际取得并引用的来源。标注"仅题录"者表示未能读取全文。</p>
+
+      <h3>A. 学界文献</h3>
+      <ol class="refs">
+        <li id="r1"><b>Yamazaki A, Edamura K, Tanegashima K, Tomo Y, Yamamoto M, Hirao H, Seki M, Asano K.</b> <i>Utility of a novel activity monitor assessing physical activities and sleep quality in cats.</i> PLOS ONE. 2020;15(7):e0236795. <b>开放获取</b>，日本大学兽医学部。<a href="https://doi.org/10.1371/journal.pone.0236795">DOI</a>｜<a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0236795">全文</a>
+          <br><span style="color:var(--muted)">本报告最重要来源：猫活动/睡眠监测验证 + OA 流行病学与行为改变清单。利益冲突已披露（设备方 JARMeC 参与、含专利申请 JP2017-514095）。</span></li>
+        <li id="r2"><i>Evaluation of collars and microchips for visual and permanent identification of pet cats.</i> JAVMA. 237(4):387. doi:10.2460/javma.237.4.387. PMID 20707748. Randomized Controlled Trial. <b>仅题录</b>（出版商页返回 202）。<a href="https://pubmed.ncbi.nlm.nih.gov/20707748/">PubMed</a></li>
+        <li id="r3"><i>Understanding the Feline Grimace Scale: A study of dimensional structure, importance of each action unit and variables affecting assessment.</i> The Veterinary Journal. 2025 Dec;314:106448. doi:10.1016/j.tvjl.2025.106448. PMID 40998152. <b>仅题录</b>。<a href="https://pubmed.ncbi.nlm.nih.gov/40998152/">PubMed</a></li>
+        <li id="r4"><i>Quantification of activity in domestic cats (Felis catus) by accelerometry.</i> Applied Animal Behaviour Science. 2015. <b>仅题录</b>（ScienceDirect）。<a href="https://www.sciencedirect.com/science/article/abs/pii/S016815911500163X">ScienceDirect</a></li>
+        <li id="r5"><i>Evaluation of a digitally integrated accelerometer-based activity monitor for the measurement of activity in cats.</i> <b>仅题录</b>（ScienceDirect）。<a href="https://www.sciencedirect.com/science/article/abs/pii/S1467298716307681">ScienceDirect</a></li>
+        <li id="r6"><i>KitBit: An Instrumented Collar for Indoor Pets.</i> Proceedings of the Tenth International Conference on Animal-Computer Interaction (ACI), 2024. doi:10.1145/3637882.3637894. <b>仅题录</b>。<a href="https://dl.acm.org/doi/abs/10.1145/3637882.3637894">ACM DL</a></li>
+        <li id="r7"><i>Epidemiology of Chronic Kidney Disease (CKD) in Cats: An Analysis of the Factors Involved.</i> <b>仅题录</b>（含 SDMA 与肌酐关系的图形分析）。<a href="https://europepmc.org/article/MED/41465795">Europe PMC</a></li>
+        <li id="r8"><i>Evaluation of Weight Loss Over Time in Cats with Chronic Kidney Disease.</i> Journal of Veterinary Internal Medicine. doi:10.1111/jvim.14561. <b>仅题录</b>。</li>
+        <li id="r9"><i>Implementation of a prospective in-clinic validated Feline Osteoarthritis Checklist.</i> Journal of Feline Medicine and Surgery. doi:10.1177/1098612X251368007. <b>仅题录</b>。</li>
+        <li id="r10">Mendl M, Burman OHP, Paul ES. <i>An integrative and functional framework for the study of animal emotion and mood.</i> Proc R Soc B. 2010;277(1696):2895-2904. <a href="https://pubmed.ncbi.nlm.nih.gov/20685706/">PMID 20685706</a></li>
+        <li id="r11"><i>Commercially available wearable health monitor in dogs is unreliable for tracking energy intake and expenditure.</i> Am J Vet Res. 2024;85(3). doi:10.2460/ajvr.23.10.0242. PMID 38109848. <b>仅题录</b>。<a href="https://pubmed.ncbi.nlm.nih.gov/38109848/">PubMed</a></li>
+        <li id="r12">Döring D, Bartels A, Erhard MH. <i>[The importance of the tactile hairs in domestic dogs…]</i> Tierarztl Prax Ausg K Kleintiere Heimtiere. 2020;48(3):186-195. PMID 32557495.（面部触须为独立感觉器官；修剪在德奥瑞受法律禁止）<a href="https://pubmed.ncbi.nlm.nih.gov/32557495/">PubMed</a></li>
+      </ol>
+
+      <h3>B. 兽医参考与教育资源</h3>
+      <ol class="refs" start="13">
+        <li id="r13"><b>WikiVet, Feline Physiology — WikiNormals.</b> 猫正常生理值汇总表（心率、血压、直肠温度、静息呼吸频率、尿比重等）。<a href="https://en.wikivet.net/Feline_Physiology_-_WikiNormals">WikiVet</a>
+          <br><span style="color:var(--muted)">性质：兽医教育资源汇总表，最后编辑 2018-03-28，未逐项标注一次文献。本报告标为 <b>中</b>，并对其心率数值标注「来源冲突」。</span></li>
+        <li id="r14">UC Davis California Veterinary Emergency Team, <i>Normal Vital Signs</i>（PDF，本次抓取因内容类型限制未解析，<b>未使用其数值</b>）。</li>
+        <li id="r15">Ontario SPCA, <i>Cat and Dog Normals</i>（PDF，未解析，<b>未使用其数值</b>）。</li>
+      </ol>
+
+      <h3>C. 产品与厂商资料</h3>
+      <ol class="refs" start="16">
+        <li id="r16">PetPace 猫用智能项圈官网页（脉搏 / 体温 / 应激水平 HRV / 呼吸）。<a href="https://petpace.com/cats/">petpace.com/cats</a></li>
+        <li id="r17">PetPace 技术规格与论文列表页。<a href="https://petpace.com/specs/">规格</a>｜<a href="https://petpace.com/scientific-publications/">论文列表</a></li>
+        <li id="r18">Tractive 官网（猫用 GPS 追踪器）。<a href="https://tractive.com/">tractive.com</a></li>
+        <li id="r19">Purina Petivity 官网（Smart Litter Box Monitor / Smart Feeder for Cats / Kidney · Oral · Gut Health Tests）。<a href="https://www.petivity.com/">petivity.com</a></li>
+        <li id="r20">Purina 新闻中心：Petivity 智能猫砂盆监测系统获 Product of the Year 2025。<a href="https://newscenter.purina.com/2025-02-07-Purina-Petivity-Smart-Litter-Box-Monitor-System-Voted-Product-of-the-Year-2025">新闻稿</a></li>
+        <li id="r21">Sure Petcare Felaqua Connect（微芯片识别饮水机，逐只猫饮水量）。<a href="https://www.surepetcare.com/en-us/felaqua-connect">产品页</a></li>
+        <li id="r22">Whisker Litter-Robot 4 Insights Bundle。<a href="https://www.whisker.com/litter-robot-4-insights-bundle">产品页</a>（JS 渲染，具体参数未取得）</li>
+        <li id="r23">CATLINK 官网（智能猫砂盆，健康检测系统与多猫识别模组表述）。<a href="https://www.catlink.cn/">catlink.cn</a></li>
+        <li id="r24">PETKIT 小佩官网。<a href="https://www.petkit.com/">petkit.com</a></li>
+        <li id="r25">PrettyLitter 官网（Health Monitoring Cat Litter，订阅制）。<a href="https://www.prettylitter.com/">prettylitter.com</a></li>
+        <li id="r26">Wired：Tractive Cat 6 Mini 评测。<a href="https://www.wired.com/review/tractive-cat-6-mini/">wired.com</a></li>
+        <li id="r27">ITRI Today：ITRI × Amicoipet 智能宠物项圈获 Concours Lépine 金奖（具体指标未核实）。<a href="https://itritoday.itri.org/118/content/en/unit_03-1.html">ITRI</a></li>
+      </ol>
+
+      <div class="callout warn">
+        <div class="ct">来源可信度提示</div>
+        <p>B、C 两类为教育资源与厂商自述，<b>不构成独立验证</b>。若需据以决策，应优先获取 A 类原文，尤其是 <b>#1（PLOS ONE 猫活动/睡眠验证）</b>、<b>#2（猫项圈 RCT）</b>与 <b>#3（Feline Grimace Scale）</b>。</p>
+      </div>
+    </section>
+
+    <section id="s-appendix">
+      <h2><span class="num">附录</span>检索策略与判据</h2>
+
+      <h3>检索时间与渠道</h3>
+      <ul>
+        <li><b>检索截止</b>：2026-10-02。</li>
+        <li><b>学术渠道</b>：PubMed、PLOS ONE、ScienceDirect、Europe PMC、ACM DL、期刊官网。</li>
+        <li><b>产业渠道</b>：厂商官网与产品页直抓、厂商新闻中心、第三方评测媒体。</li>
+        <li><b>受限渠道</b>：JMDS/JAVMA 出版商页返回 202；ScienceDirect 摘要页普遍 403；多条电商/产品页为 JS 渲染，正文不可提取；CNKI、万方需机构登录。</li>
+      </ul>
+
+      <h3>检索式（代表性）</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:32%">主题</th><th>关键词</th></tr></thead>
+          <tbody>
+            <tr><td>猫活动/睡眠验证</td><td><code>feline accelerometer activity monitor validation cats</code> · <code>cat activity monitor sleep quality validation</code></td></tr>
+            <tr><td>骨关节炎</td><td><code>feline osteoarthritis prevalence underdiagnosis cats</code> · <code>cat jumping ability osteoarthritis clinical sign</code></td></tr>
+            <tr><td>参考区间</td><td><code>feline reference intervals heart rate respiratory rate temperature</code> · <code>cat normal heart rate range 140 220</code></td></tr>
+            <tr><td>饮水与排泄</td><td><code>cat water intake normal ml/kg polydipsia</code> · <code>litter box monitoring cat weight frequency</code></td></tr>
+            <tr><td>疼痛评估</td><td><code>Feline Grimace Scale validation acute pain</code></td></tr>
+            <tr><td>佩戴可行性</td><td><code>cat collar retention study safety breakaway</code></td></tr>
+            <tr><td>产品</td><td><code>cat health monitoring collar product</code> · <code>smart litter box monitor cat weight</code> · <code>per-cat water intake microchip fountain</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>纳入与排除标准</h3>
+      <div class="grid g2">
+        <div class="card">
+          <h4>纳入</h4>
+          <ul style="margin-bottom:0">
+            <li>同行评审论文、开放获取全文优先</li>
+            <li>兽医教育资源可用作参考区间来源，但须标注等级</li>
+            <li>产品须真实在售或已正式发布，且有官方页面可查</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>排除</h4>
+          <ul style="margin-bottom:0">
+            <li>无法确认其存在来源的文献（灰区即排除）</li>
+            <li>纯营销稿、以新闻稿充当技术说明的材料</li>
+            <li>JS 渲染且无法取得正文的产品页——<b>只标定位，不填参数</b></li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>数值处理规则</h3>
+      <ul>
+        <li><b>来源冲突</b>（如猫心率 120–140 vs 140–220）→ 呈现双方，<b>不给单一数字</b>。</li>
+        <li><b>未取得一手来源</b> → 写"未核实"或"未找到可靠来源"，<b>不以估算值填充</b>。</li>
+        <li><b>厂商宣称</b>一律与独立验证分栏陈述。</li>
+        <li><b>已被证伪的指标</b>（能量消耗）明确标注并建议不列入产品能力。</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer>
+    <p style="margin-bottom:10px"><b>AI 使用声明</b>　本报告的检索、来源整理与文稿起草由 AI 辅助研究工具完成。所有引用来源均经过逐条可访问性核验；无法确认存在性的来源一律剔除或以"未核实"明确标注。报告的选题、范围界定与最终判断由使用者负责。</p>
+    <p style="margin-bottom:10px"><b>免责声明</b>　本报告为信息综合与产品可行性评估，<b>不构成兽医诊断或治疗建议</b>。任何消费级宠物设备的读数均不得作为临床决策依据。猫的疼痛与疾病评估应由执业兽医进行；如怀疑猫有健康问题，请及时就医。</p>
+    <p style="margin-bottom:0"><b>报告版本</b>　v1.0 · 生成于 2026-10-02 · 检索截止 2026-10-02 · 方法论：二手研究 + 证据分级 · 范围：家猫</p>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  var bar=document.getElementById('progress');
+  function onScroll(){
+    var h=document.documentElement;
+    var max=h.scrollHeight-h.clientHeight;
+    bar.style.width=(max>0?(h.scrollTop/max*100):0)+'%';
+  }
+  document.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+
+  var links=[].slice.call(document.querySelectorAll('nav.toc a'));
+  var targets=links.map(function(a){return document.querySelector(a.getAttribute('href'));}).filter(Boolean);
+  if(!('IntersectionObserver' in window)||!targets.length) return;
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(!e.isIntersecting) return;
+      links.forEach(function(l){l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id);});
+    });
+  },{rootMargin:'-10% 0px -75% 0px'});
+  targets.forEach(function(t){io.observe(t);});
+})();
+</script>
+</body>
+</html>
