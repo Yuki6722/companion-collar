@@ -22,6 +22,11 @@
 - `scripts/fetch-assets.mjs`：幂等抓取 CC0 资产（10.56 MB，含字节校验与许可清单生成）。
 - `scripts/smoke-scene.mjs`：场景自检断言——读取浏览器回传的快照，验证渲染、资产替换与状态切换。
 - `apps/web/public/styles.css`；`scripts/dev-server.mjs` 增加 `POST /__selftest` 端点（仅本地预览）。
+- **FBX 来源的橘猫资产（`wip`，粗糙版，暂不接入场景）**：`scripts/build-cat-asset.mjs` 把上游
+  Quaternius Animal Pack Vol.2 的 `Cat.fbx` 在构建期转成 `apps/web/public/assets/models/cat/cat.glb`。
+  实测 807 三角面、34 根骨骼、`Idle`/`Walking` 各 1.67 s；构建确定性（同一输入两次 sha256 一致）。
+  **全仓无代码引用、与 `CatRig` 接口尚不兼容、上游许可未归档** → **先不要用**。
+  细节与启用前提见 [`docs/design/04-cat-asset-wip.md`](docs/design/04-cat-asset-wip.md)。
 
 ### Changed
 - `apps/web` 从单页骨架改为**两屏 + hash 路由**：家居场景 / 工程自检（原骨架自检内容迁到 `screens/status.ts`）。
