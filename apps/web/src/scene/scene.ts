@@ -422,6 +422,11 @@ export class HomeScene {
     return this.catStatus?.text() ?? '';
   }
 
+  /** 自检用：当前生效的突发动作幅度。用来区分「标签在报」与「身体真的在动」。 */
+  catIncidentMotion(): Record<string, number> | null {
+    return this.cat?.incidentMotionSnapshot() ?? null;
+  }
+
   /**
    * 切换到机位预设。
    *

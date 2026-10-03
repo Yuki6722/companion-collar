@@ -177,6 +177,12 @@ if (withIncident) {
     breathDuring > breathBefore * 1.3,
     `breathFreq ${breathBefore}（平常）→ ${breathDuring}（呼吸急促中）`,
   );
+  // 动作配方也必须真的挂上：这是「标签在报」与「身体在动」的分界
+  check(
+    '突发动作配方已生效（不只是标签在报）',
+    (withIncident.catMotion?.breathAmpAdd ?? 0) > 0,
+    `catMotion=${JSON.stringify(withIncident.catMotion)}`,
+  );
 }
 
 if (failures.length > 0) {

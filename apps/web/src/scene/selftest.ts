@@ -38,6 +38,13 @@ export interface SceneSnapshot {
    * 而这两类恰好是肉眼可见、却最难在无头环境里自动发现的问题。
    */
   catLabel?: string;
+  /**
+   * 当前生效的突发动作幅度。
+   *
+   * 为什么单独记这个：`catIncident` 只能证明**标签在报**，证明不了**身体在动**。
+   * 这两者的分离正是「点了抽搐没反应」的故障形态，因此必须分别记录。
+   */
+  catMotion?: Record<string, number>;
   issues: string[];
   /** 槽位状态：区分「资产没到」与「资产到了没换上」 */
   slots?: Record<string, string | number>;
@@ -135,6 +142,7 @@ export function summarize(snap: SceneSnapshot): string {
     `catHour=${Number(snap.catHour ?? 0).toFixed(2)}`,
     `catIncident=${snap.catIncident ?? 'none'}`,
     `catLabel=${snap.catLabel || 'none'}`,
+    `catTremor=${Number(snap.catMotion?.tremorAmp ?? 0).toFixed(3)}`,
     `tailFreq=${Number(snap.catPose.tailFreq ?? 0).toFixed(2)}`,
     `earFlatten=${Number(snap.catPose.earFlatten ?? 0).toFixed(2)}`,
     `pupil=${Number(snap.catPose.pupilScale ?? 0).toFixed(2)}`,

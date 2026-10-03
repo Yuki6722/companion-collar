@@ -180,6 +180,21 @@ export class CatController {
     };
   }
 
+  /** 自检用：当前生效的突发动作幅度（不在突发中时为 null）。 */
+  incidentMotionSnapshot(): Record<string, number> | null {
+    const m = this.incidentMotion;
+    if (!m) return null;
+    return {
+      tremorAmp: round4(m.tremorAmp),
+      tremorFreq: round4(m.tremorFreq),
+      limbJitter: round4(m.limbJitter),
+      bodyTwist: round4(m.bodyTwist),
+      breathAmpAdd: round4(m.breathAmpAdd),
+      breathFreqScale: round4(m.breathFreqScale),
+      rigidity: round4(m.rigidity),
+    };
+  }
+
   /**
    * 设置突发演示的身体动作。
    *
@@ -447,6 +462,10 @@ function easeOutCubic(k: number): number {
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+function round4(v: number): number {
+  return Math.round(v * 10000) / 10000;
 }
 
 function lerpPose(a: CatPoseParams, b: CatPoseParams, k: number): CatPoseParams {
