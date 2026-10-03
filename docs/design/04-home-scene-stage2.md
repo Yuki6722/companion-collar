@@ -218,6 +218,56 @@ seed + durationS + injectIncidents
 **自检怎么断言**：不靠「标签文案有没有变」（`resting` 段里本来就不变），
 而是断言**段内进展计数在推进**或**已切换到新段**——这才是「时间线在走」的可靠证据。
 
+### 6.7 踩过的最贵的一个坑：状态接线被复制成两份
+
+用户反馈「点击抽搐，动作确实抽搐了，但头顶还是显示休息」。
+
+**根因**：`HomeScene` 里有**两条**创建行为运行时的代码路径，各自写了一份 `onStatus` 回调：
+
+```ts
+// ① 构造时（第 242 行附近）——同时更新头顶标签 ✅
+this.behavior = new CatBehaviorRuntime(timeline, this.cat, {
+  onStatus: (s) => {
+    this.catStatus?.set({ activity: s.activity, posture: s.posture, incident: s.incident, ... });
+    this.behaviorOnStatus?.(s);
+  },
+});
+
+// ② triggerIncident()（点突发按钮走这条）——漏了头顶标签 ❌
+this.behavior = new CatBehaviorRuntime(next, this.cat, {
+  startAtS: Math.max(0, atS - 1),
+  onStatus: (s) => this.behaviorOnStatus?.(s),
+});
+```
+
+于是**只有点突发这条路**，头顶标签被整个跳过：身体在抽（场景内部状态在变），
+标签停在点击前的「休息 趴卧」。而自动推进、初始状态、`?incident=` 之外的路径都正常——
+所以之前所有验证都通过，因为我一直在测**起点与自动推进**，从没测过**点击**这条分支。
+
+**修法**：把接线提成**一个字段**，两条路径共用：
+
+```ts
+private readonly onBehaviorStatus = (s: BehaviorStatus): void => {
+  this.catStatus?.set({ ... });
+  this.behaviorOnStatus?.(s);
+};
+// 两处都不再各自写回调
+onStatus: this.onBehaviorStatus,
+```
+
+这样结构上不可能再漏——新增第三条创建路径时也只能复用它。
+
+**为什么值得单独记**：这不是逻辑错误，是**接线重复**。逻辑错的 bug 通常能被已有的
+单测抓住；而接线漏接只有在**那个特定入口**被执行时才会暴露。
+教训是：**同一份状态回应只允许存在一处**；一旦发现自己在两个地方写同一个回调，
+就该立刻提成字段——即使当时两处的内容一模一样。
+
+**自检怎么拦住它**：`smoke-scene.mjs` 现在断言
+**「突发期间头顶标签同步报出突发」**（`catLabel` 必须含「抽搐」）。
+这条断言走的是 `triggerIncident` 那条分支，而不是初始构造——正是缺了它才让这个 bug 溜过全部验证。
+另外注意断言里改用了 `tremorAmp > 0`（而不是 `breathAmpAdd > 0`），因为自动序列现在注入的是
+**抽搐**——抽搐的识别特征是抖动，不是呼吸。
+
 ## 7. 房间锚点与可达性
 
 - **权威坐标仍是 `layout.ts`**。`anchor-map.ts` 只做映射，不新增坐标。

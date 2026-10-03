@@ -196,8 +196,17 @@ if (withIncident) {
   // 动作配方也必须真的挂上：这是「标签在报」与「身体在动」的分界
   check(
     '突发动作配方已生效（不只是标签在报）',
-    (withIncident.catMotion?.breathAmpAdd ?? 0) > 0,
+    (withIncident.catMotion?.tremorAmp ?? 0) > 0,
     `catMotion=${JSON.stringify(withIncident.catMotion)}`,
+  );
+  // ★ 反过来也要断言：**触发突发不是靠重载页面，而是靠运行中重建时间线**。
+  // 曾经这里漏接头顶标签的回调，表现为「点了抽搐：身体在抽、标签显示休息」。
+  // 那条路径（triggerIncident）与初始构造是两条代码路径，只测初始构造抓不到，
+  // 因此必须断言「突发期间标签也在报突发」。
+  check(
+    '突发期间头顶标签同步报出突发（triggerIncident 路径）',
+    (withIncident.catLabel ?? '').includes('抽搐'),
+    `catLabel=${withIncident.catLabel}`,
   );
 }
 

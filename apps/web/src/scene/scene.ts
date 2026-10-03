@@ -87,6 +87,23 @@ export class HomeScene {
   /** 自主行为运行时；行为层关闭时为 null */
   private behavior: CatBehaviorRuntime | null = null;
   private behaviorOnStatus: ((s: BehaviorStatus) => void) | null = null;
+  /**
+   * 状态回应的**唯一接线**。
+   *
+   * 为什么提成一个字段：此前「初始运行时」与「点突发后新建的运行时」各写了一份
+   * 回调，结果后者漏掉头顶标签的更新——表现为「点突发后身体在动、标签停在点击前」。
+   * 提成字段后结构上不可能再漏：任何新建的运行时都用同一个回调。
+   */
+  private readonly onBehaviorStatus = (s: BehaviorStatus): void => {
+    this.catStatus?.set({
+      activity: s.activity,
+      posture: s.posture,
+      incident: s.incident,
+      segmentElapsedS: s.segmentElapsedS,
+      segmentRealDurationS: s.segmentRealDurationS,
+    });
+    this.behaviorOnStatus?.(s);
+  };
   /** 当前行为时间线（注入突发时会被替换） */
   private behaviorTimeline: CatBehaviorTimeline | null = null;
   /** 猫头顶的状态标签（把行为模型外显）；行为层关闭时为 null */
@@ -239,16 +256,7 @@ export class HomeScene {
       this.statusVisible = !new URLSearchParams(window.location.search).has('status-off');
       this.catStatus.setVisible(this.statusVisible);
       this.behavior = new CatBehaviorRuntime(timeline, this.cat, {
-        onStatus: (s) => {
-          this.catStatus?.set({
-            activity: s.activity,
-            posture: s.posture,
-            incident: s.incident,
-            segmentElapsedS: s.segmentElapsedS,
-            segmentRealDurationS: s.segmentRealDurationS,
-          });
-          this.behaviorOnStatus?.(s);
-        },
+        onStatus: this.onBehaviorStatus,
       });
     }
 
@@ -360,6 +368,11 @@ export class HomeScene {
    * 为什么不直接在运行时插队：注入会改变时段的长度分配，
    * 而 `activityAt()` 的连续性不变量（区间首尾相接、覆盖满时长）必须保持。
    * 重建时间线能让「注入 → 还原」这条回归链路在浏览器里也成立。
+   *
+   * ⚠️ 接线纪律（这里踩过坑）：新建的运行时**必须复用 `this.onBehaviorStatus`**，
+   * 不能另外写一份回调。最初这里写的是 `(s) => this.behaviorOnStatus?.(s)`，
+   * 只喂了 HUD、漏掉了头顶标签——于是「点突发后身体在动、标签却停在点击前的状态」。
+   * 状态回应的接线只允许存在一处。
    */
   triggerIncident(kind: CatIncidentKind): void {
     if (!this.cat) return;
@@ -381,7 +394,7 @@ export class HomeScene {
     });
     this.behavior = new CatBehaviorRuntime(next, this.cat, {
       startAtS: Math.max(0, atS - 1),
-      onStatus: (s) => this.behaviorOnStatus?.(s),
+      onStatus: this.onBehaviorStatus,
     });
   }
 

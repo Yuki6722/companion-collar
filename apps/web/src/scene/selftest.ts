@@ -120,10 +120,12 @@ export function installDebugHandle(
     window.setTimeout(() => post(), 14_500);
     window.setTimeout(() => {
       call(handle, 'setAutoCat', '');
-      call(handle, 'incident', 'labored-breathing');
+      call(handle, 'incident', 'seizure');
     }, 16_000);
-    // 突发自 16 s 起持续 60 s（演示时间），这里在它进行中回传一次
+    // 抽搐自 16 s 起持续 15 s（演示时间），在它进行中回传一次
     window.setTimeout(() => post(), 18_000);
+    // 抽搐结束后再回传一次：用来对照「突发期间」与「突发之后」的标签
+    window.setTimeout(() => post(), 32_000);
   }
 
   return { post, handle };
