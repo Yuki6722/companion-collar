@@ -17,6 +17,7 @@ import { buildCat } from './cat/cat-model.ts';
 import { CatController } from './cat/cat-controller.ts';
 import { CatBehaviorRuntime } from './cat/cat-behavior.ts';
 import type { BehaviorStatus } from './cat/cat-behavior.ts';
+import { CatStatusLabel } from './cat/cat-status-label.ts';
 import { CAT_ANCHOR_SPECS } from './cat/anchor-map.ts';
 import { OPERATIVE_CONSTANTS, buildBehaviorTimeline } from '@camp/core';
 import type { CatBehaviorTimeline, CatIncidentKind } from '@camp/core';
@@ -88,11 +89,16 @@ export class HomeScene {
   private behaviorOnStatus: ((s: BehaviorStatus) => void) | null = null;
   /** 当前行为时间线（注入突发时会被替换） */
   private behaviorTimeline: CatBehaviorTimeline | null = null;
+  /** 猫头顶的状态标签（把行为模型外显）；行为层关闭时为 null */
+  private catStatus: CatStatusLabel | null = null;
+  private statusVisible = true;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
   private readonly labelLayer: HotspotLayer;
+  /** 猫头顶状态标签的 DOM 宿主（与资源标签层并列、互不干扰） */
+  private readonly catLabelHost: HTMLElement;
   private readonly sun: THREE.DirectionalLight;
   private readonly canvasHost: HTMLElement;
   private readonly clock = new THREE.Clock();
@@ -209,6 +215,13 @@ export class HomeScene {
     this.cat = new CatController(catRig, { reducedMotion: opts.reducedMotion });
     this.behaviorOnStatus = opts.onBehaviorStatus ?? null;
 
+    // 猫头顶的状态标签：**独立于资源标签层**，因此单独给一个宿主。
+    // 资源标签那层有「相互遮挡就隐藏」的贪心去重，猫的状态标签绝不能因为
+    // 撞上某个资源标签就被隐藏——它承载的是「它现在在做什么」这件主线信息。
+    this.catLabelHost = document.createElement('div');
+    this.catLabelHost.className = 'cat-status-layer';
+    opts.labelHost.appendChild(this.catLabelHost);
+
     // 自主行为：默认开启。时间线由调用方给（仿真器产出）或本地按同一套规则生成。
     // `?behavior=off` 可关掉，回到第一阶段的手动演示档位。
     const behaviorEnabled = !new URLSearchParams(window.location.search).has('behavior-off');
@@ -222,8 +235,18 @@ export class HomeScene {
           anchors: CAT_ANCHOR_SPECS,
         });
       this.behaviorTimeline = timeline;
+      this.catStatus = new CatStatusLabel(this.catLabelHost);
+      this.statusVisible = !new URLSearchParams(window.location.search).has('status-off');
+      this.catStatus.setVisible(this.statusVisible);
       this.behavior = new CatBehaviorRuntime(timeline, this.cat, {
-        onStatus: (s) => this.behaviorOnStatus?.(s),
+        onStatus: (s) => {
+          this.catStatus?.set({
+            activity: s.activity,
+            posture: s.posture,
+            incident: s.incident,
+          });
+          this.behaviorOnStatus?.(s);
+        },
       });
     }
 
@@ -380,6 +403,21 @@ export class HomeScene {
   }
 
   /**
+   * 猫头顶状态标签的显隐。
+   *
+   * 与资源标签开关**分开**：资源标签是「房间信息」，状态标签是「它现在在做什么」，
+   * 演示时经常需要「关掉满屋标签、只看猫」。
+   */
+  setStatusVisible(on: boolean): void {
+    this.statusVisible = on;
+    this.catStatus?.setVisible(on);
+  }
+
+  isStatusVisible(): boolean {
+    return this.statusVisible;
+  }
+
+  /**
    * 切换到机位预设。
    *
    * `immediate` 用于「必须以某个确定机位呈现」的场合（URL 指定视角、文档截图）：
@@ -477,6 +515,8 @@ export class HomeScene {
     this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLostBound);
     this.controls.dispose();
     this.labelLayer.dispose();
+    this.catStatus?.dispose();
+    this.catLabelHost.remove();
     this.scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) {
@@ -633,6 +673,16 @@ export class HomeScene {
 
     this.renderer.render(this.scene, this.camera);
     this.labelLayer.update(this.camera, this.canvasHost.clientWidth, this.canvasHost.clientHeight);
+    // 状态标签的**位置**每帧更新（猫在动），**文案**只在行为状态变化时更新
+    // （见 `CatStatusLabel.set` 的纪律 2），因此这里不产生文本重排。
+    if (this.catStatus) {
+      this.catStatus.update(
+        this.camera,
+        this.cat?.rig.root.position ?? new THREE.Vector3(),
+        this.canvasHost.clientWidth,
+        this.canvasHost.clientHeight,
+      );
+    }
 
     this.statTimer += dt;
     if (this.statTimer > 0.5 || !this.statsEmitted) {

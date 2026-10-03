@@ -32,6 +32,8 @@ export interface HudCallbacks {
   onCatState: (id: CatStateId) => void;
   onPreset: (preset: PresetSpec) => void;
   onLabels: (on: boolean) => void;
+  /** 猫头顶状态标签的显隐（与资源标签分开） */
+  onStatusLabel: (on: boolean) => void;
   onHighlights: (on: boolean) => void;
   onQuality: (choice: QualityChoice) => void;
   /** 切到自主行为 */
@@ -61,7 +63,7 @@ export class Hud {
   private readonly behaviorLine: HTMLElement;
   private readonly incidentLine: HTMLElement;
 
-  constructor(callbacks: HudCallbacks, initial: { labels?: boolean; highlights?: boolean } = {}) {
+  constructor(callbacks: HudCallbacks, initial: { labels?: boolean; highlights?: boolean; status?: boolean } = {}) {
     this.callbacks = callbacks;
 
     this.canvasHost = el('div', { class: 'scene-host' });
@@ -157,6 +159,9 @@ export class Hud {
     const layersPanel = el('section', { class: 'panel panel-layers' }, [
       el('h2', { class: 'panel-title', text: '图层与画质' }),
       this.switchRow('显示资源标签', initial.labels ?? true, (on) => this.callbacks.onLabels(on)),
+      this.switchRow('显示猫头顶的状态', initial.status ?? true, (on) =>
+        this.callbacks.onStatusLabel(on),
+      ),
       this.switchRow('高亮猫的关键资源', initial.highlights ?? false, (on) =>
         this.callbacks.onHighlights(on),
       ),

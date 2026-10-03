@@ -86,7 +86,11 @@ export class CatBehaviorRuntime {
       ? { x: place.position.x, y: place.heightM, z: place.position.z, rotY: place.facing }
       : { x: 0, y: 0, z: 0, rotY: 0 };
     this.controller.snapPoseFor(first.posture, true);
+    this.controller.setActivityMotion(ACTIVITY_MOTION[first.activity] ?? null);
     this.controller.setExternalTransform(this.transform, 0);
+    // 立刻推一次状态：否则头顶标签与 HUD 会空白最多 250 ms（emitStatus 的节流），
+    // 截图与「第一眼」都会看到空标签。
+    this.onStatus?.(this.status());
   }
 
   setPaused(on: boolean): void {

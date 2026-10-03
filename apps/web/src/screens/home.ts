@@ -24,6 +24,9 @@ export function mountHomeScreen(host: HTMLElement): () => void {
 
   // ?labels=off 用于文档截图与「只看房间本身」的场景
   const showLabels = new URLSearchParams(window.location.search).get('labels') !== 'off';
+  // 猫头顶的状态标签默认开启（它承载「它现在在做什么」这件主线信息）；
+  // ?status=off 可关掉——截图时经常需要干净画面
+  const showStatus = new URLSearchParams(window.location.search).get('status') !== 'off';
 
   const hud = new Hud(
     {
@@ -54,10 +57,11 @@ export function mountHomeScreen(host: HTMLElement): () => void {
         else scene?.preset(preset.id);
       },
       onLabels: (on) => scene?.setLabelsVisible(on),
+      onStatusLabel: (on) => scene?.setStatusVisible(on),
       onHighlights: (on) => scene?.setHighlightsVisible(on),
       onQuality: (choice) => scene?.setQuality(choice),
     },
-    { labels: showLabels },
+    { labels: showLabels, status: showStatus },
   );
 
   // 机位：房间预设 + 一个由档案推导出的项圈高度机位 + 一个实时跟猫的特写

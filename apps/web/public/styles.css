@@ -238,6 +238,73 @@ body {
   border-radius: 6px;
 }
 
+/* ---- 猫头顶的状态标签：把行为模型外显 ----
+   与资源标签（.hotspot）在视觉上刻意区分：状态标签是**主线信息**，
+   用深色实底 + 小尾巴，读起来像「贴在猫头上」，而不是另一个资源说明。 */
+
+.cat-status-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.cat-status {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(24, 22, 20, 0.82);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  backdrop-filter: blur(2px);
+}
+
+/* 指向猫头的小尾巴 */
+.cat-status::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  background: inherit;
+  transform: rotate(45deg);
+  border-radius: 1px;
+}
+
+.cat-status-name {
+  font-weight: 600;
+}
+
+.cat-status-detail {
+  font-size: 11px;
+  opacity: 0.72;
+}
+
+/* 突发演示：换成醒目配色，因为那一刻最该被看到的就是「发生了什么动作」 */
+.cat-status[data-state='incident'] {
+  background: rgba(160, 64, 12, 0.92);
+  box-shadow: 0 2px 14px rgba(180, 83, 9, 0.45);
+}
+
+.cat-status[data-state='incident'] .cat-status-name::before {
+  content: '●';
+  font-size: 9px;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+
 /* ---- 首屏提示卡：说明这页最值得看的东西，避免演示时找不到重点 ---- */
 
 .intro-card {
