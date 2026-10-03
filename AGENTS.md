@@ -8,17 +8,26 @@
 
 ## 1. 这个仓库是什么
 
-**companion-collar / 项圈 · 伴侣视角**：3 天 Vibe Coding Camp 的团队交付。给猫狗主人一个网页应用，可**自定义宠物档案（品种 / 体型 / 年龄）**，看见「同一间屋子在宠物感知下是什么样」，并得到一份**可核查的居家资源缺口清单**。
+**companion-collar / 基线哨兵 · 离家事件流**：3 天 Vibe Coding Camp 的团队交付。
+
+> **一句话定位**：**你上班时，它经历了什么；以及，它是否正在慢慢变化。**
+
+面向**在外工作的年轻养宠人**：白天不在家，不知道宠物的健康状况。产品由两部分组成：
+
+- **离家事件流** —— 按主人不在家的时段，汇总「发生了什么事件」（抓挠、摩擦、碰撞、甩头、姿势改变、发声、环境噪声），只描述**事件与比值**
+- **基线哨兵** —— 相对**这只宠物自己的基线**检测指标漂移（活动、静息活动、心率、HRV、呼吸、发声、抓挠、躲藏占比、噪声事件），只描述**变化**
 
 配套一个**项圈形态方案 + 数据仿真器**（本次不造真硬件，数据全部仿真且带已知真值）。
+
+**为什么是这个方向**：「了解宠物感受」其实是四个问题——①它现在感觉如何（**不可回答**，Mendl et al. 2010：动物情绪体验不可直接测量）②我不在时发生了什么（可回答）③它在慢慢变化吗（可回答，**且这是主人的盲区**，PLOS ONE 2026 n=647 + AAFP 指南）④我家环境够不够（可回答）。**本项目只回答 ② 和 ③**；市面产品都在答 ①，这正是它们答不好的原因。
 
 **团队三人**（由各自的研究报告确定分工）：
 
 | 代号 | 工作流 | 交付面 |
 |---|---|---|
-| **A** | 硬件与仿真线 | `pnpm sim:generate` 产出场景数据；项圈规格与形态方案 |
-| **B** | 前端与体验线 | 可扫码访问的线上 URL |
-| **C** | 感知模型与验证线 | 带证据标签的参数表；前后测验证报告 |
+| **A** | 硬件与仿真线 | `pnpm sim:generate` 产出带注入漂移的场景数据；项圈规格与形态方案 |
+| **B** | 前端与体验线 | 可扫码访问的线上 URL（事件流 / 漂移报告 / 宠物档案三屏） |
+| **C** | 基线引擎与验证线 | 带证据标签的漂移输出；前后测验证报告 |
 
 ---
 
@@ -84,7 +93,7 @@ iOS Safari 全版本不支持 WebXR，而主力用户是手机端。真做头显
 ## 5. 包边界与公共 API
 
 ```
-@camp/core        ← 类型、感知参数模型、证据登记、五大支柱规则、分析层
+@camp/core        ← 领域类型、稳健基线、漂移检测、档案推导、措辞政策
 @camp/simulator   ← 依赖 core；仿真数据生成、DeviceAdapter 实现、CLI
 @camp/web         ← 依赖以上两者；不反向被依赖
 ```
@@ -128,6 +137,26 @@ import map 定义在 [`apps/web/index.html`](apps/web/index.html)，把 `@camp/*
 ### 5.5.3 TypeScript 必须是 5.x
 `typescript@7` 是原生编译器预览版，需要平台二进制包 `@typescript/typescript-win32-x64`，在本环境装不上。**钉在 `^5.9`**。
 
+### 5.5.4 `core` 不得在运行时导入其它 workspace 包
+Node 的类型剥离（strip-only）**明确拒绝 node_modules 下的文件**——而 workspace 包在跑测试时是经 node_modules 符号链接解析的，于是抛：
+
+```
+ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING
+```
+
+**推论（务必遵守）**
+- `@camp/core` 源码里**不能出现运行时的跨包 import**（连 `export ... from '@camp/core'` 这种转发都不行）
+- 依赖方向只能是 `simulator → core`、`web → core + simulator`
+- 因此 `core` 自带所需的最小实现。目前两处刻意保留的"重复"，**都不是疏忽**：
+  - `core/src/drift.ts` 的 `makeShuffleRng` —— 置换检验只需要打乱能力
+  - `simulator/src/prng.ts` 的 `Rng` —— 数据生成需要完整抽样器（正态、区间、概率）
+- **测试文件也不例外**：`packages/core/test/helpers.ts` 自带确定性抽样器，正是为了不 import `@camp/simulator`
+
+### 5.5.5 措辞表的单一事实来源
+禁词表只在 **`packages/core/src/claims.ts`** 定义一处。`scripts/check-claims.mjs`（构建期门禁）与 `core/test/drift.test.ts`（断言输出不含禁词）都从那里读取。
+
+**新增禁词只改 `claims.ts` 一处**，门禁与测试同时生效。该文件带 `claims-check:ignore-file` —— 它必须能写出禁词本身。
+
 ---
 
 ## 6. 命令
@@ -169,7 +198,7 @@ node scripts/build-web.mjs                        # 内部 spawn 已用 stdio:'i
 
 ```
 AGENTS.md                  ← 本文件
-packages/core/             [C] 感知参数 · 证据登记 · 五大支柱 · 分析层
+packages/core/             [C] 领域类型 · 稳健基线 · 漂移检测 · 措辞政策
 packages/simulator/        [A] 仿真数据生成器 · DeviceAdapter
 apps/web/                  [B] 静态站（tsc 编译 + 浏览器 import map，无打包器）
 docs/research/             三份研究报告（团队共同依据，含归属说明）
@@ -196,17 +225,25 @@ data/                      运行时数据（不入库）
 
 ## 9. 当前进度
 
-- ✅ 仓库骨架、TypeScript strict 基线、措辞门禁
-- ✅ `@camp/core`：领域类型、档案推导（年龄/体型/项圈预算/机位高度）
-- ✅ `@camp/simulator`：确定性 PRNG、四场景、带注入滞后的真值数据、`DeviceAdapter`
-- ✅ 三份研究报告归档
-- ⏳ `resolvePerceptionProfile` + 证据登记表（Day 1，负责 C）
-- ⏳ 五大支柱规则化（Day 1，负责 C）
-- ⏳ 前端完整 UI：档案配置、视角对比、资源清单（Day 2，负责 B）
-- ⏳ 项圈规格与形态方案（Day 1–3，负责 A）
-- ⏳ 前后测验证（Day 3，负责 C）
+**方向（v2）**：从「感知参数可视化」调整为 **「基线哨兵 + 离家事件流」**。完整计划见 [`docs/design/00-plan-3day-camp.md`](docs/design/00-plan-3day-camp.md)。
 
-阶段 tag：`v0.1.0`（Day1 骨架可跑）→ `v0.2.0`（Day2 体验闭环）→ `v1.0.0`（Day3 交付）
+已完成：
+- ✅ 仓库骨架、TypeScript strict + `erasableSyntaxOnly` 门禁、无打包器构建
+- ✅ 措辞门禁，禁词表已收拢为**单一事实来源**（`core/src/claims.ts`）
+- ✅ `@camp/core`：领域类型、档案推导、**稳健基线（中位数/MAD）**、**漂移检测（稳健效应量 + 置换检验 + 持续性判据）**
+- ✅ `@camp/simulator`：确定性 PRNG、四场景、逐通道注入滞后的真值数据、`DeviceAdapter`
+- ✅ 三份研究报告归档；`AGENTS.md`、三日计划、证据政策
+- ✅ 门禁全绿：typecheck 3/3、测试 36/36、措辞门禁通过
+
+待办：
+- ⏳ `simulator`：注入**渐进漂移**（线性斜坡）+ `truth.injectedDrift` + 回归断言（Day 1，A）
+- ⏳ `core`：`eventRateByKind` / `summarizeAwayWindows` / 离家窗口异常检测（Day 2，C）
+- ⏳ `apps/web` 三屏：事件流 / 漂移报告 / 宠物档案（含离家时段）（Day 2，B）
+- ⏳ 项圈规格与形态方案（Day 1–3，A）
+- ⏳ 5–10 人前后测：漂移识别率（Day 3，C）
+- ⏳ **GitHub Pages 启用**（建议提前跑通，避免 Day 3 卡壳）
+
+阶段 tag：`v0.0.1`（骨架）→ `v0.1.0`（Day1）→ `v0.2.0`（Day2）→ `v1.0.0`（Day3）
 
 ---
 
