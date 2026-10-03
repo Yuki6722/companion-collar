@@ -43,6 +43,15 @@ export interface BehaviorStatus {
   moving: boolean;
   /** 已解码的行为区间序号（自检用） */
   segmentIndex: number;
+  /**
+   * 当前行为段已进行的**真实**秒数与整段真实时长。
+   *
+   * 为什么需要它：`resting` 段平均 56 秒、最长可达 2 分钟以上，而整段时间里
+   * 「活动」文字是不变的——用户会以为标签卡住了。把段内进展显示出来，
+   * 才能让人看出**时间线在走**，而不是只有文字跳变时才觉得活着。
+   */
+  segmentElapsedS: number;
+  segmentRealDurationS: number;
 }
 
 function now(): number {
@@ -62,6 +71,10 @@ export class CatBehaviorRuntime {
   private plan: TravelPlan | null = null;
   private planStartT = 0;
   private currentSegmentKey = '';
+  /** 当前区间（缓存，避免每帧重新二分查找） */
+  private currentSegment: CatBehaviorSegment | null = null;
+  /** 段内已进行的**真实**秒数（不是时间线秒），供标签显示进展 */
+  private segmentElapsedS = 0;
   private transform: CatTransform;
   private readonly onStatus: ((s: BehaviorStatus) => void) | null;
 
@@ -81,6 +94,7 @@ export class CatBehaviorRuntime {
     // 起始位置直接落在时间线给出的锚点上，不做过渡——
     // 首屏不该看到猫从别处「飘」过来（与第一阶段 snapTo 的理由相同）。
     const first = activityAt(timeline, this.t);
+    this.currentSegment = first;
     const place = anchorPlace(first.anchorId) ?? anchorPlace('floor-living');
     this.transform = place
       ? { x: place.position.x, y: place.heightM, z: place.position.z, rotY: place.facing }
@@ -109,7 +123,7 @@ export class CatBehaviorRuntime {
   }
 
   status(): BehaviorStatus {
-    const seg = activityAt(this.timeline, this.t);
+    const seg = this.currentSegment ?? activityAt(this.timeline, this.t);
     const incident = incidentAt(this.timeline, this.t);
     const def = ACTIVITY_DEFS[seg.activity];
     const place = anchorPlace(seg.anchorId);
@@ -124,6 +138,9 @@ export class CatBehaviorRuntime {
       incident: incident?.kind ?? null,
       moving: this.plan !== null,
       segmentIndex: this.timeline.segments.indexOf(seg),
+      segmentElapsedS: this.segmentElapsedS,
+      // 段的**真实**时长：突发段本来就按真实时间推进，其余段要除以倍率
+      segmentRealDurationS: seg.incidentKind !== undefined ? seg.durS : seg.durS / this.timeScale,
     };
   }
 
@@ -153,6 +170,7 @@ export class CatBehaviorRuntime {
     }
 
     const seg = activityAt(this.timeline, this.t);
+    this.currentSegment = seg;
     const key = `${seg.t}:${seg.activity}:${seg.anchorId}`;
     const segChanged = key !== this.currentSegmentKey;
 
@@ -179,6 +197,15 @@ export class CatBehaviorRuntime {
       this.controller.setIncidentMotion(
         seg.incidentKind ? INCIDENT_DEFS[seg.incidentKind]?.motion ?? null : null,
       );
+      // 段一换，已进行时长立刻归零
+      this.segmentElapsedS = 0;
+    } else if (step > 0) {
+      // 段内累计**真实**已进行时长。
+      //
+      // 为什么按真实秒而不是时间线秒：标签上的「已进行 X 秒」是给眼睛看的，
+      // 时间线秒在 20× 倍率下会跳得飞快（20 秒一跳），读起来像计数器坏了。
+      // 按真实秒计数与呼吸、抖动的观感节奏一致。
+      this.segmentElapsedS += step;
     }
 
     if (this.plan) {
@@ -201,14 +228,14 @@ export class CatBehaviorRuntime {
     this.emitStatus();
   }
 
-  private lastStatusAtMs = 0;
-
   private emitStatus(): void {
     if (!this.onStatus) return;
-    // 每 250 ms 推一次即可：HUD 上是一行文字，不需要按帧刷新
-    const wallMs = now();
-    if (wallMs - this.lastStatusAtMs < 250) return;
-    this.lastStatusAtMs = wallMs;
+    // 逐帧推送，**不在运行时层节流**。
+    //
+    // 为什么去掉这里的 250 ms 节流：`locomoting` 段的真实时长平均只有 1.2 秒、
+    // 最短 0.2 秒，比节流间隔还短——那样「移动 行走」根本来不及显示，
+    // 用户会以为标签停了。改为逐帧推送后，消费方各按自己的节奏节流：
+    // 头顶标签只在**内容变化**时改文本、按 1 秒改进度；HUD 面板另按 1 秒节流。
     this.onStatus(this.status());
   }
 }

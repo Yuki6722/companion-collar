@@ -30,13 +30,19 @@ export interface CatStatusInput {
   posture: CatPosture;
   /** 当前突发（若有）。标签会切成「警示」样式。 */
   incident: CatIncidentKind | null;
+  /** 当前行为段已进行的真实秒数（用于进展指示） */
+  segmentElapsedS?: number;
+  /** 当前行为段的真实总时长（秒） */
+  segmentRealDurationS?: number;
 }
 
 export class CatStatusLabel {
   private readonly root: HTMLDivElement;
   private readonly nameNode: HTMLSpanElement;
   private readonly detailNode: HTMLSpanElement;
+  private readonly timeNode: HTMLSpanElement;
   private lastKey = '';
+  private lastShownSeconds = -1;
   private visible = true;
 
   constructor(host: HTMLElement) {
@@ -46,7 +52,9 @@ export class CatStatusLabel {
     this.nameNode.className = 'cat-status-name';
     this.detailNode = document.createElement('span');
     this.detailNode.className = 'cat-status-detail';
-    this.root.append(this.nameNode, this.detailNode);
+    this.timeNode = document.createElement('span');
+    this.timeNode.className = 'cat-status-time';
+    this.root.append(this.nameNode, this.detailNode, this.timeNode);
     // 标签只是展示，不该拦截轨道控制的拖拽
     this.root.style.pointerEvents = 'none';
     host.appendChild(this.root);
@@ -58,27 +66,51 @@ export class CatStatusLabel {
   }
 
   /**
-   * 更新文案。只在内容真的变了才碰 DOM（见文件头的纪律 2）。
+   * 更新文案与段内进展。只在内容真的变了才碰 DOM（见文件头的纪律 2）。
    *
    * 展示规则：突发期间**以突发为主标题**（那是此刻最该被看到的事），
    * 行为作为副标题；其余时刻主标题是行为、副标题是姿势。
+   *
+   * 末尾的「已进行 Xs」是关键：`resting` 段平均 56 秒、最长超过 2 分钟，
+   * 而整段时间里活动文字是不变的——没有这个计数，用户会以为标签卡住了。
+   * 计数按**秒**更新（不是逐帧），既看得出时间在走，又不会每帧重排文字。
    */
   set(input: CatStatusInput): void {
     const key = `${input.activity}|${input.posture}|${input.incident ?? ''}`;
-    if (key === this.lastKey) return;
-    this.lastKey = key;
+    const seconds = Math.floor(input.segmentElapsedS ?? 0);
+    const keyChanged = key !== this.lastKey;
 
-    if (input.incident) {
-      const inc = INCIDENT_DEFS[input.incident];
-      this.nameNode.textContent = inc?.label ?? String(input.incident);
-      this.detailNode.textContent = ACTIVITY_DEFS[input.activity]?.label ?? String(input.activity);
-      this.root.dataset.state = 'incident';
+    if (keyChanged) {
+      this.lastKey = key;
+      if (input.incident) {
+        const inc = INCIDENT_DEFS[input.incident];
+        this.nameNode.textContent = inc?.label ?? String(input.incident);
+        this.detailNode.textContent = ACTIVITY_DEFS[input.activity]?.label ?? String(input.activity);
+        this.root.dataset.state = 'incident';
+      } else {
+        this.nameNode.textContent = ACTIVITY_DEFS[input.activity]?.label ?? String(input.activity);
+        this.detailNode.textContent = postureLabel(input.posture);
+        this.root.dataset.state = 'normal';
+      }
+      // 段一换，计数无条件刷新（即使秒数恰好相同）
+      this.lastShownSeconds = seconds;
+      this.timeNode.textContent = `${seconds}s`;
       return;
     }
 
-    this.nameNode.textContent = ACTIVITY_DEFS[input.activity]?.label ?? String(input.activity);
-    this.detailNode.textContent = postureLabel(input.posture);
-    this.root.dataset.state = 'normal';
+    if (seconds !== this.lastShownSeconds) {
+      this.lastShownSeconds = seconds;
+      this.timeNode.textContent = `${seconds}s`;
+    }
+  }
+
+  /** 便于自检断言：当前文案（`主标题 · 副标题 · 计时`），未设置时为空串。 */
+  text(): string {
+    const name = this.nameNode.textContent ?? '';
+    if (!name) return '';
+    const detail = this.detailNode.textContent ?? '';
+    const time = this.timeNode.textContent ?? '';
+    return [name, detail, time].filter(Boolean).join(' · ');
   }
 
   /**
@@ -100,14 +132,6 @@ export class CatStatusLabel {
     }
     this.root.style.opacity = '1';
     this.root.style.transform = `translate(-50%, -100%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
-  }
-
-  /** 便于自检断言：当前文案（`主标题 · 副标题`），未设置时为空串。 */
-  text(): string {
-    const name = this.nameNode.textContent ?? '';
-    const detail = this.detailNode.textContent ?? '';
-    if (!name) return '';
-    return detail ? `${name} · ${detail}` : name;
   }
 
   dispose(): void {

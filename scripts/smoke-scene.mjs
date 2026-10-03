@@ -129,6 +129,22 @@ if (autoSnaps.length >= 2) {
   const lastHour = autoSnaps.at(-1).catHour ?? 0;
   check('演示时钟在推进', Math.abs(lastHour - firstHour) > 0.01, `${firstHour} → ${lastHour}`);
 
+  // 段内进展计数器：这是「标签没有卡住」的可靠证据。
+  // 活动名在 resting 段里平均 56 秒不变，只看名称变化会误判。
+  const elapsedFirst = autoSnaps[0].catSegElapsed ?? 0;
+  const elapsedLast = autoSnaps.at(-1).catSegElapsed ?? 0;
+  const segChanged = (autoSnaps[0].catAnchor ?? '') !== (autoSnaps.at(-1).catAnchor ?? '');
+  check(
+    '段内进展计数在推进（或已切换到新段）',
+    elapsedLast > elapsedFirst || segChanged,
+    `本段已进行 ${elapsedFirst}s → ${elapsedLast}s，锚点变化=${segChanged}`,
+  );
+  check(
+    '标签文案与当前行为一致',
+    (autoSnaps.at(-1).catLabel ?? '').length > 0,
+    `catLabel=${autoSnaps.at(-1).catLabel}`,
+  );
+
   // 活动必须是行为词汇表里的取值，不能是空字符串或随机字符串
   const known = new Set([
     'resting', 'alert', 'grooming', 'locomoting', 'playing',

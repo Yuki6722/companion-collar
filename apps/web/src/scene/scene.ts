@@ -244,6 +244,8 @@ export class HomeScene {
             activity: s.activity,
             posture: s.posture,
             incident: s.incident,
+            segmentElapsedS: s.segmentElapsedS,
+            segmentRealDurationS: s.segmentRealDurationS,
           });
           this.behaviorOnStatus?.(s);
         },

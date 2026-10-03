@@ -39,6 +39,16 @@ export interface SceneSnapshot {
    */
   catLabel?: string;
   /**
+   * 当前行为段已进行的**真实**秒数。
+   *
+   * 为什么单独记：标签的「活动名」在 `resting` 段里平均 56 秒不变（最长超过 2 分钟），
+   * 只断言文案变化会误判成「标签卡住」。这个计数器每秒都在涨，
+   * 才是「时间线真的在走」的可靠证据。
+   */
+  catSegmentElapsedS?: number;
+  /** 当前行为段的真实总时长（秒），与上一项配合看进展 */
+  catSegmentTotalS?: number;
+  /**
    * 当前生效的突发动作幅度。
    *
    * 为什么单独记这个：`catIncident` 只能证明**标签在报**，证明不了**身体在动**。
@@ -142,6 +152,8 @@ export function summarize(snap: SceneSnapshot): string {
     `catHour=${Number(snap.catHour ?? 0).toFixed(2)}`,
     `catIncident=${snap.catIncident ?? 'none'}`,
     `catLabel=${snap.catLabel || 'none'}`,
+    `catSegElapsed=${Number(snap.catSegmentElapsedS ?? 0).toFixed(0)}`,
+    `catSegTotal=${Number(snap.catSegmentTotalS ?? 0).toFixed(0)}`,
     `catTremor=${Number(snap.catMotion?.tremorAmp ?? 0).toFixed(3)}`,
     `tailFreq=${Number(snap.catPose.tailFreq ?? 0).toFixed(2)}`,
     `earFlatten=${Number(snap.catPose.earFlatten ?? 0).toFixed(2)}`,

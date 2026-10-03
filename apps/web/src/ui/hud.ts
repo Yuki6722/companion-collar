@@ -261,11 +261,15 @@ export class Hud {
     }
   }
 
-  /** 自主行为的实时状态：当前活动、姿势、所在位置与演示时钟。 */
+  /** 自主行为的实时状态：当前活动、姿势、所在位置、演示时钟与段内进展。 */
   setBehaviorStatus(status: BehaviorStatus): void {
     const clock = formatClock(status.hourOfDay);
-    const where = status.anchorLabel;
-    this.behaviorLine.textContent = `自主行为 · ${clock} · ${status.activityLabel}（${status.postureLabel}）· ${where}`;
+    // 段内进展也要显示：`resting` 段平均 56 秒、最长超过 2 分钟，
+    // 这段时间里活动名称是不变的，没有进展指示就会像卡住。
+    const elapsed = Math.floor(status.segmentElapsedS ?? 0);
+    this.behaviorLine.textContent =
+      `自主行为 · ${clock} · ${status.activityLabel}（${status.postureLabel}）` +
+      ` · ${status.anchorLabel} · 本段 ${elapsed}s`;
   }
 
   /** 突发演示的状态行。文案只描述动作，不命名任何状况。 */

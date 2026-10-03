@@ -21,6 +21,8 @@ export function mountHomeScreen(host: HTMLElement): () => void {
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   let scene: HomeScene | null = null;
+  /** HUD 面板的节流时间戳（行为运行时是逐帧推送的，面板按 1 秒刷新即可） */
+  let lastHudUpdate = 0;
 
   // ?labels=off 用于文档截图与「只看房间本身」的场景
   const showLabels = new URLSearchParams(window.location.search).get('labels') !== 'off';
@@ -112,6 +114,11 @@ export function mountHomeScreen(host: HTMLElement): () => void {
       onStats: (stats) => hud.setStats(stats),
       onFatal: (reason) => hud.showFatal(reason),
       onBehaviorStatus: (status) => {
+        // 行为运行时现在**逐帧**推送（因为 locomoting 段短到 0.2 秒，节流会让它显示不出来）。
+        // HUD 面板是一行文字，按 1 秒节流即可，避免每帧重排 DOM。
+        const wall = performance.now();
+        if (wall - lastHudUpdate < 1000) return;
+        lastHudUpdate = wall;
         hud.setBehaviorStatus(status);
         hud.setIncidentStatus(status.incident);
       },
@@ -185,6 +192,8 @@ export function mountHomeScreen(host: HTMLElement): () => void {
           catHour: behavior ? Number(behavior.hourOfDay.toFixed(2)) : 0,
           catIncident: behavior?.incident ?? null,
           catLabel: scene?.catLabelText() ?? '',
+          catSegmentElapsedS: behavior?.segmentElapsedS ?? 0,
+          catSegmentTotalS: behavior?.segmentRealDurationS ?? 0,
           catMotion: scene?.catIncidentMotion() ?? undefined,
           issues: (report?.issues ?? []).map((i) => `${i.id}: ${i.reason}`),
           slots: {
