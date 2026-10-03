@@ -108,6 +108,49 @@ if (backToCalm) {
   console.log('  · 日志里没有「切回平静」的快照，跳过该断言');
 }
 
+// ---------------------------------------------------------------- 自主行为
+
+const autoSnaps = records.filter((r) => r.catMode === 'auto');
+if (autoSnaps.length >= 2) {
+  const activities = new Set(autoSnaps.map((r) => r.catActivity).filter(Boolean));
+  check(
+    '自主行为下猫确实在换活动',
+    activities.size >= 2,
+    `只见到 ${[...activities].join('、') || '（无）'}`,
+  );
+  const anchors = new Set(autoSnaps.map((r) => r.catAnchor).filter(Boolean));
+  const positions = new Set(autoSnaps.map((r) => JSON.stringify(r.catAt)));
+  check(
+    '自主行为下猫确实在移动',
+    anchors.size >= 2 || positions.size >= 2,
+    `锚点 ${[...anchors].join('、') || '（无）'}`,
+  );
+  const firstHour = autoSnaps[0].catHour ?? 0;
+  const lastHour = autoSnaps.at(-1).catHour ?? 0;
+  check('演示时钟在推进', Math.abs(lastHour - firstHour) > 0.01, `${firstHour} → ${lastHour}`);
+
+  // 活动必须是行为词汇表里的取值，不能是空字符串或随机字符串
+  const known = new Set([
+    'resting', 'alert', 'grooming', 'locomoting', 'playing',
+    'feeding', 'drinking', 'eliminating', 'scratching', 'hiding', 'perching', 'vomit',
+  ]);
+  const unknown = [...activities].filter((a) => !known.has(a));
+  check('活动取值都来自行为词汇表', unknown.length === 0, unknown.join('、'));
+} else {
+  console.log('  · 日志里自主行为快照不足 2 条，跳过自主行为断言');
+}
+
+const withIncident = records.find((r) => r.catIncident);
+if (withIncident) {
+  check(
+    '注入的突发出现在快照里',
+    withIncident.catIncident === 'labored-breathing',
+    `catIncident=${withIncident.catIncident}`,
+  );
+} else {
+  console.log('  · 日志里没有突发快照，跳过突发断言');
+}
+
 if (failures.length > 0) {
   console.error(`\n✗ 场景自检未通过：${failures.length} 项`);
   process.exit(1);

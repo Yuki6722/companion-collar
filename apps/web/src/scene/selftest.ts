@@ -20,8 +20,16 @@ export interface SceneSnapshot {
   tilesLoaded: number;
   envLoaded: boolean;
   catState: string;
+  /** `auto` = 自主行为；`manual` = 手动演示档位 */
+  catMode?: string;
   /** 猫当前的混合参数（用于断言「切换确实改变了状态」） */
   catPose: Record<string, number | boolean>;
+  /** 行为层事实：当前活动 / 姿势 / 锚点 / 演示时钟 / 突发 */
+  catActivity?: string;
+  catPosture?: string;
+  catAnchor?: string;
+  catHour?: number;
+  catIncident?: string | null;
   issues: string[];
   /** 槽位状态：区分「资产没到」与「资产到了没换上」 */
   slots?: Record<string, string | number>;
@@ -74,7 +82,8 @@ export function installDebugHandle(
   window.setInterval(render, 1000);
 
   if (options.autoSequence) {
-    // 时间点刻意错开：等资产与首帧稳定 → 切激动（含 0.8 s 过渡）→ 回传 → 切回平静 → 回传
+    // 时间点刻意错开：等资产与首帧稳定 → 切激动（含 0.8 s 过渡）→ 回传 → 切回平静 → 回传。
+    // 最后再触发一次突发演示并回传：断言「注入的突发确实出现在快照里」。
     window.setTimeout(() => post(), 6000);
     window.setTimeout(() => {
       call(handle, 'setCatState', 'agitated');
@@ -84,6 +93,12 @@ export function installDebugHandle(
       call(handle, 'setCatState', 'calm');
     }, 12_000);
     window.setTimeout(() => post(), 14_500);
+    window.setTimeout(() => {
+      call(handle, 'setAutoCat', '');
+      call(handle, 'incident', 'labored-breathing');
+    }, 16_000);
+    // 突发自 16 s 起持续 60 s（演示时间），这里在它进行中回传一次
+    window.setTimeout(() => post(), 18_000);
   }
 
   return { post, handle };
@@ -105,6 +120,12 @@ export function summarize(snap: SceneSnapshot): string {
     `draws=${snap.drawCalls}`,
     `fps=${snap.fps}`,
     `cat=${snap.catState}`,
+    `catMode=${snap.catMode ?? 'manual'}`,
+    `catAct=${snap.catActivity ?? 'none'}`,
+    `catPosture=${snap.catPosture ?? 'none'}`,
+    `catAnchor=${snap.catAnchor ?? 'none'}`,
+    `catHour=${Number(snap.catHour ?? 0).toFixed(2)}`,
+    `catIncident=${snap.catIncident ?? 'none'}`,
     `tailFreq=${Number(snap.catPose.tailFreq ?? 0).toFixed(2)}`,
     `earFlatten=${Number(snap.catPose.earFlatten ?? 0).toFixed(2)}`,
     `pupil=${Number(snap.catPose.pupilScale ?? 0).toFixed(2)}`,

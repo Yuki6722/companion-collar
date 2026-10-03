@@ -238,6 +238,34 @@ body {
   border-radius: 6px;
 }
 
+/* ---- 猫的行为面板：分段小标题、行为状态行、突发演示按钮 ---- */
+
+.panel-subtitle {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  text-transform: none;
+}
+
+.behavior-line {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* 突发演示按钮与「手动演示档位」在视觉上区分开：
+   前者是瞬时动作，后者是持续档位 */
+.incident-btn {
+  border-style: dashed;
+  font-size: 12.5px;
+}
+
+.incident-btn:hover {
+  border-color: #b45309;
+  color: #7a4a12;
+}
+
 .preset-row {
   display: flex;
   flex-wrap: wrap;

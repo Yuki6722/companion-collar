@@ -107,6 +107,56 @@ export interface CatBehaviorInput {
 export const DAY_START_HOUR = 9;
 
 /**
+ * 房间锚点的 **id 清单**：跨包契约的单一事实来源。
+ *
+ * 为什么单独列一份 id：
+ *   `simulator` 与 `apps/web` 各自提供一份锚点表（前者只要高度差来判断走还是跳，
+ *   后者需要真实米制坐标来渲染）。两份表都**不含坐标共用**的必要，但 id 必须一致，
+ *   否则画面上的猫会「走进一个仿真里不存在的锚点」。
+ *   两边都从这里取 id 集合，任何一边漏配都会被单测当场抓出来。
+ */
+export const CAT_ANCHOR_IDS: readonly string[] = [
+  'floor-living',
+  'floor-bedroom',
+  'floor-kitchen',
+  'tree-platform',
+  'tree-top',
+  'cat-shelf-low',
+  'cat-shelf-high',
+  'wardrobe-top',
+  'bed-top',
+  'sofa-top',
+  'cat-bed',
+  'hiding-box',
+  'food-bowls',
+  'fountain',
+  'water-bowl',
+  'litter-a',
+  'litter-b',
+];
+
+/** 锚点 id → 中文名；供 UI 显示「猫现在在哪」。 */
+export const CAT_ANCHOR_LABELS: Readonly<Record<string, string>> = {
+  'floor-living': '起居区地面',
+  'floor-bedroom': '睡眠区地面',
+  'floor-kitchen': '厨房区地面',
+  'tree-platform': '猫爬架一层平台',
+  'tree-top': '猫爬架顶台',
+  'cat-shelf-low': '墙面跳台（低）',
+  'cat-shelf-high': '墙面跳台（高）',
+  'wardrobe-top': '衣柜顶',
+  'bed-top': '床面',
+  'sofa-top': '沙发面',
+  'cat-bed': '封闭式猫窝',
+  'hiding-box': '纸箱躲藏处',
+  'food-bowls': '食盆',
+  fountain: '饮水机',
+  'water-bowl': '第二水碗',
+  'litter-a': '猫砂盆 A',
+  'litter-b': '猫砂盆 B',
+};
+
+/**
  * 会话内秒数 → 当日小时数。
  *
  * 为什么用固定映射而不是读系统时间：仿真与测试必须确定性；读真实时钟会让同一份

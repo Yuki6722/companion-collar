@@ -15,6 +15,11 @@ import { ENV_MANIFEST, MODEL_MANIFEST, loadAssets } from './assets.ts';
 import type { AssetReport } from './assets.ts';
 import { buildCat } from './cat/cat-model.ts';
 import { CatController } from './cat/cat-controller.ts';
+import { CatBehaviorRuntime } from './cat/cat-behavior.ts';
+import type { BehaviorStatus } from './cat/cat-behavior.ts';
+import { CAT_ANCHOR_SPECS } from './cat/anchor-map.ts';
+import { buildBehaviorTimeline } from '@camp/core';
+import type { CatBehaviorTimeline, CatIncidentKind } from '@camp/core';
 import type { CatStateId } from './cat/cat-states.ts';
 import { HotspotLayer } from './hotspots.ts';
 import type { Hotspot } from './hotspots.ts';
@@ -44,7 +49,15 @@ export interface SceneOptions extends SceneCallbacks {
   labelHost: HTMLElement;
   quality: QualityChoice;
   reducedMotion: boolean;
+  /** 自主行为的状态更新（当前活动、姿势、所在锚点、突发、演示时钟） */
+  onBehaviorStatus?: (status: BehaviorStatus) => void;
+  /** 已有的行为时间线（由 `@camp/simulator` 产出）。缺省时本地按同一套规则生成一条 */
+  behaviorTimeline?: CatBehaviorTimeline;
 }
+
+/** 自主行为时间线的默认长度：一整天。演示倍率由 timeline.timeScale 决定。 */
+const DEFAULT_BEHAVIOR_DURATION_S = 24 * 3600;
+const DEFAULT_TIME_SCALE = 60;
 
 const CAMERA_FOV = 52;
 const CAMERA_START: [number, number, number] = [6.1, 3.05, 6.25];
@@ -64,6 +77,11 @@ interface CameraMove {
 
 export class HomeScene {
   readonly cat: CatController | null;
+  /** 自主行为运行时；行为层关闭时为 null */
+  private behavior: CatBehaviorRuntime | null = null;
+  private behaviorOnStatus: ((s: BehaviorStatus) => void) | null = null;
+  /** 当前行为时间线（注入突发时会被替换） */
+  private behaviorTimeline: CatBehaviorTimeline | null = null;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
@@ -183,6 +201,25 @@ export class HomeScene {
     const catRig = buildCat(mats, this.settings.furShells);
     root.add(catRig.root);
     this.cat = new CatController(catRig, { reducedMotion: opts.reducedMotion });
+    this.behaviorOnStatus = opts.onBehaviorStatus ?? null;
+
+    // 自主行为：默认开启。时间线由调用方给（仿真器产出）或本地按同一套规则生成。
+    // `?behavior=off` 可关掉，回到第一阶段的手动演示档位。
+    const behaviorEnabled = !new URLSearchParams(window.location.search).has('behavior-off');
+    if (behaviorEnabled && this.cat) {
+      const timeline =
+        opts.behaviorTimeline ??
+        buildBehaviorTimeline({
+          seed: 42,
+          durationS: DEFAULT_BEHAVIOR_DURATION_S,
+          timeScale: DEFAULT_TIME_SCALE,
+          anchors: CAT_ANCHOR_SPECS,
+        });
+      this.behaviorTimeline = timeline;
+      this.behavior = new CatBehaviorRuntime(timeline, this.cat, {
+        onStatus: (s) => this.behaviorOnStatus?.(s),
+      });
+    }
 
     this.labelLayer = new HotspotLayer(opts.labelHost);
     this.registerHotspots();
@@ -252,9 +289,74 @@ export class HomeScene {
 
   /** 猫的逻辑坐标（保留两位，由 wall clock 推导），自检与调试用。 */
   catPosition(): [number, number, number] | undefined {
-    const t = this.cat?.getCurrentTransform();
+    const t = this.behavior ? this.behavior.getTransform() : this.cat?.getCurrentTransform();
     if (!t) return undefined;
     return [round2(t.x), round2(t.y), round2(t.z)];
+  }
+
+  // ---------------------------------------------------------------- 自主行为
+
+  /** 回到手动演示档位（暂停自主行为）。 */
+  setManualCat(): void {
+    this.behavior?.setPaused(true);
+    this.cat?.useManualMode();
+  }
+
+  /** 恢复自主行为。 */
+  setAutoCat(): void {
+    this.behavior?.setPaused(false);
+  }
+
+  isAutoCat(): boolean {
+    return this.behavior !== null && !this.behavior.isPaused();
+  }
+
+  behaviorStatus(): BehaviorStatus | null {
+    return this.behavior?.status() ?? null;
+  }
+
+  /** 演示倍率：1 秒当多少秒。 */
+  setBehaviorTimeScale(_scale: number): void {
+    // 倍率属于时间线构造参数（`timeline.timeScale`），运行中改变会破坏
+    // 「时间线与真值一致」这条性质，因此这里只记录、不热改。
+    // 需要不同倍率时用 `?scale=` 重新加载。
+  }
+
+  /**
+   * 触发一次突发演示。
+   *
+   * 语义：**重建一条时间线**，在「当前演示时刻」注入这次突发。
+   * 为什么不直接在运行时插队：注入会改变时段的长度分配，
+   * 而 `activityAt()` 的连续性不变量（区间首尾相接、覆盖满时长）必须保持。
+   * 重建时间线能让「注入 → 还原」这条回归链路在浏览器里也成立。
+   */
+  triggerIncident(kind: CatIncidentKind): void {
+    if (!this.cat) return;
+    const timeline =
+      this.behaviorTimeline ??
+      buildBehaviorTimeline({
+        seed: 42,
+        durationS: DEFAULT_BEHAVIOR_DURATION_S,
+        timeScale: DEFAULT_TIME_SCALE,
+        anchors: CAT_ANCHOR_SPECS,
+      });
+    const atS = this.behavior ? this.behavior.getTimeS() : 0;
+    const next = buildBehaviorTimeline({
+      seed: timeline.seed,
+      durationS: timeline.durationS,
+      timeScale: timeline.timeScale,
+      anchors: CAT_ANCHOR_SPECS,
+      injectIncidents: [{ atS: Math.max(1, atS), kind }],
+    });
+    this.behavior = new CatBehaviorRuntime(next, this.cat, {
+      startAtS: Math.max(0, atS - 1),
+      onStatus: (s) => this.behaviorOnStatus?.(s),
+    });
+  }
+
+  /** 自检用：当前突发种类（无则 null）。 */
+  currentIncident(): string | null {
+    return this.behavior?.status().incident ?? null;
   }
 
   setReducedMotion(on: boolean): void {
@@ -279,9 +381,23 @@ export class HomeScene {
    */
   preset(id: string, immediate = false): void {
     if (id === 'cat-follow') {
-      const state = this.cat?.getState();
       const p = this.cat?.rig.root.position;
-      if (p && state) {
+      if (!p) return;
+      if (this.behavior) {
+        // 自主行为下猫会到处走，第一阶段那两套「相对猫的固定偏移」不再成立
+        // （偏移是按站位朝向手写的，转个身就会钻进家具里）。
+        // 这里改为按**猫当前朝向**把机位放到它的斜后方，任何位置与朝向都成立。
+        const rotY = this.behavior.getTransform().rotY;
+        const distance = 1.15;
+        const back = Math.PI + 0.55; // 斜后方
+        const angle = rotY + back;
+        const camX = p.x + Math.sin(angle) * distance;
+        const camZ = p.z + Math.cos(angle) * distance;
+        this.moveTo([camX, p.y + 0.72, camZ], [p.x, p.y + 0.16, p.z], immediate ? 0 : 0.9);
+        return;
+      }
+      const state = this.cat?.getState();
+      if (state) {
         const cam = CAT_ANCHORS[state].cam;
         this.moveTo([p.x + cam.x, p.y + cam.y, p.z + cam.z], [p.x, p.y + 0.16, p.z], immediate ? 0 : 0.9);
         return;
@@ -494,7 +610,10 @@ export class HomeScene {
       if (this.move.t >= 1) this.move = null;
     }
 
-    this.cat?.update(dt);
+    // 自主行为优先：它自己会把位置与姿势落到 rig 上，并调用控制器推进微动作。
+    // 行为层关闭时退回第一阶段的手动路径。
+    if (this.behavior) this.behavior.update(dt);
+    else this.cat?.update(dt);
     this.controls.update();
 
     if (this.settings.shadows) {

@@ -8,8 +8,9 @@
  *   **与 layout 同构的最小锚点清单**：只声明「有哪些锚点、高度多少、具备什么能力」，
  *   用于让时间线里出现真实的位移与攀跳。
  *
- *   ⚠️ 与 `apps/web/src/scene/anchor-map.ts` 的对应关系必须在两处保持一致：
- *   锚点的 `id` 是跨包契约。core 的单测会断言 web 那份表的 id 集合与这里相同。
+ *   ⚠️ 锚点的 `id` 是跨包契约，单一事实来源是 core 的 `CAT_ANCHOR_IDS`：
+ *   本表与 `apps/web/src/scene/cat/anchor-map.ts` 都按它取 id，
+ *   core 单测会断言两张表的 id 集合与之一致。
  */
 import { buildBehaviorTimeline } from '../../core/src/index.ts';
 import type { CatAnchorSpec, CatBehaviorTimeline, CatIncidentKind } from '../../core/src/index.ts';
@@ -18,7 +19,8 @@ import type { CatAnchorSpec, CatBehaviorTimeline, CatIncidentKind } from '../../
  * 与 `apps/web/src/scene/layout.ts` 的猫用品坐标对应的锚点。
  *
  * 高度取「猫站上去的台面高度」；地面锚点高度 0。
- * 这里**不写坐标**——仿真只需要高度差来决定「走还是跳」。
+ * 这里**不写坐标**——仿真只需要高度差来决定「走还是跳」；
+ * 真实米制坐标由 web 层的 `anchor-map.ts` 提供（它直接读 `layout.ts`）。
  */
 export const SIM_CAT_ANCHORS: readonly CatAnchorSpec[] = [
   { id: 'floor-living', label: '起居区地面', capabilities: ['floor', 'jump-target'], heightM: 0 },
@@ -36,8 +38,8 @@ export const SIM_CAT_ANCHORS: readonly CatAnchorSpec[] = [
   { id: 'food-bowls', label: '食盆', capabilities: ['food'], heightM: 0.05 },
   { id: 'fountain', label: '饮水机', capabilities: ['water'], heightM: 0.16 },
   { id: 'water-bowl', label: '第二水碗', capabilities: ['water'], heightM: 0.06 },
-  { id: 'litter-a', label: '猫砂盆 A', capabilities: ['litter'], heightM: 0.2 },
-  { id: 'litter-b', label: '猫砂盆 B', capabilities: ['litter'], heightM: 0.2 },
+  { id: 'litter-a', label: '猫砂盆 A', capabilities: ['litter'], heightM: 0.22 },
+  { id: 'litter-b', label: '猫砂盆 B', capabilities: ['litter'], heightM: 0.22 },
 ];
 
 export interface BehaviorLayerOptions {

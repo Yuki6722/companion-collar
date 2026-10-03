@@ -47,7 +47,7 @@ export { OWNER_ACTIVE_HOURS, RHYTHM_DEFS, activityWeightAt, isOwnerAwayHour } fr
 export type { RhythmDef } from './rhythm.ts';
 
 // 契约
-export { DAY_START_HOUR, hourOfDayAt } from './contract.ts';
+export { CAT_ANCHOR_IDS, CAT_ANCHOR_LABELS, DAY_START_HOUR, hourOfDayAt } from './contract.ts';
 export type {
   CatAnchorCapability,
   CatAnchorSpec,

@@ -4,6 +4,8 @@ import {
   ACTIVITY_DEFS,
   ACTIVITY_IDS,
   BEHAVIOR_PARAMS,
+  CAT_ANCHOR_IDS,
+  CAT_ANCHOR_LABELS,
   FORBIDDEN_TERMS,
   INCIDENT_BOUNDARY_NOTE,
   INCIDENT_DEFS,
@@ -27,15 +29,28 @@ import type { CatAnchorSpec, CatBehaviorTimeline } from '../src/index.ts';
 
 // ---------------------------------------------------------------- 夹具
 
-/** 与 `apps/web/src/scene/layout.ts` 同构的锚点，但**不含米制坐标**（行为层不需要）。 */
+/**
+ * 测试夹具：与 `simulator/src/behavior.ts` 的 `SIM_CAT_ANCHORS` 同构
+ * （同样按 `CAT_ANCHOR_IDS` 取 id），但**不含米制坐标**——行为层不需要坐标。
+ */
 const ANCHORS: readonly CatAnchorSpec[] = [
   { id: 'floor-living', label: '起居区地面', capabilities: ['floor', 'jump-target'], heightM: 0 },
+  { id: 'floor-bedroom', label: '睡眠区地面', capabilities: ['floor', 'jump-target'], heightM: 0 },
+  { id: 'floor-kitchen', label: '厨房区地面', capabilities: ['floor', 'jump-target'], heightM: 0 },
+  { id: 'tree-platform', label: '猫爬架一层平台', capabilities: ['jump-target', 'vertical'], heightM: 0.72 },
   { id: 'tree-top', label: '猫爬架顶台', capabilities: ['vertical', 'sleep', 'jump-target'], heightM: 1.45 },
-  { id: 'hiding-box', label: '纸箱躲藏处', capabilities: ['hide'], heightM: 0 },
-  { id: 'cat-bed', label: '封闭式猫窝', capabilities: ['hide', 'sleep'], heightM: 0 },
-  { id: 'food', label: '食盆', capabilities: ['food'], heightM: 0 },
-  { id: 'water', label: '饮水机', capabilities: ['water'], heightM: 0 },
-  { id: 'litter-a', label: '猫砂盆 A', capabilities: ['litter'], heightM: 0 },
+  { id: 'cat-shelf-low', label: '墙面跳台（低）', capabilities: ['vertical'], heightM: 1.25 },
+  { id: 'cat-shelf-high', label: '墙面跳台（高）', capabilities: ['vertical'], heightM: 1.65 },
+  { id: 'wardrobe-top', label: '衣柜顶', capabilities: ['vertical'], heightM: 2.4 },
+  { id: 'bed-top', label: '床面', capabilities: ['sleep', 'jump-target'], heightM: 0.56 },
+  { id: 'sofa-top', label: '沙发面', capabilities: ['sleep', 'jump-target'], heightM: 0.42 },
+  { id: 'cat-bed', label: '封闭式猫窝', capabilities: ['sleep', 'hide'], heightM: 0.07 },
+  { id: 'hiding-box', label: '纸箱躲藏处', capabilities: ['hide'], heightM: 0.02 },
+  { id: 'food-bowls', label: '食盆', capabilities: ['food'], heightM: 0.05 },
+  { id: 'fountain', label: '饮水机', capabilities: ['water'], heightM: 0.16 },
+  { id: 'water-bowl', label: '第二水碗', capabilities: ['water'], heightM: 0.06 },
+  { id: 'litter-a', label: '猫砂盆 A', capabilities: ['litter'], heightM: 0.22 },
+  { id: 'litter-b', label: '猫砂盆 B', capabilities: ['litter'], heightM: 0.22 },
 ];
 
 const DAY_S = 24 * 3600;
@@ -420,6 +435,18 @@ test('突发种类与定义一一对应', () => {
     assert.ok(def.hint.length > 5);
   }
   assert.equal(INCIDENT_KINDS.length, Object.keys(INCIDENT_DEFS).length);
+});
+
+test('锚点 id 清单与锚点表一致（跨包契约）', () => {
+  // 单一事实来源是 CAT_ANCHOR_IDS；simulator 与 apps/web 各自按它建表。
+  // 这条断言保证「契约里的 id」不会多于或少于实际可用的锚点。
+  const ids = ANCHORS.map((a) => a.id).sort();
+  const expected = [...CAT_ANCHOR_IDS].sort();
+  assert.deepEqual(ids, expected, '锚点表与 CAT_ANCHOR_IDS 不一致');
+  for (const id of CAT_ANCHOR_IDS) {
+    assert.ok(CAT_ANCHOR_LABELS[id], `锚点 ${id} 缺少中文名`);
+  }
+  assert.equal(Object.keys(CAT_ANCHOR_LABELS).length, CAT_ANCHOR_IDS.length);
 });
 
 test('活动词汇：每个活动都有定义与姿势，且都有权重（权重为 0 的仅干呕）', () => {

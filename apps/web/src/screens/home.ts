@@ -5,6 +5,8 @@
  * 因此即使 WebGL 不可用，**清单仍然完整可用**——这正是「不依赖 3D 也能交付价值」的兜底。
  */
 import { cameraHeightOf, summarizeHomeResources } from '@camp/core';
+import { INCIDENT_KINDS } from '@camp/core';
+import type { CatIncidentKind } from '@camp/core';
 import { DEMO_PROFILE } from '../pet.ts';
 import { CAMERA_PRESETS, HOME_RESOURCES, TRAFFIC_PATH } from '../scene/layout.ts';
 import { HomeScene } from '../scene/scene.ts';
@@ -25,7 +27,28 @@ export function mountHomeScreen(host: HTMLElement): () => void {
 
   const hud = new Hud(
     {
-      onCatState: (id) => scene?.setCatState(id),
+      onCatState: (id) => {
+        // 手动档位意味着退出自主行为——否则行为运行时会立刻把位置/姿势覆盖回去
+        scene?.setManualCat();
+        hud.setCatMode('manual');
+        scene?.setCatState(id);
+      },
+      onAutoCat: () => {
+        scene?.setAutoCat();
+        hud.setCatMode('auto');
+        hud.setIncidentStatus(null);
+      },
+      onManualCat: () => {
+        scene?.setManualCat();
+        hud.setCatMode('manual');
+      },
+      onIncident: (kind) => {
+        // 触发突发会重建时间线，因此必须处于自主模式才看得到
+        scene?.setAutoCat();
+        hud.setCatMode('auto');
+        scene?.triggerIncident(kind);
+        hud.setIncidentStatus(kind);
+      },
       onPreset: (preset) => {
         if (preset.custom) scene?.moveTo(preset.position, preset.target);
         else scene?.preset(preset.id);
@@ -84,21 +107,43 @@ export function mountHomeScreen(host: HTMLElement): () => void {
       },
       onStats: (stats) => hud.setStats(stats),
       onFatal: (reason) => hud.showFatal(reason),
+      onBehaviorStatus: (status) => {
+        hud.setBehaviorStatus(status);
+        hud.setIncidentStatus(status.incident);
+      },
     });
-    scene.setCatState('calm');
     scene.setLabelsVisible(showLabels);
     scene.start();
-    // ?state=agitated 直接以「激动不适」开场：截图与演示需要一次就位，不必等点击
-    const initial = new URLSearchParams(window.location.search).get('state');
+    // 默认进入自主行为；?mode=manual 则保持第一阶段的手动演示档位
+    const params0 = new URLSearchParams(window.location.search);
+    const startManual = params0.get('mode') === 'manual' || params0.has('behavior-off');
+    if (startManual) {
+      scene.setManualCat();
+      hud.setCatMode('manual');
+    } else {
+      hud.setCatMode('auto');
+      // ?incident=<kind> 直接触发一次突发演示（截图与演示串场用）
+      const incident = params0.get('incident');
+      if (incident && INCIDENT_KINDS.includes(incident as CatIncidentKind)) {
+        scene.triggerIncident(incident as CatIncidentKind);
+        hud.setIncidentStatus(incident as CatIncidentKind);
+      }
+    }
+    // ?state=agitated 直接以「激动不适」开场：截图与演示需要一次就位，不必等点击。
+    // 这会同时切到手动档位（手动档位与自主行为互斥）。
+    const initial = params0.get('state');
     if (initial === 'agitated' || initial === 'calm') {
+      scene.setManualCat();
+      hud.setCatMode('manual');
       scene.snapCatState(initial);
       hud.setCatState(initial);
     }
     // ?view=<presetId> 直接切到指定机位（文档截图与演示串场用）；这里要求立即到位
-    const view = new URLSearchParams(window.location.search).get('view');
+    const view = params0.get('view');
     if (view) scene.preset(view, true);
     // 资产请求可能整体失败（例如直接以 file:// 打开）：超时兜底关闭加载层
-    window.setTimeout(() => hud.finishLoading(), 12000);  } catch (err) {
+    window.setTimeout(() => hud.finishLoading(), 12000);
+  } catch (err) {
     hud.finishLoading();
     hud.showFatal(
       err instanceof Error
@@ -115,6 +160,7 @@ export function mountHomeScreen(host: HTMLElement): () => void {
         const stats = scene?.getStats();
         const report = scene?.getAssetReport();
         const pose = (scene?.cat?.getCurrentPose() ?? {}) as unknown as Record<string, number | boolean>;
+        const behavior = scene?.behaviorStatus();
         return {
           webgl: scene !== null,
           triangles: stats?.triangles ?? 0,
@@ -125,8 +171,15 @@ export function mountHomeScreen(host: HTMLElement): () => void {
           tilesLoaded: report?.loadedTiles.length ?? 0,
           envLoaded: report?.envLoaded ?? false,
           catState: scene?.getCatState() ?? 'none',
+          catMode: scene?.isAutoCat() ? 'auto' : 'manual',
           catPose: pose,
           catAt: scene?.catPosition() ?? undefined,
+          // 行为层事实：断言「猫真的在按时间线活动」而不是只换姿势
+          catActivity: behavior?.activity ?? 'none',
+          catPosture: behavior?.posture ?? 'none',
+          catAnchor: behavior?.anchorId ?? 'none',
+          catHour: behavior ? Number(behavior.hourOfDay.toFixed(2)) : 0,
+          catIncident: behavior?.incident ?? null,
           issues: (report?.issues ?? []).map((i) => `${i.id}: ${i.reason}`),
           slots: {
             sideboard: scene?.slotState('sideboard') ?? 'none',
@@ -136,7 +189,21 @@ export function mountHomeScreen(host: HTMLElement): () => void {
         };
       },
       {
-        setCatState: (id) => scene?.setCatState(id as CatStateId),
+        // 自检动作：切档位、切机位、触发突发
+        setCatState: (id) => {
+          scene?.setManualCat();
+          hud.setCatMode('manual');
+          scene?.setCatState(id as CatStateId);
+        },
+        setAutoCat: () => {
+          scene?.setAutoCat();
+          hud.setCatMode('auto');
+        },
+        incident: (kind) => {
+          scene?.setAutoCat();
+          scene?.triggerIncident(kind as CatIncidentKind);
+          hud.setIncidentStatus(kind as CatIncidentKind);
+        },
         preset: (id) => scene?.preset(id),
       },
       {

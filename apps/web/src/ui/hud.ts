@@ -1,13 +1,16 @@
 /**
- * 场景 HUD：猫状态开关、机位、图层、画质、资源清单、加载进度、降级提示。
+ * 场景 HUD：猫的行为（自主 / 手动 / 突发演示）、机位、图层、画质、资源清单、加载进度、降级提示。
  *
- * 边界纪律（两条，都会出现在界面上）：
+ * 边界纪律（三条，都会出现在界面上）：
  *   1. 猫的两种状态是**手动演示档位**，不是系统推断——文案由 `BOUNDARY_NOTE` 提供，不得改写掉。
  *   2. 资源清单里 `unknown` 必须显示为「需你确认」，不能因为没数据就看起来合格。
+ *   3. 突发演示是**你手动触发的动画**，不命名任何状况、不构成诊断——文案由
+ *      `INCIDENT_BOUNDARY_NOTE` 与 `INCIDENT_REFERRAL_NOTE` 提供，不得改写掉。
  */
-import { PILLAR_LABELS } from '@camp/core';
-import type { HomeResourceSummary, PillarId } from '@camp/core';
+import { INCIDENT_BOUNDARY_NOTE, INCIDENT_DEFS, INCIDENT_KINDS, INCIDENT_REFERRAL_NOTE, PILLAR_LABELS } from '@camp/core';
+import type { CatIncidentKind, HomeResourceSummary, PillarId } from '@camp/core';
 import type { AssetReport } from '../scene/assets.ts';
+import type { BehaviorStatus } from '../scene/cat/cat-behavior.ts';
 import type { CatStateId } from '../scene/cat/cat-states.ts';
 import { CAT_STATES, BOUNDARY_NOTE } from '../scene/cat/cat-states.ts';
 import type { QualityChoice } from '../scene/quality.ts';
@@ -31,6 +34,12 @@ export interface HudCallbacks {
   onLabels: (on: boolean) => void;
   onHighlights: (on: boolean) => void;
   onQuality: (choice: QualityChoice) => void;
+  /** 切到自主行为 */
+  onAutoCat: () => void;
+  /** 切回手动演示档位 */
+  onManualCat: () => void;
+  /** 触发一次突发演示 */
+  onIncident: (kind: CatIncidentKind) => void;
 }
 
 export class Hud {
@@ -48,6 +57,9 @@ export class Hud {
   private readonly fatal: HTMLElement;
   private readonly presetHost: HTMLElement;
   private readonly callbacks: HudCallbacks;
+  private readonly modeButtons = new Map<'auto' | 'manual', HTMLButtonElement>();
+  private readonly behaviorLine: HTMLElement;
+  private readonly incidentLine: HTMLElement;
 
   constructor(callbacks: HudCallbacks, initial: { labels?: boolean; highlights?: boolean } = {}) {
     this.callbacks = callbacks;
@@ -56,7 +68,28 @@ export class Hud {
     this.labelHost = el('div', { class: 'hotspot-layer' });
     this.canvasHost.append(this.labelHost);
 
-    // ---- 猫状态开关
+    // ---- 猫的行为：自主 / 手动 / 突发演示
+    this.behaviorLine = el('p', { class: 'state-hint behavior-line', text: '自主行为：准备中…' });
+
+    const modeRow = el('div', { class: 'state-row' });
+    for (const [key, label] of [
+      ['auto', '自主行为'],
+      ['manual', '手动演示'],
+    ] as const) {
+      const button = el(
+        'button',
+        {
+          class: 'state-btn',
+          type: 'button',
+          attrs: { 'aria-pressed': 'false' },
+          on: { click: () => (key === 'auto' ? this.callbacks.onAutoCat() : this.callbacks.onManualCat()) },
+        },
+        [el('span', { class: 'state-btn-label', text: label })],
+      );
+      this.modeButtons.set(key, button);
+      modeRow.append(button);
+    }
+
     this.stateButtons.clear();
     const stateRow = el('div', { class: 'state-row' });
     for (const id of ['calm', 'agitated'] as CatStateId[]) {
@@ -75,11 +108,38 @@ export class Hud {
       stateRow.append(button);
     }
     this.hint = el('p', { class: 'state-hint' });
+
+    // ---- 突发演示
+    const incidentRow = el('div', { class: 'state-row' });
+    for (const kind of INCIDENT_KINDS) {
+      const def = INCIDENT_DEFS[kind];
+      const button = el(
+        'button',
+        {
+          class: 'state-btn incident-btn',
+          type: 'button',
+          title: def.hint,
+          on: { click: () => this.callbacks.onIncident(kind) },
+        },
+        [el('span', { class: 'state-btn-label', text: def.label })],
+      );
+      incidentRow.append(button);
+    }
+    this.incidentLine = el('p', { class: 'state-hint', text: '尚未触发突发演示。' });
+
     const catPanel = el('section', { class: 'panel panel-cat' }, [
-      el('h2', { class: 'panel-title', text: '猫的演示状态' }),
+      el('h2', { class: 'panel-title', text: '猫的行为' }),
+      modeRow,
+      this.behaviorLine,
+      el('h3', { class: 'panel-subtitle', text: '手动演示档位' }),
       stateRow,
       this.hint,
       el('p', { class: 'boundary-note', text: BOUNDARY_NOTE }),
+      el('h3', { class: 'panel-subtitle', text: '突发演示（手动触发）' }),
+      incidentRow,
+      this.incidentLine,
+      el('p', { class: 'boundary-note', text: INCIDENT_BOUNDARY_NOTE }),
+      el('p', { class: 'panel-foot', text: INCIDENT_REFERRAL_NOTE }),
     ]);
 
     // ---- 机位
@@ -168,6 +228,35 @@ export class Hud {
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
     this.hint.textContent = CAT_STATES[id].hint;
+  }
+
+  /** 切换「自主行为 / 手动演示」两个模式按钮的高亮。 */
+  setCatMode(mode: 'auto' | 'manual'): void {
+    for (const [key, button] of this.modeButtons) {
+      const active = key === mode;
+      button.classList.toggle('state-btn-active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    if (mode === 'manual') {
+      this.behaviorLine.textContent = '手动演示：自主行为已暂停，猫停在原地。';
+    }
+  }
+
+  /** 自主行为的实时状态：当前活动、姿势、所在位置与演示时钟。 */
+  setBehaviorStatus(status: BehaviorStatus): void {
+    const clock = formatClock(status.hourOfDay);
+    const where = status.anchorLabel;
+    this.behaviorLine.textContent = `自主行为 · ${clock} · ${status.activityLabel}（${status.postureLabel}）· ${where}`;
+  }
+
+  /** 突发演示的状态行。文案只描述动作，不命名任何状况。 */
+  setIncidentStatus(kind: CatIncidentKind | null): void {
+    if (!kind) {
+      this.incidentLine.textContent = '尚未触发突发演示。';
+      return;
+    }
+    const def = INCIDENT_DEFS[kind];
+    this.incidentLine.textContent = `正在演示：${def.label} —— ${def.hint}`;
   }
 
   setProgress(done: number, total: number, label: string): void {
@@ -279,4 +368,12 @@ export class Hud {
     select.addEventListener('change', () => this.callbacks.onQuality(select.value as QualityChoice));
     return el('label', { class: 'switch-row' }, [el('span', { text: '画质' }), select]);
   }
+}
+
+/** 演示时钟：把当日小时数格式化成 `HH:MM`。 */
+function formatClock(hourOfDay: number): string {
+  const h = ((hourOfDay % 24) + 24) % 24;
+  const hh = Math.floor(h);
+  const mm = Math.floor((h - hh) * 60);
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
