@@ -112,6 +112,55 @@ export interface PillarGap {
   adaptedForDog?: boolean;
 }
 
+// ---------------------------------------------------------------- 居家资源清单
+
+/** 关键环境资源类别。与 AAFP/ISFM 指南的资源枚举一一对应。 */
+export type HomeResourceKind =
+  | 'litter'
+  | 'food'
+  | 'water'
+  | 'sleep'
+  | 'scratch'
+  | 'hide'
+  | 'vertical'
+  | 'play';
+
+/**
+ * 房间里的一个资源点。
+ *
+ * 这份数据是**场景与清单的共同事实来源**：`apps/web` 用 `position` 摆 3D 物件，
+ * `summarizeHomeResources()` 用同一份坐标判定「资源是否相互分离」。
+ */
+export interface HomeResourceItem {
+  id: string;
+  kind: HomeResourceKind;
+  label: string;
+  /** 米制平面坐标 */
+  position: { x: number; z: number };
+  /** 台面高度（米）。仅垂直空间/睡窝有意义，用于「能否俯瞰」。 */
+  heightM?: number;
+}
+
+/** 一条可核查的检查项。`status: 'unknown'` 表示无法从现有信息判定，绝不等于合格。 */
+export interface HomeResourceCheck {
+  /** 沿用研究报告 science.json 的检查项编号（rs1…rs4、sp1…sp3、pl1/pl2、in1…in3、sm1…sm3） */
+  id: string;
+  pillar: PillarId;
+  requirement: string;
+  actual: string;
+  status: GapStatus;
+  evidence: Tier;
+  source?: string;
+  note?: string;
+}
+
+export interface HomeResourceSummary {
+  cats: number;
+  counts: Partial<Record<HomeResourceKind, number>>;
+  checks: HomeResourceCheck[];
+}
+
+
 // ---------------------------------------------------------------- 会话与采样
 
 export interface Sample {

@@ -11,4 +11,5 @@ export * from './types.ts';
 export * from './baseline.ts';
 export * from './drift.ts';
 export * from './profile.ts';
+export * from './home.ts';
 export * from './claims.ts';

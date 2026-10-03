@@ -26,23 +26,32 @@
 
 ```bash
 pnpm install
-pnpm dev            # 开发服务器 http://localhost:5273
-pnpm verify         # typecheck + 单元测试 + 措辞门禁
-pnpm build          # 产出静态站点 → apps/web/dist
-pnpm sim:generate   # 生成一份仿真会话数据
+node scripts/fetch-assets.mjs   # 一次性抓取 CC0 3D 资产（已入库，通常无需重跑）
+pnpm build                      # tsc + import map → apps/web/dist
+pnpm dev                        # 静态预览 http://localhost:5273
+pnpm verify                     # typecheck + 单元测试 + 措辞门禁
+pnpm sim:generate               # 生成一份仿真会话数据
 ```
+
+打开后默认进入**家居场景**（3D 样板间 + 居家资源清单），右上角可切到**工程自检**。
+URL 参数：`?state=agitated` 以「激动不适」开场、`?view=cat-follow` 直接给猫特写、
+`?debug=1` 显示自检徽章（`?debug=1&auto=1` 会自驱动切换状态并把快照回传给本地服务）。
 
 ## 仓库结构
 
 ```
-packages/core/        感知参数模型 · 证据登记 · 五大支柱规则 · 分析层   [C]
-packages/simulator/   带已知真值的仿真数据生成器 · DeviceAdapter 接口   [A]
-apps/web/             Vite 静态站（GitHub Pages 部署）                  [B]
+packages/core/        感知参数模型 · 证据登记 · 居家资源清单规则 · 分析层   [C]
+packages/simulator/   带已知真值的仿真数据生成器 · DeviceAdapter 接口      [A]
+apps/web/             无打包器静态站（tsc + 浏览器 import map → Pages）    [B]
+                      家居场景（3D 样板间） · 工程自检
 docs/research/        三份研究报告（团队共同依据）
-docs/design/          产品定义 · 证据政策 · 验证方案
+docs/design/          产品定义 · 证据政策 · 验证方案 · 家居场景设计（03）
 docs/hardware/        项圈规格 · 传感器位置 · 真机路线
-scripts/              构建 · 禁词门禁 · 部署 · 回归
+scripts/              构建 · three vendoring · 资产抓取 · 禁词门禁 · 场景自检 · 部署
 ```
+
+> 家居空间建模（第一阶段）的设计、资产许可与验证方式见
+> [`docs/design/03-home-scene-stage1.md`](docs/design/03-home-scene-stage1.md)。
 
 ## 三人分工
 

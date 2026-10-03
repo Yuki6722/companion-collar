@@ -57,8 +57,88 @@ if (res.status !== 0) {
   process.exit(res.status ?? 1);
 }
 
+const THREE_PKG = resolveThreePackage();
+const VENDOR_THREE = path.join(DIST, 'vendor', 'three');
+
+/**
+ * three 装在 workspace 包自己的 node_modules 下（pnpm 不做提升），
+ * 所以两个候选目录都要看：根目录（hoisted 安装）与 apps/web。
+ */
+function resolveThreePackage() {
+  const candidates = [
+    path.join(ROOT, 'node_modules', 'three'),
+    path.join(WEB, 'node_modules', 'three'),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'build', 'three.module.js'))) return dir;
+  }
+  console.error('✗ 找不到 three 运行时。请先在 apps/web 下执行：pnpm add -D three @types/three');
+  process.exit(1);
+}
+
+/** 用得上的 three addon；其相对依赖由 vendorThree() 递归带上，不手写完整清单。 */
+const THREE_ADDON_ENTRIES = [
+  'controls/OrbitControls.js',
+  'loaders/GLTFLoader.js',
+  'loaders/RGBELoader.js',
+  'environments/RoomEnvironment.js',
+  'geometries/RoundedBoxGeometry.js',
+];
+
+/**
+ * 为什么复制而不是从 node_modules 直接引用：
+ * 部署产物只有 dist（GitHub Pages），import map 必须指向同源路径；同时保证运行时零网络依赖。
+ *
+ * 为什么递归而不写固定清单：GLTFLoader 依赖 ../utils/BufferGeometryUtils.js 与
+ * ../utils/SkeletonUtils.js，手写清单一升级 three 就会漏文件、并且要到运行时才炸。
+ */
+function vendorThree() {
+  const build = path.join(THREE_PKG, 'build');
+  const jsm = path.join(THREE_PKG, 'examples', 'jsm');
+  const mainEntry = path.join(build, 'three.module.js');
+  if (!fs.existsSync(mainEntry)) {
+    console.error('✗ 找不到 three 运行时。请先运行 pnpm install');
+    process.exit(1);
+  }
+
+  /** 相对 dist/vendor/three 的 posix 路径 → 源文件绝对路径 */
+  const files = new Map();
+  files.set('three.module.js', mainEntry);
+
+  // 0.167+ 把核心拆到 three.core.js，由 three.module.js 相对导入
+  if (/from\s*['"]\.\/three\.core\.js['"]/.test(fs.readFileSync(mainEntry, 'utf8'))) {
+    files.set('three.core.js', path.join(build, 'three.core.js'));
+  }
+
+  const collect = (relPosix) => {
+    const key = `addons/${relPosix}`;
+    if (files.has(key)) return;
+    const abs = path.join(jsm, ...relPosix.split('/'));
+    if (!fs.existsSync(abs)) {
+      console.error(`✗ 缺少 three addon：examples/jsm/${relPosix}`);
+      process.exit(1);
+    }
+    files.set(key, abs);
+    for (const m of fs.readFileSync(abs, 'utf8').matchAll(/from\s*['"]([^'"]+)['"]/g)) {
+      const spec = m[1];
+      if (!spec.startsWith('.')) continue; // 裸标识符 'three' 交给 import map
+      collect(path.posix.normalize(path.posix.join(path.posix.dirname(relPosix), spec)));
+    }
+  };
+  for (const entry of THREE_ADDON_ENTRIES) collect(entry);
+
+  for (const [rel, abs] of files) {
+    const dst = path.join(VENDOR_THREE, ...rel.split('/'));
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(abs, dst);
+  }
+  return files.size;
+}
+
 console.log('→ 复制 index.html');
 fs.copyFileSync(path.join(WEB, 'index.html'), path.join(DIST, 'index.html'));
+
+console.log(`→ 复制 three 运行时 → dist/vendor/three（${vendorThree()} 个文件）`);
 
 if (fs.existsSync(path.join(WEB, 'public'))) {
   console.log('→ 复制 public/');

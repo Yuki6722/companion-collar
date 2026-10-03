@@ -5,7 +5,30 @@
 
 ## [Unreleased]
 
+### Added
+- **家居空间建模（第一阶段）**：`apps/web` 新增「家居场景」屏（默认首页）——
+  7.2×5.6×2.75 m 写实风格开间样板间，含猫爬架、饮水机、食盆、猫砂盆 ×2、猫窝、纸箱、抓板、
+  壁挂跳台与柜顶通道，以及床、衣柜、冰箱、开放式厨房、电视与电视柜、沙发、茶几、置物架、地毯、
+  落地灯等饲主家具。设计、资产许可与验证方式见 [`docs/design/03-home-scene-stage1.md`](docs/design/03-home-scene-stage1.md)，
+  截图见 `docs/design/shots/`。
+- **橘猫的两套手动演示状态**（平静舒适 / 激动不适）：参数化姿态、耳朵、尾巴、瞳孔、呼吸与动作幅度，
+  0.8 s 过渡且**可中途打断**。状态推进由 wall clock 推导而非逐帧累加 —— 否则后台标签降帧会卡住状态。
+  界面明确标注这是手动演示档位，**不是**系统对猫状态的推断。
+- `@camp/core/src/home.ts`：居家资源清单规则（`summarizeHomeResources`）——
+  把房间里的资源折算成 AAFP/ISFM 检查项，逐条带证据等级与来源；
+  **与房间内容无关的项固定 `unknown`**，界面显示「需你确认」，绝不因缺数据而默认合格；
+  指南未给米制阈值的判据（分离距离、离通道距离、可俯瞰高度）标为**操作化常量**并写明理由。
+  新增 11 项单测（`packages/core/test/home.test.ts`）。
+- `scripts/fetch-assets.mjs`：幂等抓取 CC0 资产（13.09 MB，含字节校验与许可清单生成）。
+- `scripts/smoke-scene.mjs`：场景自检断言 —— 读取浏览器回传的快照，验证渲染、资产替换与状态切换。
+- `apps/web/public/styles.css`、`scripts/dev-server.mjs` 的 `POST /__selftest` 端点（仅本地预览）。
+
 ### Changed
+- `apps/web` 从单页骨架改为**两屏 + hash 路由**：家居场景 / 工程自检；骨架自检内容迁移到 `screens/status.ts`。
+- `scripts/build-web.mjs` 新增 three vendoring：把 `three.module.js`/`three.core.js` 与**递归解析**出的
+  addon 依赖复制到 `dist/vendor/three/`，由 import map 指向同源路径（运行时零外链）。
+- `scripts/dev-server.mjs` 补齐 `.gltf/.glb/.bin/.hdr` MIME；`.gitattributes` 标注 3D 资产为二进制。
+- `README.md` 结构说明与快速开始同步（`apps/web` 已不是 Vite 站）。
 - **产品方向 v2**：从「感知参数可视化 + 居家资源核查」调整为 **「基线哨兵 + 离家事件流」**。
   一句话定位：**你上班时，它经历了什么；以及，它是否正在慢慢变化。**
   依据：「了解宠物感受」其实是四个问题，只有①不可回答（动物情绪体验不可直接测量）；
@@ -13,6 +36,13 @@
   AAFP 指南指出客户「被问到引导性问题前未意识到逐渐发生的变化」。
   完整计划见 `docs/design/00-plan-3day-camp.md`。
 - `AGENTS.md` 同步重写：新增 §5.5.4（core 不得运行时跨包导入）、§5.5.5（措辞表单一事实来源）
+
+### Verified
+- typecheck 3/3 通过（core / simulator / web）
+- 单元测试 **47/47** 通过（core profile 5、baseline 10、drift 10、home 11、simulator 11）
+- 措辞门禁通过；静态站构建产出 **122 个文件**
+- 场景自检通过：`models=6 tiles=3 env=1 placeholdersLeft=0 issues=0`，且切到激动后
+  尾巴/耳朵/瞳孔参数确实改变、两种状态落在不同锚点、切回平静后参数回到起点
 
 ### Added
 - `@camp/core/src/baseline.ts`：稳健基线（中位数 / MAD / 1.4826×MAD 等效标准差）。

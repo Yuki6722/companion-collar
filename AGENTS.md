@@ -134,6 +134,11 @@ class Foo {
 
 import map 定义在 [`apps/web/index.html`](apps/web/index.html)，把 `@camp/*` 裸标识符映射到编译产物。**新增 workspace 包时必须同步更新该映射**，否则浏览器无法解析。
 
+**第三方库（目前只有 three）走同一套机制**：`three` 与 `three/addons/` 也映射到同源路径 `./vendor/three/…`，由 `scripts/build-web.mjs` 在构建时把运行时**递归解析并复制**进 `dist/vendor/three/`。
+- 为什么递归：`GLTFLoader` 依赖 `utils/BufferGeometryUtils.js`、`utils/SkeletonUtils.js`，手写清单会随 three 升级漏文件，且要到运行时才炸。
+- 为什么复制而不是指向 `node_modules`：部署产物只有 `dist`，运行时必须零外链。
+- three 是 `apps/web` 的 **devDependency**（只作构建期源码），`@types/three` 同理；**不要在 `core` 里引入 three**。
+
 ### 5.5.3 TypeScript 必须是 5.x
 `typescript@7` 是原生编译器预览版，需要平台二进制包 `@typescript/typescript-win32-x64`，在本环境装不上。**钉在 `^5.9`**。
 
@@ -163,8 +168,9 @@ ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING
 
 ```bash
 pnpm install
+node scripts/fetch-assets.mjs  # 一次性抓取 CC0 3D 资产（已入库，通常无需重跑）
 pnpm dev            # 构建 + 静态预览 http://localhost:5273
-pnpm build          # 静态站点 → apps/web/dist（无打包器，tsc 编译）
+pnpm build          # 静态站点 → apps/web/dist（无打包器，tsc 编译；含 three vendoring）
 pnpm typecheck      # 全 workspace 类型检查（含 erasableSyntaxOnly 门禁）
 pnpm test           # node:test 单元测试
 pnpm check:claims   # 措辞门禁
@@ -172,7 +178,11 @@ pnpm verify         # 以上三者串联（提交前必跑）
 pnpm sim:generate -- --seed 42 --scenario noise-event --minutes 240
 ```
 
-### ⚠️ DSH 沙箱内的两个已知限制
+> `pnpm add` 在本仓库要带 `--store-dir .tools/pnpm-store`：`node_modules` 是用那个 store 链接出来的，
+> 不指定会报 `ERR_PNPM_UNEXPECTED_STORE`。示例：
+> `node <bundled>/pnpm.mjs --store-dir .tools/pnpm-store --filter @camp/web add -D three@0.186.1`.
+
+### ⚠️ DSH 沙箱内的已知限制
 
 沙箱禁止「带管道 stdio 的子进程」，因此以下命令在 **agent 会话内**会失败（人类终端与 CI 不受影响）：
 
@@ -180,14 +190,17 @@ pnpm sim:generate -- --seed 42 --scenario noise-event --minutes 240
 |---|---|---|
 | `pnpm -r <script>` | `Error: spawn EPERM` | 直接调用工具，见下 |
 | `node --test <目录>` | `Error: spawn EPERM`（runner 为每个文件派生进程） | **直接执行测试文件** |
+| 启动浏览器（Chrome/Edge 无头） | `mojo platform_channel.cc: Check failed` —— 进程间通信用命名管道，被拦截 | 场景自检改由**人在普通终端跑一次**，agent 只读日志断言（`scripts/smoke-scene.mjs`） |
 
 ```bash
 # 沙箱内的等价验证方式
 node node_modules/typescript/bin/tsc -p packages/core/tsconfig.json
 node packages/core/test/profile.test.ts          # 同进程执行，node:test 照常工作
+node packages/core/test/home.test.ts
 node packages/simulator/test/simulator.test.ts
 node scripts/check-claims.mjs
 node scripts/build-web.mjs                        # 内部 spawn 已用 stdio:'inherit'
+node scripts/smoke-scene.mjs                       # 读浏览器回传的自检日志做断言
 ```
 
 **不要给 `pnpm -r <script>` 传 `--store-dir`**——pnpm 会把它当脚本参数转发下去，导致 `tsc` 报参数错误。该参数只对 `install` / `add` 有效。
@@ -198,13 +211,17 @@ node scripts/build-web.mjs                        # 内部 spawn 已用 stdio:'i
 
 ```
 AGENTS.md                  ← 本文件
-packages/core/             [C] 领域类型 · 稳健基线 · 漂移检测 · 措辞政策
+packages/core/             [C] 领域类型 · 稳健基线 · 漂移检测 · 居家资源清单规则 · 措辞政策
 packages/simulator/        [A] 仿真数据生成器 · DeviceAdapter
-apps/web/                  [B] 静态站（tsc 编译 + 浏览器 import map，无打包器）
+apps/web/                  [B] 静态站（tsc + 浏览器 import map，无打包器）
+  public/assets/              CC0 3D 资产（模型 / 平铺贴图 / HDRI）+ CREDITS.md
+  src/scene/                  3D 场景：layout（权威坐标）· build-* · cat/ · materials · textures
+  src/screens/                家居场景 / 工程自检
 docs/research/             三份研究报告（团队共同依据，含归属说明）
-docs/design/               产品定义 · 证据政策 · 验证方案 · 三日计划
+docs/design/               产品定义 · 证据政策 · 验证方案 · 三日计划 · 03 家居场景
+docs/design/shots/         场景截图（人工核对的画面证据）
 docs/hardware/             项圈规格 · 传感器位置 · 真机路线
-scripts/                   构建 · 措辞门禁 · 部署
+scripts/                   构建 · three vendoring · 资产抓取 · 措辞门禁 · 场景自检 · 部署
 data/                      运行时数据（不入库）
 ```
 
@@ -233,7 +250,10 @@ data/                      运行时数据（不入库）
 - ✅ `@camp/core`：领域类型、档案推导、**稳健基线（中位数/MAD）**、**漂移检测（稳健效应量 + 置换检验 + 持续性判据）**
 - ✅ `@camp/simulator`：确定性 PRNG、四场景、逐通道注入滞后的真值数据、`DeviceAdapter`
 - ✅ 三份研究报告归档；`AGENTS.md`、三日计划、证据政策
-- ✅ 门禁全绿：typecheck 3/3、测试 36/36、措辞门禁通过
+- ✅ **家居空间建模（第一阶段）**：`apps/web` 的 3D 样板间（写实风格、CC0 扫描模型 + HDRI 环境光）、
+  橘猫的两套**手动演示状态**、`@camp/core` 的居家资源清单规则（`summarizeHomeResources`）。
+  设计与验收见 [`docs/design/03-home-scene-stage1.md`](docs/design/03-home-scene-stage1.md)
+- ✅ 门禁全绿：typecheck 3/3、测试 47/47、措辞门禁通过、场景自检通过（`scripts/smoke-scene.mjs`）
 
 待办：
 - ⏳ `simulator`：注入**渐进漂移**（线性斜坡）+ `truth.injectedDrift` + 回归断言（Day 1，A）
@@ -242,6 +262,8 @@ data/                      运行时数据（不入库）
 - ⏳ 项圈规格与形态方案（Day 1–3，A）
 - ⏳ 5–10 人前后测：漂移识别率（Day 3，C）
 - ⏳ **GitHub Pages 启用**（建议提前跑通，避免 Day 3 卡壳）
+- ⏳ 家居场景第二阶段：把 `CatController.setState()` 接到仿真真值 `truth.comfortCurve`；
+  `HOME_RESOURCES` 支持用户自助编辑；「现状 / 达标」双布局对比
 
 阶段 tag：`v0.0.1`（骨架）→ `v0.1.0`（Day1）→ `v0.2.0`（Day2）→ `v1.0.0`（Day3）
 
