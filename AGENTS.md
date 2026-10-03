@@ -238,13 +238,15 @@ node scripts/smoke-scene.mjs                       # 读浏览器回传的自检
 ```
 AGENTS.md                  ← 本文件
 packages/core/             [C] 领域类型 · 稳健基线 · 漂移检测 · 居家资源清单规则 · 措辞政策
-packages/simulator/        [A] 仿真数据生成器 · DeviceAdapter
+  src/behavior/               行为词汇 · 证据参数登记表 · 节律 · 时间线引擎
+packages/simulator/        [A] 仿真数据生成器 · DeviceAdapter · 行为时间线
 apps/web/                  [B] 静态站（tsc + 浏览器 import map，无打包器）
   public/assets/              CC0 3D 资产（模型 / 平铺贴图 / HDRI）+ CREDITS.md
   src/scene/                  3D 场景：layout（权威坐标）· build-* · cat/ · materials · textures
+    cat/                        猫模型 · 控制器 · **行为运行时 / 锚点映射 / 位移推进**
   src/screens/                家居场景 / 工程自检
-docs/research/             三份研究报告（团队共同依据，含归属说明）
-docs/design/               产品定义 · 证据政策 · 验证方案 · 三日计划 · 03 家居场景
+docs/research/             六份研究报告（团队共同依据，含归属说明）
+docs/design/               产品定义 · 证据政策 · 验证方案 · 三日计划 · 03/04 家居场景各阶段
 docs/design/shots/         场景截图（人工核对的画面证据）
 docs/hardware/             项圈规格 · 传感器位置 · 真机路线
 scripts/                   构建 · three vendoring · 资产抓取 · 措辞门禁 · 场景自检 · 部署
@@ -279,17 +281,23 @@ data/                      运行时数据（不入库）
 - ✅ **家居空间建模（第一阶段）**：`apps/web` 的 3D 样板间（写实风格、CC0 扫描模型 + HDRI 环境光）、
   橘猫的两套**手动演示状态**、`@camp/core` 的居家资源清单规则（`summarizeHomeResources`）。
   设计与验收见 [`docs/design/03-home-scene-stage1.md`](docs/design/03-home-scene-stage1.md)
-- ✅ 门禁全绿：typecheck 3/3、测试 47/47、措辞门禁通过、场景自检通过（`scripts/smoke-scene.mjs`）
+- ✅ **行为建模（第二阶段）**：`@camp/core/src/behavior/` 的行为引擎（词汇、证据参数登记表、
+  节律、时间线）、`simulator` 的行为时间线与突发真值、`apps/web` 的**自主行动猫**与
+  **手动突发演示**。调研见 [`docs/research/05`](docs/research/05-cat-home-behavior-repertoire.md)
+  与 [`06`](docs/research/06-cat-acute-observables.md)，
+  设计与验收见 [`docs/design/04-home-scene-stage2.md`](docs/design/04-home-scene-stage2.md)
+- ✅ 门禁全绿：typecheck 3/3、测试 83/83、措辞门禁通过、构建 136 个文件
 
 待办：
 - ⏳ `simulator`：注入**渐进漂移**（线性斜坡）+ `truth.injectedDrift` + 回归断言（Day 1，A）
 - ⏳ `core`：`eventRateByKind` / `summarizeAwayWindows` / 离家窗口异常检测（Day 2，C）
 - ⏳ `apps/web` 三屏：事件流 / 漂移报告 / 宠物档案（含离家时段）（Day 2，B）
+- ⏳ `apps/web`：把 `screens/home.ts` 接到 `generateSession` 的 `behaviorTimeline`
+  （目前场景用本地按同一套规则生成的时间线，见 stage2 §10 接缝 1）
 - ⏳ 项圈规格与形态方案（Day 1–3，A）
 - ⏳ 5–10 人前后测：漂移识别率（Day 3，C）
 - ⏳ **GitHub Pages 启用**（建议提前跑通，避免 Day 3 卡壳）
-- ⏳ 家居场景第二阶段：把 `CatController.setState()` 接到仿真真值 `truth.comfortCurve`；
-  `HOME_RESOURCES` 支持用户自助编辑；「现状 / 达标」双布局对比
+- ⏳ 家居场景第三阶段候选：用户自助编辑 `HOME_RESOURCES`；「现状 / 达标」双布局对比
 
 阶段 tag：`v0.0.1`（骨架）→ `v0.1.0`（Day1）→ `v0.2.0`（Day2）→ `v1.0.0`（Day3）
 
