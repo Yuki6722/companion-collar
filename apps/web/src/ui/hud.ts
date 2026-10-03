@@ -178,7 +178,21 @@ export class Hud {
       this.checklistBody,
     ]);
 
-    const panels = el('div', { class: 'hud-panels' }, [catPanel, cameraPanel, layersPanel]);
+    // ---- 首屏提示：让「猫在自主行动」这件事一眼可见，而不是藏在面板里
+    const intro = el('div', { class: 'intro-card' }, [
+      el('h2', { class: 'panel-title', text: '这里有只会自己活动的猫' }),
+      el('p', {
+        class: 'panel-foot',
+        text: '猫按仿真数据自己走动、跳上跳下、抓挠、进食、躲藏。左侧「猫的行为」面板可切到手动演示档位，或触发一次突发动作演示。',
+      }),
+      el('ul', { class: 'intro-list' }, [
+        el('li', { text: '「猫特写」机位会实时跟随它当前所在位置' }),
+        el('li', { text: '想先看房间：点「全景」并关掉资源标签' }),
+        el('li', { text: '所有数据均为仿真，不构成任何诊断' }),
+      ]),
+    ]);
+
+    const panels = el('div', { class: 'hud-panels' }, [intro, catPanel, cameraPanel, layersPanel]);
 
     this.progressBar = el('div', { class: 'progress-bar' });
     this.progressText = el('p', { class: 'progress-text', text: '正在准备场景…' });

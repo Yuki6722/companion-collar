@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>猫突发状况的居家监测与预警：学界研究与业界产品调研</title>
+<style>
+  :root{
+    --ink:#16181d; --ink-2:#3d434e; --muted:#6b7280; --line:#e4e7ec;
+    --bg:#fbfaf8; --card:#ffffff;
+    --teal:#0f766e; --teal-soft:#e6f4f1;
+    --amber:#b45309; --amber-soft:#fdf3e3;
+    --red:#b42318; --red-soft:#fdeceb;
+    --green:#15803d; --green-soft:#e9f6ec;
+    --blue:#1d4ed8; --blue-soft:#eaeffd;
+    --purple:#6d28d9; --purple-soft:#f1ebfe;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(16,24,40,.05),0 4px 14px -6px rgba(16,24,40,.10);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",-apple-system,sans-serif;
+    font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+  }
+  #progress{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--teal),var(--amber));z-index:100;transition:width .1s linear}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:236px minmax(0,1fr);gap:48px;align-items:start}
+  @media (max-width:1040px){.wrap{grid-template-columns:1fr;gap:0}}
+  nav.toc{position:sticky;top:28px;max-height:calc(100vh - 56px);overflow-y:auto;padding:24px 0 40px;font-size:13.5px}
+  @media (max-width:1040px){nav.toc{position:static;max-height:none;border-bottom:1px solid var(--line);margin-bottom:8px}}
+  nav.toc .toc-title{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 12px}
+  nav.toc a{display:block;color:var(--ink-2);text-decoration:none;padding:5px 10px;border-left:2px solid transparent;border-radius:0 6px 6px 0;line-height:1.45}
+  nav.toc a:hover{background:#f1f3f6;color:var(--ink)}
+  nav.toc a.sub{padding-left:22px;font-size:12.5px;color:var(--muted)}
+  nav.toc a.active{border-left-color:var(--teal);background:var(--teal-soft);color:var(--teal);font-weight:600}
+  header.masthead{grid-column:1/-1;padding:64px 0 36px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);font-weight:700;margin-bottom:14px}
+  h1{font-size:clamp(28px,4.2vw,42px);line-height:1.25;margin:0 0 16px;letter-spacing:-.02em;font-weight:800}
+  .subtitle{font-size:17px;color:var(--ink-2);max-width:64ch;margin:0 0 26px;line-height:1.7}
+  .meta-row{display:flex;flex-wrap:wrap;gap:8px 28px;font-size:13px;color:var(--muted)}
+  .meta-row b{color:var(--ink-2);font-weight:600}
+  main{padding:8px 0 96px;min-width:0}
+  section{padding:34px 0;border-bottom:1px solid var(--line);scroll-margin-top:24px}
+  section:last-of-type{border-bottom:none}
+  h2{font-size:25px;line-height:1.35;margin:0 0 6px;letter-spacing:-.01em;font-weight:750;scroll-margin-top:24px}
+  h2 .num{color:var(--teal);font-variant-numeric:tabular-nums;margin-right:10px;font-weight:800}
+  h3{font-size:18.5px;margin:34px 0 10px;font-weight:700;color:var(--ink);scroll-margin-top:24px}
+  h4{font-size:15.5px;margin:24px 0 8px;font-weight:700;color:var(--ink-2)}
+  p{margin:0 0 14px}
+  .lede{font-size:16.5px;color:var(--ink-2)}
+  ul,ol{margin:0 0 14px;padding-left:22px}
+  li{margin-bottom:7px}
+  a{color:var(--teal);text-decoration:none;border-bottom:1px solid rgba(15,118,110,.28)}
+  a:hover{border-bottom-color:var(--teal);background:var(--teal-soft)}
+  code{font-family:"Cascadia Mono",Consolas,monospace;font-size:.88em;background:#f1f3f6;padding:1px 5px;border-radius:4px}
+  .callout{border:1px solid var(--line);border-left:3px solid var(--teal);background:var(--card);border-radius:var(--radius);padding:16px 20px;margin:20px 0;box-shadow:var(--shadow)}
+  .callout.warn{border-left-color:var(--amber);background:var(--amber-soft)}
+  .callout.risk{border-left-color:var(--red);background:var(--red-soft)}
+  .callout.ok{border-left-color:var(--green);background:var(--green-soft)}
+  .callout .ct{font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px}
+  .callout p:last-child{margin-bottom:0}
+  .badge{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;line-height:1.6;vertical-align:middle}
+  .b-strong{background:var(--green-soft);color:var(--green)}
+  .b-mid{background:var(--amber-soft);color:var(--amber)}
+  .b-weak{background:var(--red-soft);color:var(--red)}
+  .b-peer{background:var(--blue-soft);color:var(--blue)}
+  .b-dispute{background:var(--purple-soft);color:var(--purple)}
+  .b-gray{background:#f1f3f6;color:var(--muted)}
+  .grid{display:grid;gap:16px}
+  .grid.g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .grid.g3{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 8px;font-size:15.5px;color:var(--ink)}
+  .card .kpi{font-size:27px;font-weight:800;color:var(--teal);line-height:1.2;letter-spacing:-.02em}
+  .card .kpi-label{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .card p{font-size:14px;color:var(--ink-2);margin-bottom:0}
+  .tablewrap{overflow-x:auto;margin:20px 0;border:1px solid var(--line);border-radius:var(--radius);background:var(--card)}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
+  th,td{text-align:left;padding:10px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f7f8fa;font-weight:700;color:var(--ink-2);font-size:12.5px;letter-spacing:.02em;white-space:nowrap;position:sticky;top:0}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fafbfc}
+  td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .refs{font-size:13.5px;color:var(--ink-2)}
+  .refs li{margin-bottom:11px;line-height:1.6;scroll-margin-top:24px}
+  .refs li:target{background:var(--amber-soft);border-radius:4px}
+  .tag{display:inline-block;font-size:11.5px;color:var(--muted);background:#f1f3f6;border-radius:4px;padding:1px 6px;margin-left:6px}
+  footer{grid-column:1/-1;border-top:1px solid var(--line);padding:28px 0 64px;font-size:13px;color:var(--muted)}
+  .rank{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:var(--teal);color:#fff;font-size:12px;font-weight:700;margin-right:6px}
+  .rank.r2{background:#0e7490}.rank.r3{background:var(--blue)}.rank.r4{background:var(--amber)}.rank.r5{background:var(--muted)}
+  @media print{
+    body{background:#fff;font-size:11pt}
+    nav.toc,#progress{display:none}
+    .wrap{display:block;max-width:none;padding:0}
+    section{page-break-inside:avoid;border-bottom:none;padding:16px 0}
+    a{color:#000;border:none}
+    .card,.callout,.tablewrap{box-shadow:none}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">研究报告 07 · 基线哨兵项目</div>
+  <h1>猫突发状况的居家监测与预警</h1>
+  <p class="subtitle">
+    当家猫发生突发心脏事件、急性消化道事件、急性肾损伤或外伤时，<b>在家里能看到什么、有没有设备能提前报警、
+    这些报警有多少被验证过</b>——一份把「突发情况」拆成可观察信号、可行传感形态与已知性能上限的调研。
+  </p>
+  <div class="meta-row">
+    <span><b>检索日期</b> 2026-10-03</span>
+    <span><b>证据分级</b> strong / moderate / weak / unverified / disputed</span>
+    <span><b>范畴</b> 猫（不含犬的外推）· 急性事件 · 报警闭环</span>
+    <span><b>前序</b> 04 猫健康监测 · 06 猫急性可观察信号</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <p class="toc-title">目录</p>
+  <a href="#s-summary">摘要与六条结论</a>
+  <a href="#s-method">1 研究问题与方法</a>
+  <a href="#s-method-rq" class="sub">1.1 四个子问题</a>
+  <a href="#s-method-bounds" class="sub">1.2 范围边界</a>
+  <a href="#s-method-grade" class="sub">1.3 证据分级与检索</a>
+  <a href="#s-method-delta" class="sub">1.4 相对 04 / 06 的增量</a>
+  <a href="#s-academic">2 学界研究</a>
+  <a href="#s-ac-owner" class="sub">2.1 主人识别：渐变 vs 突发</a>
+  <a href="#s-ac-cardiac" class="sub">2.2 突发心脏事件</a>
+  <a href="#s-ac-srr" class="sub">2.3 睡眠呼吸频率</a>
+  <a href="#s-ac-gi" class="sub">2.4 急性消化道事件</a>
+  <a href="#s-ac-renal" class="sub">2.5 急性肾损伤与尿路梗阻</a>
+  <a href="#s-ac-trauma" class="sub">2.6 外伤、中毒与其他</a>
+  <a href="#s-ac-ml" class="sub">2.7 算法能做的上限</a>
+  <a href="#s-industry">3 业界产品</a>
+  <a href="#s-in-wearable" class="sub">3.1 项圈与可穿戴</a>
+  <a href="#s-in-stationary" class="sub">3.2 智能猫砂盆</a>
+  <a href="#s-in-camera" class="sub">3.3 摄像头</a>
+  <a href="#s-in-ai" class="sub">3.4 AI 评分与远程分诊</a>
+  <a href="#s-in-gap" class="sub">3.5 宣称与证据：十条对照</a>
+  <a href="#s-in-verdict" class="sub">3.6 两个格局判断</a>
+  <a href="#s-synth">4 综合洞察</a>
+  <a href="#s-sy-core" class="sub">4.1 三条核心判断</a>
+  <a href="#s-sy-latency" class="sub">4.2 时延预算</a>
+  <a href="#s-sy-asym" class="sub">4.3 代价不对称</a>
+  <a href="#s-sy-migrate" class="sub">4.4 可迁移结论</a>
+  <a href="#s-sy-wording" class="sub">4.5 措辞纪律</a>
+  <a href="#s-conclusion">5 结论与建议</a>
+  <a href="#s-limits">6 局限与未核实清单</a>
+  <a href="#s-refs">参考文献</a>
+  <a href="#s-appendix">附录 检索策略</a>
+</nav>
+
+<main>
+
+<!-- ============================== 摘要 ============================== -->
+<section id="s-summary">
+  <h2><span class="num">摘要</span></h2>
+  <p class="lede">
+    本报告回答一个具体问题：<b>「监测猫并提醒主人突发情况」这件事，学界做到哪一步、市面上卖的东西做到哪一步？</b>
+    结论是：<b>传感不是瓶颈，「把变化判成急症」才是</b>。学界唯一给出居家阈值、且被反复验证的预警协议是
+    <b>睡眠呼吸频率</b>；而在所有被点名的突发情况里，最常见的居家信号是<b>呼吸与姿态</b>，不是心率。
+  </p>
+
+  <h3>六条主要结论</h3>
+  <div class="grid g2">
+    <div class="card">
+      <h4><span class="rank">1</span>「猫版健康手环」在突发场景比在慢病场景更失效</h4>
+      <p>人类手环成立的前提是「最高价值的指标都能在手腕一个位置测到」。猫不成立：急症里最有分辨力的信号是
+      <b>呼吸频率与姿态</b>（视觉量）与<b>体重、排尿、进食</b>（发生在猫砂盆、食盆、水碗），<b>没有一项发生在颈部</b>。
+      颈部项圈能贡献的主要是「低活动 / 不动」这一条——而它同时与恐惧、正常衰老、环境变化相关。</p>
+    </div>
+    <div class="card">
+      <h4><span class="rank r2">2</span>突发心脏事件里，最常见的居家可见信号是「呼吸快」</h4>
+      <p>127 例猫动脉血栓栓塞（ATE）病例中，<b>呼吸急促占 91%</b>——即使没有充血性心衰，也有 <b>89%</b> 呼吸急促；
+      到急诊就诊的「急性瘫痪」猫里，<b>ATE 占 60.6%</b>。而 ACVIM 2020 共识原话是：心肌病猫
+      「最常见的就诊表现是<b>费力呼吸</b>」，有些猫只表现为<b>躲藏或食欲不振</b>。</p>
+    </div>
+    <div class="card">
+      <h4><span class="rank r3">3</span>唯一有居家阈值的预警协议，靠的是「人数」而不是「设备」</h4>
+      <p>让主人在家数睡眠呼吸频率：健康猫与轻中度心房扩大的猫，<b>睡眠呼吸频率均值一致 &lt;30 次/分，中位约 21</b>；
+      严重左房扩大的猫有时会超过 30。原文给出的行动规则是
+      「<b>均值 &gt;30，或多次测量 &gt;30，likely warrant additional evaluation</b>」。
+      这是本报告找到的<b>唯一</b>一条「居家可执行 + 有阈值 + 有同行评审」的预警协议。</p>
+    </div>
+    <div class="card">
+      <h4><span class="rank r4">4</span>肾与泌尿类的最早信号是「量与体重」，不是「质」</h4>
+      <p>569 只 CKD 猫在<b>确诊前 12 个月中位已掉 8.9% 体重</b>，而且<b>确诊前 3 年就已经在掉</b>；
+      但「多饮多尿」这类变化 <b>75.6% 没有被主人报告</b>。可自动计量的量（体重、如厕频次与时长）
+      恰是设备最容易接手的一段——这也是目前唯一有同行评审性能数字的居家筛查方向。</p>
+    </div>
+    <div class="card">
+      <h4><span class="rank r5">5</span>算法上限已被量化，而数字并不高</h4>
+      <p>项圈加速度计预测早期退行性关节病：<b>AUC 0.78、敏感度 68% @ 75% 特异度</b>，且标签是主人报告（代理标签）。
+      智能猫砂盆识别 CKD：加权 F1 92.7%，但为厂商资助研究。而
+      <b>没有任何一项研究，证明消费级设备能对猫的急性心脏事件或尿路梗阻做出及时预警并改善结局</b>。</p>
+    </div>
+    <div class="card">
+      <h4><span class="rank">6</span>决定结局的是「到院速度」，不是监测精度</h4>
+      <p>183 只 FATE（猫动脉血栓栓塞）病例中，<b>37% 在到院 6 小时内被安乐死</b>；接受支持治疗的存活率约
+      <b>30–40%</b>。同一份综述指出，近年随着抗血栓预防进展，中位生存时间已可超过 1 年。
+      也就是说：把猫<b>更早识别为急症并送到医院</b>，比把读数测得再准一点，价值大得多。</p>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">贯穿全文的边界</div>
+    <p>
+      本报告只整理「哪些可观察变化在文献中被记录为与某些状况<b>同时出现</b>」，以及设备<b>宣称</b>与<b>已验证</b>能力的差距。
+      <b>关联不等于因果，更不等于诊断。</b>猫的急症没有一项特异的居家信号；任何持续异常或任何疑似急症，
+      都应当直接联系兽医，而不是等待设备给出结论。全部数值仅用于让仿真贴近日与现实边界说明，
+      <b>不构成兽医诊断依据</b>。
+    </p>
+  </div>
+</section>
+
+<!-- ============================== 1 方法 ============================== -->
+<section id="s-method">
+  <h2><span class="num">1</span>研究问题与方法</h2>
+
+  <h3 id="s-method-rq">1.1 四个子问题</h3>
+  <table>
+    <thead><tr><th>#</th><th>子问题</th><th>为什么问</th></tr></thead>
+    <tbody>
+      <tr><td class="num">Q1</td><td>被点名的那几类突发情况（心脏、消化道、肾与泌尿、外伤中毒），在居家各自留下什么可观察痕迹？可观察性有多强？</td><td>决定了「值不值得做预警」以及「该测什么」</td></tr>
+      <tr><td class="num">Q2</td><td>学界有没有做过「监测 → 判断 → 提醒」的<b>端到端</b>验证？性能上限是多少？</td><td>决定了产品能承诺什么，以及预期性能该怎么写</td></tr>
+      <tr><td class="num">Q3</td><td>在售产品实际提供了什么报警能力？其宣称有多少被独立验证？</td><td>决定了差异化空间与话术纪律</td></tr>
+      <tr><td class="num">Q4</td><td>一个只戴在脖子上的项圈，在这条链路上能承担哪一段、不能承担哪一段？</td><td>决定了本项目项圈形态方案的能力边界</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="s-method-bounds">1.2 范围边界</h3>
+  <div class="grid g2">
+    <div class="card">
+      <h4>本报告回答</h4>
+      <ul>
+        <li>急症在<b>居家环境</b>下的可观察信号与文献措辞</li>
+        <li>可穿戴 / 固定式传感 / 摄像头在急症预警上的<b>已验证性能</b></li>
+        <li>在售产品的报警机制与验证状态</li>
+        <li>各项能力的<b>物理与生理原因</b>（为什么测不到）</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>本报告不回答</h4>
+      <ul>
+        <li><b>不做诊断、不建立诊断规则</b>，不给「什么病」的结论</li>
+        <li><b>不外推犬的数据</b>：凡犬研究一律标注「犬」且不作为猫的依据</li>
+        <li>不评测治疗方案与预后选择</li>
+        <li>不推荐具体品牌，不比较性价比排名</li>
+        <li>不覆盖慢性病长期管理与老年筛查（见报告 04）</li>
+        <li>不覆盖疼痛量表条目细节与居家行为清单（见报告 06）</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 id="s-method-grade">1.3 证据分级与检索</h3>
+  <table>
+    <thead><tr><th>等级</th><th>定义</th><th>本报告的用法</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge b-strong">strong</span></td><td>多个相互独立的同行评审发现一致，或权威指南 + 一手研究一致</td><td>可作为设计依据</td></tr>
+      <tr><td><span class="badge b-mid">moderate</span></td><td>单一研究，或权威综述 / 指南</td><td>可用，但须写明人群与条件</td></tr>
+      <tr><td><span class="badge b-weak">weak</span></td><td>二手来源、讲义、厂商材料</td><td>只作线索，不支撑主张</td></tr>
+      <tr><td><span class="badge b-gray">unverified</span></td><td>无可靠一手来源</td><td><b>禁止展示具体数字</b></td></tr>
+      <tr><td><span class="badge b-dispute">disputed</span></td><td>来源之间冲突</td><td>必须展示为区间并标注冲突</td></tr>
+      <tr><td><span class="badge b-peer">peer-reviewed</span></td><td>来源性质标记</td><td>用于区分同行评审与厂商宣称</td></tr>
+    </tbody>
+  </table>
+  <p>
+    检索渠道：PubMed / Europe PMC REST（用于取摘要原文与核实 DOI）、PMC 开放全文、权威兽医教材与机构页
+    （MSD/Merck Veterinary Manual、International Cat Care、AAHA、ACVIM）、以及厂商官网与商品页。
+    厂商材料与新闻稿一律<b>不作为验证</b>，只作为「它宣称了什么」的记录。完整检索式与纳入排除标准见
+    <a href="#s-appendix">附录</a>。
+  </p>
+
+  <h3 id="s-method-delta">1.4 相对报告 04 / 06 的增量</h3>
+  <table>
+    <thead><tr><th>报告</th><th>组织线索</th><th>本报告新增的部分</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><a href="../04-cat-health-monitoring/cat-health-monitoring.html">04 猫健康监测</a></td>
+        <td>按<b>指标</b>（心率、呼吸、活动、体重…）问「猫版健康手环可行吗」</td>
+        <td>把问题从「能不能测」推进到「测到了能不能判成急症、能不能及时提醒」</td>
+      </tr>
+      <tr>
+        <td><a href="../06-cat-acute-observables.md">06 急性可观察信号</a></td>
+        <td>按<b>症状</b>（呕吐、躲藏、弓背…）穷举居家可观察项与证据等级</td>
+        <td>改为按<b>突发情况</b>组织（心脏 / 消化道 / 肾与泌尿 / 外伤中毒），并补入
+            <b>睡眠呼吸频率协议</b>、<b>ATE 流行病学与时间窗</b>、<b>CKD 体重前置下降</b>三组新证据</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="callout">
+    <div class="ct">一个必须说清的推论边界</div>
+    <p>
+      报告 06 用大量证据论证了「主人对<b>逐渐发生</b>的变化系统性漏报」（DJD 疼痛清单敏感度 55%、
+      CKD 相关排尿变化 75.6% 未被报告）。那条证据链讲的是<b>渐变</b>。
+      本报告关心的是<b>突发</b>——两者<b>不能互相套用</b>：突发事件的信号通常更明显，
+      真正的问题不是「看不见」，而是「看见了但没判断为急症、或人不在场」。
+      这条区分是后文所有产品判断的基础。
+    </p>
+  </div>
+</section>
+
+<!-- ============================== 2 学界 ============================== -->
+<section id="s-academic">
+  <h2><span class="num">2</span>学界研究</h2>
+
+  <h3 id="s-ac-owner">2.1 主人识别能力：渐变与突发是两个问题</h3>
+  <p>
+    关于「主人能不能看出猫有问题」，已有证据分两类，方向相反，必须分开陈述：
+  </p>
+  <div class="grid g2">
+    <div class="card">
+      <h4>渐变侧：漏报是常态</h4>
+      <ul>
+        <li>未受引导时，猫 DJD 疼痛清单的敏感度仅 <b>55%</b>（特异度 97%）；受引导后升至 99% — Enomoto 2020 <span class="badge b-mid">moderate</span></li>
+        <li>一批主人自认健康的老年猫中，CKD 相关排尿变化有 <b>75.6%（34/45）</b> 未被报告，仅 <b>1.3%（1/78）</b> 报告过口渴增加 — Herrera 2026 <span class="badge b-mid">moderate</span></li>
+        <li>AAFP 原文：「many clients may be <b>unaware of gradual changes until we ask provocative questions</b>」 — 2021 AAFP 老年猫指南 <span class="badge b-mid">moderate</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>突发侧：证据少得多，且问题不同</h4>
+      <ul>
+        <li>当变化足够明显时，主人的观察与客观检查<b>是一致的</b>：主人报告异常是 30% 确诊 OA 病例的首要发现，并在 64% 病例中与体检/影像共同触发诊断 — Klinck 2012 <span class="badge b-mid">moderate</span></li>
+        <li>突发场景的失效点不在「感知」，而在<b>判断与响应</b>：ATE 病例中 37% 到院 6 小时内被安乐死（见 2.2）</li>
+        <li><b>未找到</b>任何研究直接测量「主人对猫急性事件的识别准确率 / 延误时长」——这是本领域一个明确的空白 <span class="badge b-gray">unverified</span></li>
+      </ul>
+    </div>
+  </div>
+  <p>
+    因此本报告不采用「主人发现不了疾病」这种单一标题句。准确的说法是：
+    <b>主人对逐渐发生的变化容易漏报；对突发变化，感知通常不是瓶颈，判断与到场速度才是。</b>
+    这一区分直接把产品目标从「替你发现」改写为「<b>替你在场，并帮你决定要不要现在就去医院</b>」。
+  </p>
+
+  <h3 id="s-ac-cardiac">2.2 突发心脏事件：三类终点，三种居家面貌</h3>
+  <p>
+    在四类被点名的突发情况里，心脏事件是<b>最有条件做预警</b>的一类，原因不是心脏好测，
+    而是它同时具备三个条件：有一个可界定的高危人群、有一个可测的前置指标、有一个明确的居家行动阈值。
+  </p>
+
+  <h4>2.2.1 高危人群是可界定的：HCM 在「看起来健康」的猫里就有约 15%</h4>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>结论（含原文数字）</th><th>来源</th><th>等级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>在收容中心 1007 只「看起来健康」的猫中，780 只取得完整数据；<b>HCM 患病率 14.7%（95% CI 12.3–17.4）</b>；
+              心杂音 40.8%，其中 70.4% 为功能性；<b>心杂音对 HCM 的阳性预测值仅 17.9–42.6%、阴性预测值 90.2–100%</b>。
+              患病率随年龄上升；相关因素含雄性、年龄、体况评分、≥III/VI 级杂音</td>
+          <td>Payne JR, Brodbelt DC, Luis Fuentes V. <i>J Vet Cardiol</i> 2015;17(Suppl 1):S244-57（CatScan）<br>
+              DOI <a href="https://doi.org/10.1016/j.jvc.2015.03.008">10.1016/j.jvc.2015.03.008</a> · PMID 26776583</td>
+          <td><span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span></td>
+        </tr>
+        <tr>
+          <td>ACVIM 2020 共识：HCM 在<b>一般猫群中估计患病率约 15%</b>；老年猫<b>可高达 29%</b>（已排除高血压与甲亢）；
+              多数为亚临床，<b>5 年心源性死亡累积发生率约 23%</b>，与确诊年龄无关；
+              心衰是 HCM 猫最常见的就诊原因，其次为动脉血栓栓塞；<b>少数猫无任何前兆即猝死</b></td>
+          <td>Luis Fuentes V, et al. ACVIM consensus statement. <i>J Vet Intern Med</i> 2020;34(3):1062-1077<br>
+              DOI <a href="https://doi.org/10.1111/jvim.15745">10.1111/jvim.15745</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7255676/">PMC7255676</a></td>
+          <td><span class="badge b-peer">peer</span> <span class="badge b-strong">strong</span></td>
+        </tr>
+        <tr>
+          <td>转诊人群（7013 只因疑似心脏病就诊的猫）：HCM 临床患病率 9.1%；品种内最高为波斯猫 54.8%、斯芬克斯 46.9%、英短 45.0%；
+              36 只发生 ATE，仅 3 只手术后存活</td>
+          <td>Jalilian M, et al. <i>BMC Vet Res</i> 2026;22:266<br>
+              DOI <a href="https://doi.org/10.1186/s12917-026-05428-5">10.1186/s12917-026-05428-5</a></td>
+          <td><span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span><br><span class="tag">不同人群，勿与 14.7% 混用</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout warn">
+    <div class="ct">两个「15%」不是同一个数</div>
+    <p>
+      CatScan 的 <b>14.7%</b> 是收容中心「看起来健康」猫的<b>超声筛查患病率</b>；
+      ACVIM 引用的「约 15%」是该共识对一般猫群的估计。两者数值接近但人群与来源不同，
+      使用时必须写清人群，<b>不得合并成一个数字</b>。
+    </p>
+  </div>
+
+  <h4>2.2.2 三种终点的居家面貌完全不同</h4>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>终点</th><th>居家最可能看到的</th><th>关键数字</th><th>来源与等级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>充血性心衰（CHF）</b><br>胸腔积液 / 肺水肿</td>
+          <td>呼吸变快、<b>费力呼吸</b>、张口呼吸、蹲坐或不愿躺下；部分猫<b>只表现为躲藏或食欲不振</b>；
+              咳嗽在猫<b>不是</b>可靠的心衰信号</td>
+          <td>ACVIM 原文：「The most common presenting sign is <b>labored breathing</b>, although some cats only show nonspecific signs such as <b>hiding or inappetence</b>.」；
+              一项一线诊所研究：呼吸困难猫中，<b>呼吸频率 &gt;80 次/分</b>、奔马律、<b>直肠温 &lt;37.5 °C</b> 或 <b>心率 &gt;200 bpm</b> 更可能是 CHF 而非其他原因</td>
+          <td>ACVIM 2020 <span class="badge b-mid">moderate</span></td>
+        </tr>
+        <tr>
+          <td><b>动脉血栓栓塞（ATE）</b><br>「鞍状血栓」</td>
+          <td><b>突然</b>后肢无力/拖行、剧烈疼痛与嚎叫、后肢冰冷、股动脉搏动消失、肉垫发紫；
+              常为双侧后肢；尾巴通常不受影响。呼吸急促往往同时存在</td>
+          <td>127 例急性 ATE：<b>呼吸急促 91%</b>、低体温 66%、肢体运动功能缺失 66%；左房扩大 93%、合并 CHF 44%、心律失常 44%；
+              <b>无 CHF 的 ATE 猫中 89% 呼吸急促</b>；87 只治疗猫中 <b>45%（39/87）存活出院</b>；
+              逻辑回归给出直肠温 <b>37.2 °C</b> 对应 50% 存活概率；出院猫中位生存 <b>117 天</b>；
+              合并 CHF 者中位 77 天 vs 无 CHF 223 天（P = .016）</td>
+          <td>Smith SA, et al. <i>J Vet Intern Med</i> 2003;17(1):73-83 · PMID 12564730 <span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span></td>
+        </tr>
+        <tr>
+          <td><b>猝死</b></td>
+          <td><b>没有前兆</b>——这条直接限定了任何预警系统的召回上限</td>
+          <td>ACVIM：「In some cats with cardiomyopathy, <b>sudden death may occur with no premonitory signs</b>.」；
+              可能的危险因素（证据较弱）：晕厥史、室性心律失常、左房扩大、局部左室壁运动减弱</td>
+          <td>ACVIM 2020 <span class="badge b-mid">moderate</span>（危险因素为 <span class="badge b-weak">weak</span>）</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h4>2.2.3 「突然不能走后腿」在猫身上是一个非常强的信号</h4>
+  <div class="grid g3">
+    <div class="card">
+      <div class="kpi">60.6%</div>
+      <div class="kpi-label">急诊「急性瘫痪」猫中 ATE 的占比（40/66）</div>
+      <p>同一研究：猫急性瘫痪占猫急诊入院 <b>1.4%（66/4589）</b>；其次为椎间盘疾病 10.6%；约 40% 为其他诊断。
+      对照犬：犬急性瘫痪中椎间盘疾病占 72%。</p>
+    </div>
+    <div class="card">
+      <div class="kpi">30–40%</div>
+      <div class="kpi-label">FATE 接受支持治疗后的存活率</div>
+      <p>2024 年综述指出：历史文献中的存活率被「到院即安乐死」严重干扰；近年随着抗血栓预防进展，
+      中位生存时间已可超过 <b>1 年</b>。诊断可借助多普勒、床旁超声或<b>红外热成像</b>。</p>
+    </div>
+    <div class="card">
+      <div class="kpi">37%</div>
+      <div class="kpi-label">到院 6 小时内即被安乐死的比例（68/183）</div>
+      <p>MATTERS 研究（n = 183）：溶栓组再通率 54% vs 20%、功能恢复 36% vs 14%，
+      但<b>出院存活率两组无显著差异（34% vs 35%）</b>；入院直肠温 <b>35.9 °C</b> 是最佳预后阈值。</p>
+    </div>
+  </div>
+  <p class="refs">
+    来源：Rossi G, et al. <i>Vet Rec</i> 2020;187(10):e81 · DOI <a href="https://doi.org/10.1136/vr.105844">10.1136/vr.105844</a>（<span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span>）·
+    Guillaumin J. <i>JFMS</i> 2024;26(6) · DOI <a href="https://doi.org/10.1177/1098612X241257878">10.1177/1098612X241257878</a>（<span class="badge b-mid">moderate</span>）·
+    Cambournac M, et al. MATTERS. <i>Front Vet Sci</i> 2026;13:1845133 · DOI <a href="https://doi.org/10.3389/fvets.2026.1845133">10.3389/fvets.2026.1845133</a>（<span class="badge b-mid">moderate</span>）
+  </p>
+  <div class="callout ok">
+    <div class="ct">对传感形态的直接含义</div>
+    <p>
+      ATE 的两个最具分辨力的居家信号是 <b>①呼吸急促（91%）</b> 与 <b>②后肢运动功能突然丧失（66%）</b>，
+      两者都是<b>视频可见</b>的；而「后肢冰冷」需要<b>触诊或热成像</b>。
+      这解释了为什么在这一场景下，<b>摄像头的可交付性高于项圈</b>：项圈能发现「活动骤降」，
+      但无法区分「睡着不动」与「后肢瘫了」。
+    </p>
+  </div>
+
+  <h3 id="s-ac-srr">2.3 睡眠呼吸频率：被共识写进诊疗流程的居家监测项</h3>
+  <p>
+    如果只允许从本报告里带走一条可执行的方法，就是这一条。它不是某个厂商的卖点，
+    而是 <b>ACVIM 2020 心肌病共识里带证据等级（LOE）的正式建议</b>，且由两篇相互独立的研究提供数值支撑——
+    而原始做法<b>不需要任何电子设备</b>。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>研究</th><th>对象与设计</th><th>核心数字</th><th>可执行结论</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Ljungvall I, et al.<br><i>JFMS</i> 2014;16(4):281-290<br>DOI <a href="https://doi.org/10.1177/1098612X13508940">10.1177/1098612X13508940</a><br><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11383104/">PMC11383104</a></td>
+          <td>59 只超声正常猫 + 28 只表面健康猫 + 54 只亚临床心脏病猫；<b>由猫主人在家中测量 8–10 次</b></td>
+          <td>正常猫、表面健康猫、<b>轻度至中度左房扩大</b>的亚临床心脏病猫，其睡眠呼吸频率均值<b>一致 &lt;30 次/分，中位约 21</b>；
+              严重左房扩大的猫有时 &gt;30 且显著高于其他亚临床组（P &lt; 0.05）；
+              静息呼吸频率<b>始终高于</b>睡眠呼吸频率（P &lt; 0.05）；
+              猫内变异系数低（日间稳定）；年龄与地域影响均值，体重不影响；
+              <b>多数参与者认为数据采集「容易或无困难」</b></td>
+          <td>原文行动规则：「Cats with SRR<sub>mean</sub> &gt;30 breaths/min and cats with multiple SRR measurements &gt;30 breaths/min <b>likely warrant additional evaluation</b>.」</td>
+        </tr>
+        <tr>
+          <td>Porciello F, et al.<br><i>Vet J</i> 2016;207:164-168<br>DOI <a href="https://doi.org/10.1016/j.tvjl.2015.08.017">10.1016/j.tvjl.2015.08.017</a><br>PMID 26639825</td>
+          <td>51 只犬 + <b>22 只药物控制稳定、病情良好的左心 CHF 猫</b>；由主人居家测量</td>
+          <td>猫睡眠呼吸频率均值中位 <b>20 次/分（13–31）</b>，<b>仅 1 只 ≥30</b>，4 只 ≥25；
+              猫静息呼吸频率均值中位 <b>24 次/分（15–45）</b>，1 只 ≥30、2 只 &gt;40；与利尿剂剂量无关；
+              采集期间数值稳定，日间波动小</td>
+          <td>原文：「most dogs and cats with CHF that is medically well-controlled and stable have SRR<sub>mean</sub> and RRR<sub>mean</sub> <b>&lt;30 breaths/min at home</b>.」</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h4>2.3.1 ACVIM 2020 共识原文：这是标准诊疗的一部分，不是加分项</h4>
+  <p>
+    以下引语来自 ACVIM 2020 猫心肌病共识声明全文（本人经 NCBI efetch 逐字核对原文）。
+    注意每一条都自带证据等级（LOE），这是本报告全文<b>唯一</b>一处「居家预警」被写进权威指南的地方：
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>共识中的位置</th><th>原文（逐字）</th><th>LOE</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>6.2 阶段 B2（亚临床但高危）</td>
+          <td>“Once the LA is moderately to severely enlarged and antithrombotic treatment is started, management is unlikely to change until clinical signs develop, but <b>at a minimum, it is recommended that owners monitor the cat's resting or sleeping respiratory rate</b>.”</td>
+          <td>medium</td>
+        </tr>
+        <tr>
+          <td>6.3.1 急性失代偿出院时</td>
+          <td>“<b>It is recommended that owners monitor the cat's resting or sleeping respiratory rate with the goal of maintaining the respiratory rate &lt;30 breaths/min</b>.”</td>
+          <td>medium</td>
+        </tr>
+        <tr>
+          <td>6.3.2 慢性心衰的用药滴定</td>
+          <td>“<b>The maintenance dose of furosemide should be titrated to maintain a resting or sleeping respiratory rate at home of &lt;30 breaths/min</b>.”</td>
+          <td>low</td>
+        </tr>
+        <tr>
+          <td>6.3.2 复诊间隔的替代</td>
+          <td>“<b>Owner‐recorded resting or sleeping respiratory rate can provide useful information for adjusting medication over the phone without the need for clinic visits</b>, although the presence of comorbidities and the risk of disease progression may necessitate periodic reexaminations.”</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>6.5.1 ATE 之后</td>
+          <td>“<b>It is recommended that the owner continue to monitor resting or sleeping respiratory rate.</b>”</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>6.3.1 急性期院内监测</td>
+          <td>“<b>Monitoring body temperature, respiratory rate, body weight, blood pressure, and estimated urine output is recommended</b>.”</td>
+          <td>high</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">必须一起说明的性质差异（否则会误用）</div>
+    <p>
+      共识给出的 <b>&lt;30 次/分是一个「维持目标 / 上限」</b>，用于① 判断是否需要评估、② 滴定利尿剂剂量；
+      它<b>不是</b>带敏感度与特异度的诊断截断值。
+      本报告检索范围内<b>未找到</b>任何研究给出「睡眠呼吸频率升高 → 判定为心衰」的敏感度 / 特异度 →
+      <span class="badge b-gray">unverified</span>，因此产品里<b>不得</b>把它包装成「筛查工具」或给出准确率。
+      另外注意：<b>疼痛本身也会造成呼吸急促</b>（共识在 ATE 章节明确警告「pain also can cause tachypnea,
+      and this should not be mistaken for the presence of CHF」）——这是一条重要的假阳性通路，
+      也意味着「呼吸快」绝不能被解释为「心衰」。
+    </p>
+  </div>
+
+  <h4>2.3.2 心脏事件的两年结局与猝死比例</h4>
+  <p>
+    预警的对象究竟有多大概率出事？一项 255 只 HCM 猫、随访 2 年的研究报告：<b>猝死 12/255（4.7%）、
+    ATE 死亡 23/255（9.0%）、心衰死亡 44/255（17.3%）</b>，55.3% 仍存活。
+    作者指出猝死事件数太少，<b>无法建立多变量模型</b>；单变量层面与晕厥、听诊心律失常相关。
+  </p>
+  <p class="refs">
+    Payne JR, et al. <i>J Vet Cardiol</i> 2015;17(Suppl 1):S318-28 · DOI <a href="https://doi.org/10.1016/j.jvc.2015.09.008">10.1016/j.jvc.2015.09.008</a> <span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span>（仅摘要）。
+    ACVIM 原文亦写：「A minority of cats die suddenly without prior clinical signs.」
+  </p>
+  <div class="callout risk">
+    <div class="ct">猝死给任何预警系统设下的召回上限</div>
+    <p>
+      如果一部分猫在<b>没有任何前兆</b>的情况下猝死（ACVIM 明确承认这一点），
+      那么「提前预警突发心脏事件」这个目标在原理上就无法覆盖全部事件。
+      任何相关宣称都必须带这句边界；能诚实承诺的只有「提高被更早发现的比例」，而不是「防止猝死」。
+    </p>
+  </div>
+
+  <div class="callout ok">
+    <div class="ct">为什么阈值 30 是双向可用的</div>
+    <p>
+      健康猫与轻中度心脏病的猫在家的睡眠呼吸频率都 &lt;30；严重左房扩大的猫 <b>有时</b> 超过 30；
+      而<b>已经控制良好的心衰猫</b>又回落到 30 以下。<b>同一个 30 次/分，既能当「该去医院评估」的触发线，
+      也能当「治疗效果还行」的确认线</b>——这是本报告找到的唯一一条具备这种双向性质的居家指标。
+    </p>
+  </div>
+
+  <h4>2.3.3 但 30 这个数只在「睡眠」语境下成立</h4>
+  <p>
+    呼吸频率是本项目所有指标中「测量条件依赖」最强的一个。同一只猫在不同情境下的数值差异巨大：
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>测量条件</th><th>数值</th><th>来源</th></tr></thead>
+      <tbody>
+        <tr><td>教科书静息参考区间</td><td class="num">16–40 次/分</td><td>MSD Veterinary Manual（改编自 Dukes' Physiology of Domestic Animals, 12th ed.）<span class="badge b-strong">strong</span></td></tr>
+        <tr><td><b>家中睡眠</b>（视频，n = 38）</td><td class="num">中位 <b>20</b>（9–28）</td><td rowspan="3">Dijkstra E, Teske E, Szatmári V. <i>Vet J</i> 2018;234:96-101 · DOI <a href="https://doi.org/10.1016/j.tvjl.2018.02.014">10.1016/j.tvjl.2018.02.014</a><br><span class="badge b-mid">moderate</span>（仅摘要）</td></tr>
+        <tr><td><b>家中静息</b>（视频，n = 32）</td><td class="num">中位 <b>27</b>（16–60）</td></tr>
+        <tr><td><b>兽医诊室</b>（88 只健康猫）</td><td class="num">区间 28–176，中位 <b>64</b>；计算参考区间 32–135</td></tr>
+        <tr><td>一线诊室「呼吸困难猫更可能是 CHF」的阈值</td><td class="num">&gt;80 次/分</td><td>ACVIM 2020 引用的一线诊所研究 <span class="badge b-mid">moderate</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout risk">
+    <div class="ct">不得合并的数字</div>
+    <p>
+      「16–40」「27」「64」「&gt;80」这四个数<b>不是同一个量的不同版本</b>，而是四种测量条件下的四个不同量。
+      把它们平均、或取其中一个当作「猫的呼吸频率正常值」，都会产生系统性误判。
+      <b>统计基线只能取居家静息 / 午睡；诊室读数一律不得作为基线。</b>
+    </p>
+  </div>
+
+  <h4>2.3.4 已知的假阳性来源</h4>
+  <ul>
+    <li><b>热与应激</b>：猫在紧张时会喘，而「喘息在健康猫身上非常不寻常」，本来就该被当成异常信号而非噪声。</li>
+    <li><b>测量姿势与睡眠深度</b>：睡眠呼吸频率显著低于静息呼吸频率，混用两者会得出错误结论。</li>
+    <li><b>疼痛、发热、贫血、胸腔积液、哮喘、心包积液</b>等都可抬高呼吸频率——<b>呼吸频率升高本身不指向心脏</b>。</li>
+    <li><b>人为计数误差</b>：主人手工计数（原文做法为 8–10 次）存在个体差异；<b>未找到</b>任何研究验证过设备自动测量猫呼吸频率的准确性 → <span class="badge b-gray">unverified</span>。</li>
+  </ul>
+</section>
+
+  <h3 id="s-ac-trauma">2.6 外伤、中毒与其他急性事件：可观察性高、特异度低、时间尺度差两个数量级</h3>
+
+  <h4>2.6.1 猫高楼坠落综合征（high-rise syndrome）：高度与伤情的关系是 <span class="badge b-dispute">disputed</span></h4>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>队列</th><th>主要损伤模式与存活</th><th>来源与等级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>n = <b>132</b>（平均 2.7 岁）</td>
+          <td><b>90% 有胸部创伤</b>（肺挫伤 68%、气胸 63%）；呼吸模式异常 55%、面部创伤 57%、肢体骨折 39%、休克 24%、低体温 17%；
+              需紧急生命支持 37% / 非紧急 30% / 仅观察 30%；<b>接受治疗者约 90% 存活</b></td>
+          <td>Whitney WO, Mehlhaff CJ. <i>JAVMA</i> 1987;191(11):1399-1403 <span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span></td>
+        </tr>
+        <tr>
+          <td>n = <b>1125</b>（柏林，坠落高度 ≥ 4 m）</td>
+          <td>休克 48.6%、胸部创伤 58.3%、口面部 51.1%、肢体骨折 47.2%、骨盆 11.1%；<b>总存活 87%</b>，13.3% 死亡或安乐死</td>
+          <td>Candela Andrade M, et al. <i>JFMS</i> 2025 · DOI <a href="https://doi.org/10.1177/1098612X251334096">10.1177/1098612X251334096</a> <span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span></td>
+        </tr>
+        <tr>
+          <td>n = <b>120</b></td>
+          <td><b>未发现坠落高度与损伤严重度相关</b>；存活 92.5%；股骨骨折 17.5%；脊柱伤中 T13–L1 占 50%；肺挫伤 45%</td>
+          <td>Haghi M, et al. <i>Vet Med Sci</i> 2026;e71002 <span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout warn">
+    <div class="ct">不得写成「摔得越高伤得越重」</div>
+    <p>
+      该说法源自 1987 年的经典队列，但更新的两个队列（n = 1125、n = 120）<b>未能确认</b>这一关系，
+      后者明确报告「未发现坠落高度与损伤严重度相关」。因此本项目<b>不得</b>在 UI 或话术中把坠落高度当作严重度代理量。
+      可说的是：<b>任何一次坠落都属于必须评估的暴露事件，且接受治疗者约 90% 存活</b>——
+      后半句才是对主人真正有用、也会救人一命的信息。
+    </p>
+  </div>
+
+  <h4>2.6.2 咬伤脓肿与车祸：会「延迟显症」的一类</h4>
+  <div class="grid g2">
+    <div class="card">
+      <h4>咬伤脓肿</h4>
+      <ul>
+        <li>脓肿需要 <b>2–3 天</b>才成形；成形之前可见<b>跛行、嗜睡、食欲下降、发热、患部热与痛</b>；破裂后流出有臭味的脓</li>
+        <li>原文：「<b>Abscesses are usually very painful, so your cat may be reluctant to be touched.</b>」</li>
+        <li>→ 对事件流的意义：<b>「被咬」这个事件与「表现出症状」之间有 2–3 天延迟</b>，属于典型的「事件已发生但信号未到」</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>车祸（HBC）</h4>
+      <ul>
+        <li>红旗原文：「<b>Trouble breathing, pale gums, weakness, collapse, confusion, shaking, not wanting to move, or acting painful</b> are all very serious signs.」</li>
+        <li>最反直觉、也最需要写进产品边界的一句：「<b>A pet may be able to stand up or walk and still have hidden damage… do not show up for hours</b>」</li>
+        <li>膈破裂可以在伤后<b>数天至数周</b>才显症</li>
+        <li>内出血信号：鼻出血、瘀点伴苍白、呼吸窘迫、心动过速、低血容量</li>
+      </ul>
+    </div>
+  </div>
+  <p class="refs">
+    来源：iCatCare《Cat bites and abscesses》<span class="badge b-mid">moderate</span> ·
+    VIN VETzInsight（Tony Johnson DVM, DACVECC）<span class="badge b-mid">moderate</span> ·
+    Merck Veterinary Manual（抗凝鼠药中毒章）<span class="badge b-strong">strong</span>
+  </p>
+
+  <h4>2.6.3 骨科 / 脊髓 / 尾牵拉伤：最直观的指标是「能不能负重」</h4>
+  <ul>
+    <li>尾撕脱伤 n = 15：<b>全部有术前剧痛，8/15 尿失禁</b>；11/15 尾部运动与痛觉恢复（3–90 天）；
+        8 例尿失禁中 5 例 3–30 天恢复、3 例未恢复（其中 2 例安乐死）；
+        <b>保守治疗者 80% 遗留运动缺陷</b>；恢复可长达 150 天，故建议 90–150 天后再评估是否需要截尾。</li>
+    <li>最直观的居家指标是 <b>non-weightbearing lameness（完全不愿负重）</b>。</li>
+    <li>一条可被项圈/摄像头捕捉的细节：术后 <b>14/15</b> 只在最初几周出现
+        「<b>episodic loss of balance while jumping and landing</b>」——<b>跳跃落地失衡</b>是可居家观察的具体行为。</li>
+    <li>⚠️ 来源层级：该数据经 EveryCat 摘要解读获得（二手）→ <span class="badge b-weak">weak</span>，本项目不作为设计依据。</li>
+  </ul>
+
+  <h4>2.6.4 中毒：不同毒物的时间尺度差 1–2 个数量级</h4>
+  <p>
+    这是本节最重要的结论：<b>「中毒」不是一个时间窗，而是至少三个差一个数量级的时间窗</b>。
+    把「立即就医」当成所有毒物的统一措辞，会在两端都出错。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>毒物</th><th>居家可见与时间尺度</th><th>关键原文 / 数字</th><th>等级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>百合（Lilium）</b></td>
+          <td>所有部位有毒（<b>含花粉与花瓶水</b>）；呕吐、腹痛、脱水、<b>急性肾衰</b></td>
+          <td>「<b>Less than one leaf eaten</b>, or a small amount of pollen licked off the coat by a cat is enough to cause <b>kidney failure</b> and urgent veterinary treatment is required, or it can prove <b>fatal</b>.」；
+              ASPCA 列为猫有毒，毒性成分 Unknown</td>
+          <td><span class="badge b-strong">strong</span></td>
+        </tr>
+        <tr>
+          <td><b>乙二醇</b><br>（防冻液）</td>
+          <td>三阶段，且中间有一段<b>「看起来好转」</b>的假恢复期：<b>30 分钟–12 小时</b>类酒精中毒/呕吐/多饮多尿/共济失调 →
+              约 <b>12 小时</b>短暂「恢复」→ <b>12–24 小时</b>少尿性肾衰（无尿、肾肿大疼痛、心动过速、呼吸急促）</td>
+          <td>猫<b>最小致死量 1.4 mL/kg</b>；尿草酸钙结晶最早在 <b>3 小时</b>出现，且提示预后差</td>
+          <td><span class="badge b-strong">strong</span></td>
+        </tr>
+        <tr>
+          <td><b>对乙酰氨基酚 / 布洛芬</b></td>
+          <td>人用止痛药，猫极敏感</td>
+          <td>「even a small dose is enough to cause <b>severe illness</b> and, in many cases, <b>it can be fatal</b>」</td>
+          <td><span class="badge b-strong">strong</span></td>
+        </tr>
+        <tr>
+          <td><b>除虫菊酯（permethrin）</b><br>犬用滴剂误用于猫</td>
+          <td>数小时内：震颤、抖动、抽动、<b>对触碰与声音过度敏感</b>、共济失调；重者癫痫；少见面呼吸困难与失明</td>
+          <td>临床 6 级分期（Stage A 无异常 → Stage F 全面性发作，n = 34）；<b>犬用后建议犬猫隔离 72 小时</b></td>
+          <td><span class="badge b-strong">strong</span>（分期为 <span class="badge b-mid">moderate</span>，仅摘要）</td>
+        </tr>
+        <tr>
+          <td><b>抗凝类鼠药</b></td>
+          <td><b>最慢的一类</b>：凝血指标升高延迟 <b>2–5 天</b>，临床出血多发生在被毒后 <b>3–7 天</b>；
+              厌食、嗜睡、虚弱、鼻出血、呼吸窘迫、血肿瘀点伴苍白、呕血黑便血尿、心动过速</td>
+          <td>解毒剂为维生素 K1；<b>暴露当天「看起来正常」不能排除</b></td>
+          <td><span class="badge b-strong">strong</span></td>
+        </tr>
+        <tr>
+          <td><b>茶树油等精油</b></td>
+          <td>仅确认「被列为猫毒物」</td>
+          <td>⚠️ 未取得剂量与时间窗的一手来源 → <span class="badge b-gray">unverified</span>，<b>本项目不使用任何数字</b></td>
+          <td><span class="badge b-gray">unverified</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="refs">
+    来源：iCatCare《Cats and poisons》（经英国 VPIS 复核）· iCatCare《Permethrin Poisoning》·
+    Merck Veterinary Manual（乙二醇中毒章、抗凝鼠药中毒章）· Peacock RE, et al. <i>J Vet Emerg Crit Care</i> 2015;25(5):597-605（permethrin 分期）
+  </p>
+
+  <h4>2.6.5 体温与休克：参考区间本身是 <span class="badge b-dispute">disputed</span></h4>
+  <ul>
+    <li>一项 n = <b>200</b> 只健康室内成年猫、按 CLSI 方法建立的研究给出直肠温参考区间 <b>36.7–38.9 °C</b>
+        （98.1–102.1 °F），并警告继续沿用更窄的旧区间会导致
+        「<b>overdiagnosis of hypothermia or underdiagnosis of mild pyrexia</b>」。</li>
+    <li>而旧教科书区间（如 37.2–39.5 °C、38.1–39.2 °C）与多种发热定义（39.0 / 39.2 / 39.4–41.1 °C）<b>并存</b> →
+        本项目<b>必须展示为区间并标注来源</b>，不得合并成单一「猫正常体温」。</li>
+    <li>创伤侧：非存活者体温显著更低；一项 n = 50 的创伤性休克猫研究显示
+        <b>直肠-趾间温差 &lt; 2.05 °C 预测院内死亡最佳（AUC 0.804，95% CI 0.677–0.931，OR 5.016）</b>。</li>
+    <li>⚠️ MSD/Merck 未提供猫单列的「低体温 / 高热即急症」明确阈值（相关页面 404）→ <span class="badge b-gray">unverified</span>。</li>
+  </ul>
+  <p class="refs">
+    Levy JK, et al. <i>JFMS</i> 2015;17(11):950-952 · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10816251/">PMC10816251</a> <span class="badge b-peer">peer</span> <span class="badge b-strong">strong</span> ·
+    <i>Animals</i> 2026;16(15):2410 <span class="badge b-mid">moderate</span>（仅摘要）
+  </p>
+
+  <h4>2.6.6 三个权威来源的红旗清单并不一致——这本身就是结论</h4>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>来源</th><th>它给出的「立即联系」信号</th></tr></thead>
+      <tbody>
+        <tr><td>iCatCare（中毒页）</td><td>接触毒物，或出现呕吐腹泻、震颤 / 共济失调 / 癫痫 / 昏迷、咳嗽呼吸困难、皮肤红肿、黄疸、<b>多饮 + 不愿进食 + 体重下降</b></td></tr>
+        <tr><td>VIN（急诊页）</td><td>呼吸异常、<b>牙龈苍白</b>、虚弱、虚脱、<b>不愿移动</b></td></tr>
+        <tr><td>Merck（抗凝鼠药章）</td><td>出血类信号：鼻出血、瘀点伴苍白、呼吸窘迫、心动过速、低血容量</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout risk">
+    <div class="ct">两处必须点明的冲突</div>
+    <p>
+      <b>①「多饮 + 不愿进食 + 体重下降」不能等同于急症。</b>iCatCare 把它列在中毒信号里，
+      但 VIN 与 Merck 的急诊红旗集中在呼吸与循环。这三个信号恰恰是<b>慢性肾病、甲亢、糖尿病</b>的经典组合——
+      把「体重下降」当急性红旗，会造成大量误报。正确做法：<b>按疾病分述，并给不同的时间尺度</b>。
+    </p>
+    <p>
+      <b>②iCatCare 的 Traffic Light Assessment 不是居家急症分诊工具。</b>它是面向<b>收容 / 寄养应激</b>的评估，
+      其「红色」既可能是过度活跃也可能是过度嗜睡。原文说得非常清楚：
+      「<b>sometimes it's the absence of behaviour, known as inhibition, that tells you a cat isn't coping.
+      A cat that appears shut down may be far more distressed than the one that vocalises or paces.</b>」
+      → 这条正好从权威来源一侧，独立印证了报告 06 的核心假阳性警告：<b>「长时间不动」无法归因</b>。
+    </p>
+  </div>
+
+  <h4>2.6.7 主人对「这是不是急症」的判断：有了新数字</h4>
+  <div class="grid g3">
+    <div class="card">
+      <div class="kpi">55%</div>
+      <div class="kpi-label">非工作时间急诊来电中「非急诊」的比例（450 通，29 家诊所）</div>
+      <p>猫的来电占 27%，其中 <b>56% 为非急诊</b>（犬 67%、兔 49%）。
+      媒体报道的表述是「最高 67% 的主人无法准确识别急症」。</p>
+    </div>
+    <div class="card">
+      <div class="kpi">96% / 78%</div>
+      <div class="kpi-label">主人自评量表的敏感度 / 特异度（n = 130 只猫，AUC 0.87）</div>
+      <p>与 CMPS-Feline 的相关 rho = 0.66、kappa = 0.74；<b>截断分 9 时敏感度 96%、特异度 78%</b>。
+      → 也就是说，<b>给主人一把结构化的尺子，他们能做到接近临床水平</b>。</p>
+    </div>
+    <div class="card">
+      <div class="kpi">↑ 意向</div>
+      <div class="kpi-label">简短疼痛教育后，3/3 情景中「就医意向」显著上升（n = 362）</div>
+      <p>90% / 86% / 92% 的主人认为该工具有助于识别疼痛、判断是否联系兽医、描述疼痛。
+      → <b>教育本身就是一个可交付的干预</b>，且比传感器便宜得多。</p>
+    </div>
+  </div>
+  <div class="callout ok">
+    <div class="ct">把三个数字放在一起看</div>
+    <p>
+      ①主人对「是不是急症」的判断不准确（55% 的非急诊来电）；
+      ②但只要给结构化工具，主人能做到 96% 敏感度；
+      ③而一旦猫真的到了医院，<b>猫的分诊级别（需立即处理）高于犬</b>
+      （Wizenty &amp; Doherr, <i>Vet Sci</i> 2026;13(9):899，n = 4579 例非工作时段急诊）——
+      说明猫的急症往往「来得更晚、更重」。
+      <b>三条合起来指向同一个产品定位：不是替主人发现信号，而是替主人把信号结构化成分诊问题。</b>
+    </p>
+  </div>
+  <p class="refs">
+    Williams K, Jones A, Thornton S. <i>Vet Rec</i> 2017 · DOI <a href="https://doi.org/10.1136/vr.104050">10.1136/vr.104050</a> <span class="badge b-mid">moderate</span>（仅摘要）·
+    Kogan LR, et al. <i>JFMS</i> 2024;26(10) · DOI <a href="https://doi.org/10.1177/1098612X241272885">10.1177/1098612X241272885</a> <span class="badge b-peer">peer</span> <span class="badge b-strong">strong</span> ·
+    Rojsiripornchai T, et al. <i>Animals</i> 2025;15(19):2801 <span class="badge b-peer">peer</span> <span class="badge b-strong">strong</span> ·
+    Wizenty KD, Doherr MG. <i>Vet Sci</i> 2026;13(9):899 · DOI <a href="https://doi.org/10.3390/vetsci13090899">10.3390/vetsci13090899</a> <span class="badge b-peer">peer</span> <span class="badge b-strong">strong</span>
+  </p>
+
+  <h4>2.6.8 分诊系统本身是可用的，但精度有限</h4>
+  <ul>
+    <li>一份前瞻观察研究评估了 5 分制兽医分诊系统 <b>VetTriS</b>（n = 164 例猫犬）：评分者间一致性
+        <b>kappa = 0.69（substantial）</b>；<b>过检（overtriage）9.8%、漏检（undertriage）0.6%</b>；
+        目标候诊时间达成率 85.4%。</li>
+    <li>但作者同时给出两条限制：「VetTriS <b>was unable to properly assess for prioritization</b> within this study design
+        and <b>did not allow for good assessment of hydration status</b>」。</li>
+    <li>→ 这是本项目可以引用的<b>唯一一个已发表的猫犬通用分诊系统性能数字</b>，它同时告诉我们：
+        漏检率可以做到很低，<b>代价是近 10% 的过检</b>。这是一个可以直接搬用的取舍比例。</li>
+  </ul>
+  <p class="refs">
+    Groesser NH, Klootwijk L, Ruys LJ. <i>J Vet Emerg Crit Care</i> 2025;35(6):637-646 · DOI <a href="https://doi.org/10.1111/vec.70068">10.1111/vec.70068</a> <span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span>
+  </p>
+
+  <h4>2.6.9 紧急转诊路径（可直接写进产品）</h4>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>资源</th><th>联系与说明</th><th>等级</th></tr></thead>
+      <tbody>
+        <tr><td>ASPCA Animal Poison Control（美国）</td><td><b>(888) 426-4435</b>，24/7/365；可能收取一次性咨询费</td><td><span class="badge b-strong">strong</span></td></tr>
+        <tr><td>Pet Poison Helpline（北美）</td><td><b>(855) 764-7661</b>；一次费用含后续全部随访；仅有兽医毒理 / 内科专家；累计超过 300 万例。
+            居家原则原文：「<b>Do NOT give any home antidotes. Do NOT induce vomiting without consulting a vet or Pet Poison Helpline.</b>」</td><td><span class="badge b-strong">strong</span></td></tr>
+        <tr><td>英国 VPIS / Animal PoisonLine</td><td>24 小时动物毒物咨询线（经 iCatCare 引用）</td><td><span class="badge b-mid">moderate</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout warn">
+    <div class="ct">对产品的一句硬约束</div>
+    <p>
+      「<b>不要在家自行给解毒剂、不要在未咨询兽医的情况下催吐</b>」是毒物控制机构的明确要求。
+      因此产品在中毒场景下的正确行为是<b>直接给出中毒热线与就近急诊机构</b>，
+      <b>而不是给出任何「在家先做什么」的操作建议</b>。
+    </p>
+  </div>
+
+  <h3 id="s-ac-gi">2.4 急性消化道事件：家里最容易看见，也最难区分</h3>
+  <p>
+    在所有被点名的突发情况里，消化道事件的<b>居家可观察性最高</b>——呕吐与厌食几乎不可能被主人错过。
+    问题不在「看得见」，而在<b>「看见了也分不出轻重」</b>：同一组症状既可以是吃太快，也可以是线性异物穿孔前夜。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>事件</th><th>居家可见 / 频率</th><th>来源措辞与阈值</th><th>来源与等级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>呕吐 vs 反流</b></td>
+          <td>呕吐是<b>主动用力</b>过程；反流是<b>被动</b>流出，吐出物「未消化、可呈圆柱形」</td>
+          <td>呕吐「normally preceded by <b>excessive salivation, repeated swallowing, retching, and forceful contractions</b> of the abdominal muscles and the diaphragm」；反流是「a <b>passive</b> motion that does not require effort」</td>
+          <td>MSD Veterinary Manual《Vomiting in Cats》<span class="badge b-strong">strong</span></td>
+        </tr>
+        <tr>
+          <td><b>需要详细检查的呕吐</b></td>
+          <td>次数与伴随症状</td>
+          <td>「vomiting that occurs <b>more often than once or twice daily</b>, and vomiting accompanied by <b>blood, abdominal pain, depression, dehydration, weakness, fever, weight loss</b>… requires a detailed examination」；「Some causes of severe or longterm vomiting are <b>life-threatening</b>.」；偶发且无其他异常、持续「<b>less than 1 to 2 days</b>」可先支持治疗</td>
+          <td>同上 <span class="badge b-mid">moderate</span>（猫专属）</td>
+        </tr>
+        <tr>
+          <td><b>腹泻</b></td>
+          <td>软便 / 水样便、次数、颜色、黏液与血</td>
+          <td>「whenever diarrhoea is <b>severe</b>, accompanied by other signs… or if the diarrhoea continues for <b>more than a few days</b>」应检查；「Faeces that are <b>black and tarry</b> can indicate bleeding higher up in the intestine (<b>melaena</b>) and <b>should prompt contact</b> with the veterinary team.」；少量鲜血「doesn't require emergency attention」</td>
+          <td>iCatCare《Diarrhoea in cats》<span class="badge b-mid">moderate</span></td>
+        </tr>
+        <tr>
+          <td><b>急性胰腺炎</b></td>
+          <td>厌食、嗜睡、脱水、体重下降、低体温、呕吐、黄疸、发热、腹痛——<b>猫的症状比犬「更不特异」</b></td>
+          <td>原文：「Diagnosis of pancreatitis can be <b>challenging</b>」「Most cats have <b>nonspecific</b> histories and clinical signs」；
+              腹痛姿态一手定义：「a <b>prayer position</b> (forepaws on the ground with hind end elevated)」（<b>只支持「腹部不适」，不等于胰腺炎</b>）</td>
+          <td>MSD《Pancreatitis in Dogs and Cats》<span class="badge b-strong">strong</span>（猫专属患病率<b>未找到</b>）</td>
+        </tr>
+        <tr>
+          <td><b>胃肠道异物</b><br>（含线性异物）</td>
+          <td><b>n = 56 只手术猫（38 例异物 / 18 例线性异物）：呕吐 96%、厌食 80%、沉郁 61%、腹部触诊疼痛 43%、可触肿块 12%</b>；症状中位 <b>2 天（1–14）</b>；线性异物占 31%</td>
+          <td>⚠️ 「string anchored under the tongue」<b>仅 17%</b>，幽门为最常见锚点 <b>44%</b> →
+              <b>「看不到线头」不能排除线性异物</b>；该队列<b>无一只发生术后脓性腹膜炎、全部存活</b>，故<b>本项目不得给出任何「穿孔率/死亡率」数字</b></td>
+          <td>Gollnick HR, Schmiedt CW, et al. <i>JFMS</i> 2023;25(6) · DOI <a href="https://doi.org/10.1177/1098612X231178140">10.1177/1098612X231178140</a> <span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span></td>
+        </tr>
+        <tr>
+          <td><b>猫泛白细胞减少症（FPV）</b><br>急性感染的代表</td>
+          <td>潜伏期 <b>2–7 天</b>（个别可达 14 天）；<b>超急性病例「猝死可能是唯一可见的征象」</b>；高热 <b>40–41.7 °C</b>、沉郁、严重脱水致休克、完全厌食；呕吐<b>通常在发热后 1–2 天出现、多为胆汁样</b></td>
+          <td>原文要点：急性病程「seldom &gt; 5–7 days」；「<b>diarrhea is not always present</b>」；住院存活率 <b>20–51%</b></td>
+          <td>Merck Veterinary Manual《Feline Panleukopenia》<span class="badge b-strong">strong</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout warn">
+    <div class="ct">这一节的读数含义</div>
+    <p>
+      「呕吐 96%、厌食 80%」听起来像是一个很好做的警报——但它同时意味着<b>这些信号几乎没有分辨力</b>：
+      绝大多数呕吐的猫并没有异物。消化道事件的真正判别量是<b>「频率 + 伴随症状 + 持续时间」的组合</b>，
+      这是一个<b>分诊问题</b>，不是一个阈值问题。项圈在这条链路上能贡献的只有「呕吐相关的节律/声音事件计数」
+      与「进食相关活动改变」，而这两者都<b>不能</b>区分反流、干呕、咳嗽与毛球。
+    </p>
+  </div>
+
+  <h3 id="s-ac-renal">2.5 急性肾损伤与尿路梗阻：能提前量的都在猫砂盆里</h3>
+  <p>
+    这一类的居家信号有两层：<b>急性的（尿闭）以小时计，慢性的（CKD）以年计</b>。
+    有意思的是，两层的可量化指标都落在<b>猫砂盆与体重</b>上，没有一个落在颈部。
+  </p>
+
+  <h4>2.5.1 公猫尿路梗阻：本项目时间窗最紧的一类</h4>
+  <div class="grid g2">
+    <div class="card">
+      <h4>居家可见</h4>
+      <ul>
+        <li>「<b>Repeated attempts to urinate without passing anything</b>」——反复进砂盆、无尿</li>
+        <li>排尿时嚎叫或不适、<b>砂盆外排尿</b>、烦躁增加、<b>舔生殖器周围</b></li>
+        <li>拒食、沉郁、呕吐；「occurs <b>almost exclusively in male cats</b>」</li>
+        <li>⚠️ 新增关键点：<b>「pet owners sometimes mistake efforts to urinate as constipation」</b>——主人会把排尿用力误认成便秘</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>时间窗（可引用的数字）</h4>
+      <ul>
+        <li>「Urethral obstruction <b>must be treated as an emergency</b>」；「<b>fatal within 2-3 days</b>. It is also <b>incredibly painful</b>」</li>
+        <li>机制：「Complete UO causes <b>uremia within 36–48 hours</b>… and death within approximately <b>72 hours</b>」</li>
+        <li>血钾「particularly if plasma potassium concentration is <b>&gt; 7 mEq/L</b>」可致心律失常，<b>&gt; 7.5 mEq/L</b> 可致命</li>
+        <li>⚠️ 流传很广的「24–72 小时」<b>未取得一手来源</b>，本项目不使用</li>
+      </ul>
+    </div>
+  </div>
+  <p class="refs">
+    来源：iCatCare《Urethral obstruction in cats》<span class="badge b-strong">strong</span> ·
+    MSD/Merck《Urethral Obstruction in Small Animals》与《Obstructive Uropathy in Dogs and Cats》<span class="badge b-mid">moderate</span>
+  </p>
+
+  <h4>2.5.2 输尿管梗阻：最容易被漏掉的一类</h4>
+  <ul>
+    <li>原文：「Because compensatory hypertrophy of the nonaffected kidney results in a <b>nonazotemic state</b>,
+        <b>unilateral ureteral obstruction often goes undiagnosed</b>.」</li>
+    <li>筛查指征原文：「<b>Ureteral obstruction should be considered in any acutely uremic animal—especially cats</b>,
+        including those with a history of chronic kidney disease (CKD).」</li>
+    <li>对传感器尤其重要的一句：「<b>lower urinary tract signs are often not present, and the bladder is not distended</b>」——
+        也就是说，靠「砂盆行为异常」抓不到这一类。</li>
+    <li>时间窗：医疗管理无效「<b>within 24–72 hours</b>」即需手术。</li>
+    <li>⚠️ 广泛流传的「猫输尿管梗阻患病率正在上升」<b>未找到任何一手量化证据</b> → <span class="badge b-gray">unverified</span>，
+        只能表述为「临床诊断意识提高」。</li>
+  </ul>
+  <p class="refs">来源：Merck Veterinary Manual《Obstructive Uropathy in Dogs and Cats》<span class="badge b-strong">strong</span></p>
+
+  <h4>2.5.3 急性肾损伤（AKI）：信号都是非特异的</h4>
+  <ul>
+    <li>居家信号：体重下降、食欲差、嗜睡、多饮、多尿、呕吐、<b>口臭（uremic fetor）</b>；
+        但需要「<b>2/3 至 3/4 的肾功能丧失</b>」才会出现症状——这决定了 AKI 不可能靠行为信号做到「早期」。</li>
+    <li>百合中毒（猫 AKI 最经典的急性病因）：<b>n = 112 只暴露猫，AKI 住院 46.9% vs 门诊 43.8%；
+        存活 100% vs 87.5%</b>。
+        ⚠️ 该数字来自 AVMA 新闻稿（论文正文付费墙），引用时应标注来源层级。
+        iCatCare 原文仍是最强的定性表述：「<b>Less than one leaf eaten</b>, or a small amount of pollen licked off the coat
+        by a cat is enough to cause <b>kidney failure</b>… it can prove <b>fatal</b>」。</li>
+    <li>⚠️ <b>IRIS AKI 官方分级阈值本次未能读到正文</b>（MSD 的 AKI 章节抓取被截断、IRIS 的 PDF 无法解析）
+        → <b>本项目不得展示任何 AKI 分级数字</b>，只能写「存在 IRIS 分级体系」。</li>
+  </ul>
+  <p class="refs">
+    来源：iCatCare《Chronic kidney disease (CKD) in cats》<span class="badge b-mid">moderate</span> ·
+    iCatCare《Cats and poisons》<span class="badge b-strong">strong</span> ·
+    <i>JAVMA</i> 2024;263(1):41-46 · DOI <a href="https://doi.org/10.2460/javma.24.05.0355">10.2460/javma.24.05.0355</a>（<b>仅摘要/新闻稿</b>）
+  </p>
+
+  <h4>2.5.4 但 CKD 的「提前量」是可量化的——这是设备真正的机会</h4>
+  <div class="grid g2">
+    <div class="card">
+      <div class="kpi">8.9%</div>
+      <div class="kpi-label">确诊前 12 个月的中位体重下降幅度（n = 569 只 CKD 猫，6 家美国诊所）</div>
+      <p>更重要的是时间尺度：<b>体重下降在确诊前 3 年就已经存在，确诊后加速</b>。
+      诊断时体重低于中位（4.2 kg）者存活显著更短（P &lt; .0001）。作者结论：
+      「<b>Tracking body weight may help clinicians in earlier diagnosis of CKD</b>」。</p>
+      <p>⚠️ 利益冲突须披露：共同作者与经费来自 Aratana Therapeutics。</p>
+    </div>
+    <div class="card">
+      <div class="kpi">10 vs 2 天</div>
+      <div class="kpi-label">30 天内「不排便的天数」中位数：CKD 猫 vs 健康猫（各 n = 9）</div>
+      <p>P = 0.0003；日均排便次数 <b>0.86 ± 0.22 vs 1.07 ± 0.13</b>（P = 0.02）。
+      这是<b>独立于 Purina 的学术团队</b>用同一类设备得到的、最接近「可自动计量的肾相关变化」的证据。</p>
+      <p>⚠️ 各 9 只，样本极小，不能当作人群参数。</p>
+    </div>
+  </div>
+  <p class="refs">
+    Freeman LM, Lachaud MP, Matthews S, Rhodes L, Zollers B. <i>J Vet Intern Med</i> 2016;30(5):1661-1666 ·
+    DOI <a href="https://doi.org/10.1111/jvim.14561">10.1111/jvim.14561</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5032880/">PMC5032880</a> <span class="badge b-peer">peer</span> <span class="badge b-strong">strong</span> ·
+    George ZM, et al. <i>JFMS</i> 2025;27(7) · DOI <a href="https://doi.org/10.1177/1098612X251348011">10.1177/1098612X251348011</a> <span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span>
+  </p>
+  <p>
+    与之形成对照的是主人侧的报告能力：同一批「主人自认健康」的老年猫里，
+    <b>CKD 相关排尿变化 75.6%（34/45）未被报告，仅 1.3%（1/78）报告过口渴增加</b>
+    （Herrera 2026，n = 129）。<b>设备要接手的正是这一段：把主人不会主动报告的「量」，变成自动记录的量。</b>
+  </p>
+
+  <h4>2.5.5 独立于厂商的「居家人采尿」研究：可行性有上限</h4>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>结论</th><th>数字</th><th>来源与等级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>居家自采尿的<b>成功率只有 55%</b>（n = 92 只猫）；分方法：非吸收颗粒 64%、手持容器 47%、保鲜膜 44%</td>
+          <td class="num">55%</td>
+          <td rowspan="3">Mortier F, et al. <i>J Vet Intern Med</i> 2023;37(4):1401-1408 · DOI <a href="https://doi.org/10.1111/jvim.16800">10.1111/jvim.16800</a> <span class="badge b-peer">peer</span> <span class="badge b-strong">strong</span></td>
+        </tr>
+        <tr>
+          <td>与膀胱穿刺相比结果实质一致：UPC κ = 0.68、USG κ = 0.64；<b>但 28% 的猫 UPC 亚级会变、18% 的猫「浓缩能力」判定会变</b></td>
+          <td class="num">κ 0.64–0.68</td>
+        </tr>
+        <tr>
+          <td>关键纪律句：居家采样「is a valid alternative to cystocentesis in cats」，但「<b>the same urine collection method should be used when monitoring the same cat</b>」（同一只猫必须始终用同一种采集方式）</td>
+          <td class="num">—</td>
+        </tr>
+        <tr>
+          <td>猫砂基质会干扰尿比重：疏水基质（Kit4Cat）在 120 分钟内<b>不干扰</b> USG（恒为 1.044）；<b>防水砂</b>在 60/120 分钟显著<b>抬高</b> USG（1.050 / 1.052）；水族砂砾吸水不可用</td>
+          <td class="num">1.044 vs 1.050</td>
+          <td>Luna Alves APPA, et al. <i>JFMS</i> 2025;27(7) · DOI <a href="https://doi.org/10.1177/1098612X251314710">10.1177/1098612X251314710</a> <span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <b>为什么这一条对本项目特别重要</b>：报告 04 与 06 中，所有「智能猫砂盆能看出肾病」的证据都来自设备厂商
+    或其资助的研究。上面两项研究<b>与 Purina 无关</b>，它们说明两件事——
+    ① 居家采尿在原理上可行但失败率不低（45% 的猫采不到）；
+    ② <b>换一种方法就等于换了一把尺子</b>，同一只猫的纵向比较必须固定采集方式。
+    这正是「相对自身基线」方法论在猫砂盆场景下的实证支持。
+  </p>
+
+  <h4>2.5.6 体温：最会预测结局的变量，恰恰是消费级穿戴最测不准的那一个</h4>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>发现</th><th>数字</th><th>来源与等级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>急诊入院时<b>低体温很常见</b>，且与结局显著相关</td>
+          <td>n = <b>1440</b> 只猫；院内死亡率 <b>21.9%</b>；入院低体温 <b>35.4%</b>（510 只）、正常 59%、高热 5.6%；
+              <b>非存活者中位体温 35.4 °C（95% CI 34.6–36.3）vs 存活者 38.2 °C（38.1–38.3），P &lt; 0.0001</b>；
+              非存活风险随低体温分级递增（P &lt; 0.0001）；脓毒症猫 63.7% 低体温（OR 2.62）；
+              SIRS 合并心血管疾病者死亡风险 OR <b>8.27</b>（4.09–16.68）</td>
+          <td>Pontiero A, et al. <i>JFMS</i> 2025;27(1) · DOI <a href="https://doi.org/10.1177/1098612X241291295">10.1177/1098612X241291295</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11733880/">PMC11733880</a> <span class="badge b-peer">peer</span> <span class="badge b-strong">strong</span></td>
+        </tr>
+        <tr>
+          <td>但<b>非接触红外测温在猫身上与直肠温毫无相关</b></td>
+          <td>n = 168 犬 + <b>61 猫</b>；猫直肠温中位 <b>38.3 °C</b>（36.2–40.0）vs 红外耳温中位 <b>35.7 °C</b>（31.8–38.0）；
+              <b>猫的 Kendall tau = −0.01（无相关）</b>、Kappa = −0.08；平均偏差 <b>−2.7 ± 1.44 °C</b>；
+              结论原文：红外测温「<b>cannot be recommended</b> at the current time as a means to determine body temperature in dogs and cats」</td>
+          <td>Barton JC, et al. <i>JAVMA</i> 2022;260(7):752-757 · DOI <a href="https://doi.org/10.2460/javma.21.09.0403">10.2460/javma.21.09.0403</a> <span class="badge b-peer">peer</span> <span class="badge b-strong">strong</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout risk">
+    <div class="ct">本报告最有价值的一条「能力错配」</div>
+    <p>
+      在一份 1440 例的猫急诊队列里，<b>最能预测生死的单一分诊变量是体温</b>；
+      而消费级项圈能做的只是<b>皮肤/耳廓温度</b>，它在猫身上与核心体温<b>连相关都没有</b>（τ = −0.01）。
+      因此：<b>任何「用项圈体温做急症预警」的宣称都缺乏证据基础</b>。
+      如果产品要做体温告警，正确的措辞是「体表温度相对自身基线的变化」，并且必须写明<b>不能换算为核心体温</b>。
+    </p>
+  </div>
+
+  <h3 id="s-ac-ml">2.7 算法能做的上限：六个已发表的数字，和一张空白清单</h3>
+  <p>
+    「用数据判病」这件事并不是没人做过。把已发表的结果按任务排开，可以看到一个相当一致的模式：
+    <b>任务越接近「计数」（如厕次数、行为类别），性能越高；任务越接近「判断」（这是不是疼痛、这是不是急症），性能越低且越不稳定。</b>
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>任务</th><th>数据与样本</th><th>已发表性能</th><th>标签质量 / 关键限制</th><th>等级</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>猫行为分类</b>（项圈加速度计 + 机器学习）</td>
+          <td>n = 12 只猫（16 只入组、4 只淘汰），7 天，30 Hz，项圈与胸背带同时佩戴，24 种行为，166,754 秒视频；评分者内 κ = 0.93</td>
+          <td>自组织映射 κ &gt; 0.95、总准确率 &gt; 0.95；随机森林 κ 0.64–0.76、准确率 0.70–0.86</td>
+          <td><b>攀爬 / 挖掘 / 相互理毛 的真阳性 = 0</b>，必须合并行为类别才能达标；<b>项圈模型持续差于胸背带模型</b>；人群是<b>健康群体笼养猫</b>，不是居家宠物</td>
+          <td><span class="badge b-peer">peer</span> <span class="badge b-strong">strong</span></td>
+        </tr>
+        <tr>
+          <td><b>早期退行性关节病（DJD）检测</b></td>
+          <td>56 只猫佩戴、<b>51 只进入分析</b>（24 健康 / 27 主人报告活动变化），14 天，60 秒窗</td>
+          <td><b>AUC 0.78（95% CI 0.65–0.88）、敏感度 68%（0.64–0.77）@ 75% 特异度（0.68–0.79）</b></td>
+          <td>标签是<b>主人报告 + 骨科检查</b>，即<b>代理标签而非金标准</b>；<b>22% 佩戴猫被排除</b>；作者自述「there is <b>no universal objective assessment method</b> for DJD-associated pain in cats」</td>
+          <td><span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span></td>
+        </tr>
+        <tr>
+          <td><b>智能猫砂盆识别 CKD</b></td>
+          <td>回顾性；设备为 Purina Petivity</td>
+          <td>加权 <b>F1 92.7%</b>（交叉验证训练）/ <b>89.9%</b>（验证）</td>
+          <td>⚠️ 多作者为雀巢普瑞纳研究中心雇员、设备即该产品、回顾性且无预注册；CKD 画像为「排尿更频繁、排泄更久、掩埋减少」</td>
+          <td><span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span><br><span class="tag">厂商资助</span></td>
+        </tr>
+        <tr>
+          <td><b>智能猫砂盆识别排便频次下降</b></td>
+          <td><b>n = 9</b> 只 CKD 猫 vs <b>n = 9</b> 只健康猫，前瞻、30 天</td>
+          <td>30 天内<b>不排便天数中位 10（5–13）vs 2（0–7），P = 0.0003</b>；日均排便次数 <b>0.86 ± 0.22 vs 1.07 ± 0.13，P = 0.02</b></td>
+          <td>样本极小（各 9 只）；设备同样为 Petivity，但作者为大学团队、经费含 NIH T32 与猫 CKD 研究基金</td>
+          <td><span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span><br><span class="tag">n 极小</span></td>
+        </tr>
+        <tr>
+          <td><b>接触式心肺传感在猫身上能不能准</b></td>
+          <td><b>20 只健康猫，全身麻醉，仅 20 分钟</b>，307 对同步读数；设备是<b>人用婴儿血氧袜（Owlet Smart Sock）</b></td>
+          <td>心率 <b>r = 0.995</b>、平均偏差 0.18 bpm，达临床等效；血氧 <b>r = 0.634</b>、平均偏差 −0.5%，在 ±3% 等效界内</td>
+          <td>麻醉状态、健康青年猫、仅 20 分钟。作者结论：「<b>Further validation under diverse clinical conditions and in different patient populations is warranted</b>」</td>
+          <td><span class="badge b-peer">peer</span> <span class="badge b-mid">moderate</span><br><span class="tag">非猫用产品</span></td>
+        </tr>
+        <tr>
+          <td><b>自动面部疼痛评分</b>（FGS 自动化）</td>
+          <td>视频端到端管线；短头猫 200 张图像等</td>
+          <td>端到端准确率 <b>&gt;70%</b> 与 <b>66%</b>；短头猫 landmark 误差 19.96%（vs 中头型 16.76%），最佳疼痛预测 <b>MAE 0.168、R² = 0.115、Pearson 0.374</b></td>
+          <td>原文直接写「<b>poor generalizability</b>」；另一项姿态研究写明「<b>Further prospective validation against established pain, stress, and welfare assessment instruments is required before clinical or diagnostic application</b>」；4 个通用聊天机器人与专家的一致性多数较差，其中一个的 Bland-Altman 一致性界限<b>跨越了 0.39 的镇痛阈值</b></td>
+          <td><span class="badge b-peer">peer</span> <span class="badge b-strong">strong</span>（就「尚不可临床用」而言）</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="refs">
+    Smit M, et al. <i>Sensors</i> 2023;23(16):7165 · DOI <a href="https://doi.org/10.3390/s23167165">10.3390/s23167165</a> ·
+    Montout AX, et al. <i>Vet J</i> 2025;311:106352 · DOI <a href="https://doi.org/10.1016/j.tvjl.2025.106352">10.1016/j.tvjl.2025.106352</a> ·
+    Langenfeld-McCoy N, et al. <i>Animals</i> 2026;16(9):1319 · DOI <a href="https://doi.org/10.3390/ani16091319">10.3390/ani16091319</a> ·
+    George ZM, Quimby JM, Jones S, Brusach KB, Rudinsky AJ. Quantification of defecation frequency in cats with and without chronic kidney disease. <i>JFMS</i> 2025;27(7) · DOI <a href="https://doi.org/10.1177/1098612X251348011">10.1177/1098612X251348011</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12276494/">PMC12276494</a> ·
+    Melek Ş, et al. <i>Vet Med Sci</i> 2026;12(5):e71134 · DOI <a href="https://doi.org/10.1002/vms3.71134">10.1002/vms3.71134</a> ·
+    Martvel F, et al. <i>Sci Rep</i> 2024;14:28006 · DOI <a href="https://doi.org/10.1038/s41598-024-78406-2">10.1038/s41598-024-78406-2</a> ·
+    Steagall PV, et al. <i>JAVMA</i> 2026 · DOI <a href="https://doi.org/10.2460/javma.26.04.0301">10.2460/javma.26.04.0301</a> ·
+    Bezerra B, et al. <i>Front Vet Sci</i> 2026;13:1881772 · DOI <a href="https://doi.org/10.3389/fvets.2026.1881772">10.3389/fvets.2026.1881772</a> ·
+    Ngai J, et al. <i>Sci Rep</i> 2025;15:43461 · DOI <a href="https://doi.org/10.1038/s41598-025-27404-z">10.1038/s41598-025-27404-z</a>
+  </p>
+
+  <div class="callout risk">
+    <div class="ct">按阈值发布告警，等于强制做一次取舍</div>
+    <p>
+      上面每一个「性能」数字都是在<b>某个特定阈值</b>下取得的。要在产品里发一条「请立即就医」的告警，
+      就必须选定一个阈值，于是必然在<b>漏报（假阴性）</b>与<b>误报（假阳性）</b>之间做取舍。
+      以 DJD 检测的 68% 敏感度 / 75% 特异度为例：<b>约三分之一的确有问题的猫不会被提示，约四分之一的健康猫会被提示</b>。
+      这不是实现问题，是这类任务当前的客观水平；产品的话术必须承认它。
+    </p>
+  </div>
+
+  <div class="callout warn">
+    <div class="ct">本报告检索范围内，明确「没有研究做过」的事</div>
+    <ol>
+      <li>没有任何研究证明<b>消费级设备能对猫的急性事件</b>（尿路梗阻、急性心衰 / 心脏事件、动脉血栓栓塞）
+          做出<b>前瞻性及时预警并改善结局</b> — <span class="badge b-gray">unverified</span></li>
+      <li>没有前瞻研究在<b>清醒、客户自有的居家猫</b>身上把项圈心率 / 呼吸频率 / 体温对金标准做验证；
+          目前唯一的猫心肺可穿戴验证是<b>20 只麻醉猫、20 分钟</b>（且用的是人用婴儿设备）</li>
+      <li>没有「穿戴设备发出预警 → 改变猫临床结局」的随机对照试验或结局研究</li>
+      <li>没有经过验证的摄像头自动识别猫的<b>如厕或跛行</b></li>
+      <li>没有猫专属的设备依从性与脱落率数据（翻遍检索结果只有犬的数据）</li>
+      <li>没有<b>多猫家庭</b>的设备数据归属方案被验证过</li>
+    </ol>
+    <p>
+      ⚠️ 以上均为<b>本报告检索范围内的未找到</b>，不等于「一定不存在」。任何据此做出的宣称，
+      措辞都应当是「我们未检索到相关研究」，而不是「不存在相关研究」。
+    </p>
+  </div>
+
+  <p>
+    行业自身对这个问题有正式表态。AAHA/AVMA 2021 远程医疗指南在结束语中把技术定位为补充而非替代：
+    「The goal is <b>not to replace necessary in-person consultations and exams</b>, but to consider using technology…」；
+    其远程监测章节则给出一个<b>未附任何引文的断言</b>：「Tracking trends can help identify warning signs and trigger
+    interventions before problems reach an acute stage.」——这句话正是本报告要检验的对象，而目前检验结果是
+    <b>结论方向成立、具体性能尚缺</b>。兽医 AI 领域的最新立场同样谨慎：ACVIM 人工智能工作组要求
+    「<b>critical oversight to evaluate and verify the safety and efficacy of AI tools</b> in routine patient care」。
+  </p>
+  <p class="refs">
+    来源：2021 AAHA/AVMA Telehealth Guidelines for Small-Animal Practice（结论与 Remote Monitoring 章节；<b>本次复核该页被重定向，未能二次抓取原文页面</b>，
+    引用时建议以官方页面为准）<span class="badge b-mid">moderate</span> ·
+    Bertin F, et al. <i>J Vet Intern Med</i> 2026;40(1):aalaf045 · DOI <a href="https://doi.org/10.1093/jvimsj/aalaf045">10.1093/jvimsj/aalaf045</a> <span class="badge b-peer">peer</span>
+  </p>
+
+<section id="s-industry">
+  <h2><span class="num">3</span>业界产品</h2>
+  <p>
+    本次对 <b>22 个在售（或曾售）产品与服务</b>逐页核对，核对日期 2026-10-03。
+    方法与纪律：<b>只记录页面实际写了什么</b>；页面为 JS 骨架、地区跳转或抓取失败的一律标注「未获取 / 未访问成功」，
+    <b>绝不用媒体报道或产品宣传补齐参数</b>。因此下表会有一些空格——这些空格本身就是结论的一部分。
+  </p>
+
+  <h3 id="s-in-wearable">3.1 项圈与可穿戴</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>产品</th><th>形态</th><th>页面所载监测项</th><th>报警机制</th><th>验证状态</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>PetPace 2.0</b>（猫用项圈 collar-v3）<br><span class="tag">petpace.com</span></td>
+          <td>项圈</td>
+          <td>猫用页面「What We Monitor」逐项列出：<b>Pulse、Temperature、Stress Level (HRV)、Respiration</b>，另有活动 / 睡眠 / 行为与 GPS</td>
+          <td>页面分三个标签：Collect Vital Signs / Track location / Share Health Data，并有「Receive Alerts」标签与「near real-time alerts」表述；
+              另提供<b>付费远程兽医入口</b>与「<b>Share Data with Your Vet</b>」</td>
+          <td>⚠️ <b>厂商自称，无猫专属同行评审</b>。文献页两项支撑均为犬研究或学位论文（犬活动监测；HR/HRV 对比 Holter 的维也纳学位论文）。
+              它的「数据给兽医看 + 远程兽医」是全表项圈类里最接近闭环的路径——但<b>报警与兽医之间没有自动连接</b></td>
+        </tr>
+        <tr>
+          <td><b>Dinbeat UNO</b><br><span class="tag">dinbeat.com</span></td>
+          <td><b>胸背带</b>（兽医专业）</td>
+          <td><b>ECG</b>、心率、呼吸、体温、活动、体位、<b>发声</b></td>
+          <td>App 实时告警，阈值可自定义</td>
+          <td><b>厂商自称 + 兽医客户证言</b>；未找到第三方同行评审。全表唯一实测 ECG 的多参数设备</td>
+        </tr>
+        <tr>
+          <td><b>Tractive CAT 6 Mini</b><br><span class="tag">tractive.com</span></td>
+          <td>项圈（GPS）</td>
+          <td>定位、虚拟围栏。官网「Health Monitoring」栏目原文只有「<b>insights to spot potential issues early</b>」，<b>未列任何生命体征</b></td>
+          <td>App 推送</td>
+          <td>未找到同行评审</td>
+        </tr>
+        <tr>
+          <td><b>Invoxia Minitailz</b></td>
+          <td>项圈</td>
+          <td colspan="2"><b>未访问成功</b>（产品页 404、帮助中心 403）</td>
+          <td><b>不评</b>——媒体报道属新闻稿级别，不得当验证</td>
+        </tr>
+        <tr>
+          <td><b>FitBark 2 / GPS</b></td>
+          <td>项圈</td>
+          <td>活动 / 睡眠（页面正文 JS 未渲染，<b>未获取</b>）</td>
+          <td>未见健康异常报警</td>
+          <td>产品名即 Dog，<b>无猫相关验证</b></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout risk">
+    <div class="ct">全表最值得盯的一处宣称落差</div>
+    <p>
+      项圈产品页把 <b>respiration（呼吸）</b>列为监测项，而学界明确：
+      <b>没有任何一项研究验证过猫用项圈的呼吸频率</b>（见 2.7 空白清单第 2 条）。
+      与此同时，呼吸频率恰恰是唯一被 ACVIM 共识写进居家监测建议的指标（见 2.3.1）。
+      这就是本报告的核心张力：<b>最有价值的那一项，恰恰是最没有设备验证的那一项。</b>
+    </p>
+  </div>
+
+  <h3 id="s-in-stationary">3.2 智能猫砂盆：唯一被同行评审研究实际使用过的消费级品类</h3>
+  <table>
+    <thead><tr><th>产品</th><th>页面所载监测项</th><th>验证状态</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>Purina Petivity</b> Smart Litter Box Monitor<br><span class="tag">秤垫形态</span></td>
+        <td>体重、如厕（详情正文被电商骨架截断，<b>部分未获取</b>）</td>
+        <td><b>全表唯一被同行评审研究使用的设备</b>：一篇为厂商作者（CKD 识别，加权 F1 92.7% / 89.9%，回顾性）；一篇为大学团队（排便频次，n = 9 + 9）。厂商本身<b>无</b>同行评审支持其报警功能</td>
+      </tr>
+      <tr>
+        <td><b>Whisker Litter-Robot 4 / 5 / 5 Pro / EVO</b></td>
+        <td>体重、如厕次数（各页正文为导航骨架，<b>未获取</b>）</td>
+        <td>未找到同行评审。官网「<b>The Only Vet Approved Automatic Litter Box</b>」为<b>自家营销页</b>，未给第三方评审或监管认定依据</td>
+      </tr>
+      <tr>
+        <td><b>PETKIT（小佩）PuraMax 2</b></td>
+        <td>App 官网原文：<b>如厕习惯、频次、时长</b>——并据此宣称「<b>预防泌尿系统疾病</b>」</td>
+        <td>⚠️ <b>疾病预防级宣称，输入只有频次与时长，无任何验证支持</b>——全表最激进的措辞</td>
+      </tr>
+      <tr>
+        <td><b>CATLINK Scooper Pro / 霍曼</b></td>
+        <td colspan="2"><b>未获取</b>（App 页仅标题、官网为导航骨架）</td>
+      </tr>
+      <tr>
+        <td><b>PrettyLitter</b>（变色猫砂）</td>
+        <td colspan="2"><b>未访问成功</b> → 尿 pH / 血的检测功能<b>未核实</b>，不作评价</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    <b>多猫识别</b>是这一类的共同软肋：CATLINK、PETKIT、Litter-Robot 都声称可按体重区分个体，
+    但<b>各页面均未给出准确率</b>；体重接近的猫必然混档。而本项目关注的「相对这只猫自己的基线」，
+    在多猫家庭里首先要求的就是<b>个体归属正确</b>——这一条目前<b>没有任何被验证的方案</b>（见 2.7 空白清单第 6 条）。
+  </p>
+
+  <h3 id="s-in-camera">3.3 摄像头：一整类都不能测生命体征</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>产品</th><th>它实际提供什么</th><th>它不提供什么</th></tr></thead>
+      <tbody>
+        <tr><td><b>Furbo 360° Cat Camera</b></td><td>画面、双向语音、AI 通知（喵叫 / 活动）、订阅服务</td><td rowspan="3"><b>任何生命体征</b>。页面中<b>没有</b>相关宣称——这一点厂商是诚实的。
+            但反过来看：ATE 最具分辨力的两个居家信号（呼吸急促 91%、后肢拖行 66%）<b>在物理上只有摄像头能看见</b>，
+            而市面上<b>没有一款产品声称能识别它们</b></td></tr>
+        <tr><td><b>Petcube Cam 360 / Bites 2 Lite</b></td><td>AI「宠物 / 人」事件提醒、声音提醒；Cam 360 约 $34.99，Care 订阅自 $5.99/月</td></tr>
+        <tr><td><b>Wyze Cam + Cam Plus</b></td><td>通用安防订阅（<b>非宠物专用</b>）</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    这一节构成了本项目最明确的一个<b>产品空位</b>：如果「呼吸频率 + 姿态异常」是心脏急症最有价值的居家信号，
+    而它们都是视觉量，那么<b>摄像头 + 视觉分析</b>才是这条链路上形态正确的方案——
+    但现有摄像头产品全部停留在「事件通知」，没有一家做「呼吸与姿态的基线偏离检测」。
+  </p>
+
+  <h3 id="s-in-ai">3.4 AI 评分与远程分诊服务</h3>
+  <div class="grid g2">
+    <div class="card">
+      <h4>Tably（Sylvester.ai）— 基于猫面部表情的疼痛评分 App</h4>
+      <ul>
+        <li>宣称：用照片自动给出 Feline Grimace Scale 评分</li>
+        <li>⚠️ <b>在售状态存疑</b>：tably.ai 已跳转至无关站点（atom.com）、sylvester.ai 抓取失败</li>
+        <li>⚠️ <b>未找到该产品自身的同行评审验证</b></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>VetTriage — 真人兽医远程分诊</h4>
+      <ul>
+        <li>真人兽医 24/7 视频分诊，判断是否需要急诊</li>
+        <li>官网明确写「<b>必要时转诊当地急诊医院</b>」</li>
+        <li><b>全表最接近「闭环」的服务</b>——但它<b>不接任何设备数据</b>，完全不依赖传感</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout risk">
+    <div class="ct">本报告最想纠正的一处行业偷换</div>
+    <p>
+      <b>「Feline Grimace Scale 有同行评审验证」≠「AI 自动疼痛评分已验证」。</b>
+      前者是一把给<b>人</b>用的量表（Evangelista 2019, <i>Sci Rep</i>）；后者的实测结果是：
+      短头猫上「<b>poor generalizability</b>」、最佳疼痛预测 R² 仅 0.115；
+      而通用聊天机器人的一致性界限<b>跨越了 0.39 的镇痛阈值</b>。
+      把前者当作后者的证据，是本领域最普遍、也最容易骗过非专业读者的一次偷换。
+    </p>
+  </div>
+
+  <h3 id="s-in-gap">3.5 宣称与证据：十条对照</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>#</th><th>行业常见宣称</th><th>证据现状</th><th>判定</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td>项圈测「呼吸」并据此预警</td><td>无任何猫用项圈呼吸频率验证；唯一的猫心肺可穿戴验证是 20 只<b>麻醉</b>猫 20 分钟，且用的是<b>人用婴儿设备</b></td><td><span class="badge b-weak">不成立</span></td></tr>
+        <tr><td class="num">2</td><td>项圈测体温做急症预警</td><td>猫体表 / 红外温与直肠温<b>无相关</b>（Kendall τ = −0.01）；而体温是 1440 例队列中最强的结局预测因子</td><td><span class="badge b-weak">不成立</span><br><span class="tag">错配最严重</span></td></tr>
+        <tr><td class="num">3</td><td>把活动 / 睡眠包装成「Health Monitoring」</td><td>官网未列任何生命体征参数；原文只有「insights to spot potential issues early」</td><td><span class="badge b-weak">话术</span></td></tr>
+        <tr><td class="num">4</td><td>摄像头 = 健康监测</td><td>摄像头品类均<b>无</b>生命体征宣称；实际提供的只是事件通知</td><td><span class="badge b-mid">仅事件</span></td></tr>
+        <tr><td class="num">5</td><td>智能砂盆做肾病早筛</td><td>有同行评审，但为<b>厂商作者 + 厂商设备</b>（F1 92.7% / 89.9%）；独立团队研究的样本只有 9 + 9 只</td><td><span class="badge b-mid">部分成立</span><br><span class="tag">须标资助</span></td></tr>
+        <tr><td class="num">6</td><td>AI 自动疼痛评分</td><td>量表有人用验证，AI 自动评分没有；短头猫 generalizability 差；聊天机器人一致性界限跨越阈值</td><td><span class="badge b-weak">不成立</span></td></tr>
+        <tr><td class="num">7</td><td>「Vet approved」（兽医师认可）</td><td>为自家营销页，未给出第三方评审或监管依据</td><td><span class="badge b-weak">不成立</span></td></tr>
+        <tr><td class="num">8</td><td>「预防泌尿系统疾病」</td><td>输入只有如厕频次与时长；无任何验证</td><td><span class="badge b-weak">不成立</span></td></tr>
+        <tr><td class="num">9</td><td>多猫家庭自动区分个体</td><td>按体重分档，<b>各页面均未给准确率</b>；体重接近即混档</td><td><span class="badge b-gray">未验证</span></td></tr>
+        <tr><td class="num">10</td><td>保险 + 设备 = 健康闭环</td><td>合作只做<b>费用报销</b>（约 $34.99/月，含设备报销），<b>无「设备报警 → 兽医介入」链路</b></td><td><span class="badge b-weak">不成立</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="s-in-verdict">3.6 两个格局判断</h3>
+  <div class="grid g2">
+    <div class="card">
+      <h4>① 没有任何一款把「设备异常报警」自动接到「兽医介入」</h4>
+      <p>
+        逐页核对 22 个产品与服务后，<b>没有一家的文档描述过「报警 → 自动转诊 / 兽医介入」这条链路</b>。
+        最接近的两条路径都还是手动的：
+        <b>PetPace</b> 提供「与兽医共享数据」+ 付费远程兽医入口，但报警与兽医之间没有自动连接；
+        <b>VetTriage</b> 是真人兽医 24/7 分诊并明确写「必要时转诊当地急诊医院」，但它<b>不接任何设备数据</b>。
+        这与报告 01 与 04 的判断一致，并在本次核对中被加强。
+      </p>
+    </div>
+    <div class="card">
+      <h4>② 没有一款产品同时具备「摄像头 / 行为」与「生命体征」</h4>
+      <p>
+        摄像头型不测生命体征，传感型不带摄像头。而本报告的疾病侧证据恰好说明
+        <b>这两类信息缺一不可</b>：呼吸与姿态（视觉）指向心脏急症，体重与排泄（固定式）指向肾与代谢，
+        活动与发声（项圈）只能补上「有没有在动、有没有出声」。
+      </p>
+    </div>
+  </div>
+  <div class="callout warn">
+    <div class="ct">价格与订阅数据的使用限制</div>
+    <p>
+      本次核对中<b>价格与订阅金额大面积未能获取</b>（官网多为 JS 渲染、地区跳转或反爬）。
+      本报告因此<b>只保留已实际读到的少数金额</b>（如 Petcube Cam 360 约 $34.99、Care 自 $5.99/月、
+      Odie Wellness Plan $34.99/月），其余一律留空。
+      <b>任何对外引用前必须用本地经销商页面二次核实</b>，不得以本报告的数字作为定价依据。
+    </p>
+  </div>
+</section>
+
+
+<section id="s-synth">
+  <h2><span class="num">4</span>综合洞察</h2>
+
+  <h3 id="s-sy-core">4.1 三条核心判断</h3>
+  <div class="grid g2">
+    <div class="card">
+      <h4><span class="rank">1</span>传感形态与「最能预测结局的变量」系统性错配</h4>
+      <p>
+        在一份 1440 例的猫急诊队列里，最强的结局预测变量是<b>体温</b>——而项圈只能测体表温，
+        它和核心体温<b>连相关都没有</b>。最能提前量出肾病的变量是<b>体重与排泄</b>——它们的发生地是体重秤和猫砂盆。
+        最能指向心脏失代偿的变量是<b>睡眠呼吸频率</b>——目前只能靠人眼数。
+        <b>四个最有价值的量，没有一个在脖子上。</b>
+      </p>
+    </div>
+    <div class="card">
+      <h4><span class="rank r2">2</span>已有的居家预警协议靠「人数」，不靠设备</h4>
+      <p>
+        ACVIM 共识里带 LOE 的那条建议，原始做法是<b>主人每天数呼吸</b>。
+        这给设备的定位下了一个很克制的结论：<b>设备的真正价值不是发现新信号，而是把人「不愿意天天做、容易做错、记不住」的动作自动化并留存下来</b>。
+        凡是声称靠新传感发现新急症信号的，都需要额外证据——而目前没有。
+      </p>
+    </div>
+    <div class="card">
+      <h4><span class="rank r3">3</span>缺的不是传感器，是分诊</h4>
+      <p>
+        FATE 病例中 <b>37% 在到院 6 小时内被安乐死</b>；全科队列中 <b>61.2% 就诊即安乐死</b>；
+        而非工作时间的来电里有 <b>55% 根本不是急症</b>。
+        决定结局的是<b>「这只猫有没有被识别为急症、有没有尽快到院」</b>。
+        传感器把读数做得再准一点，对这一环的边际贡献远小于<b>把信号结构化成一个分诊问题</b>。
+      </p>
+    </div>
+    <div class="card">
+      <h4><span class="rank r4">4</span>能给主人的最低成本干预是「教育」，且已被验证</h4>
+      <p>
+        给 362 位猫主人一份简短的疼痛教育，<b>3/3 情景中就医意向显著上升</b>；
+        给主人一把结构化量表（n = 130），他们能做到 <b>96% 敏感度 / 78% 特异度</b>。
+        这两个数字比任何一款消费级设备的健康告警都更有实证支撑。
+      </p>
+    </div>
+  </div>
+
+  <h3 id="s-sy-latency">4.2 时延预算：不同急症的可预警窗口差两个数量级</h3>
+  <p>
+    这是本报告对产品设计最直接的一张表。<b>如果系统的输出粒度是「日均值」，它在原理上就抓不到尿闭与中毒。</b>
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>情况</th><th>从信号出现到不可逆后果</th><th>需要的最小采样频率</th><th>证据来源</th></tr></thead>
+      <tbody>
+        <tr><td><b>公猫尿路梗阻</b></td><td>尿毒症 <b>36–48 小时</b>，死亡约 <b>72 小时</b></td><td><b>小时级</b>（且需事件级上报，不能等日汇总）</td><td>MSD <span class="badge b-mid">moderate</span></td></tr>
+        <tr><td><b>中毒 —— 百合 / 乙二醇</b></td><td><b>数小时–24 小时</b>；乙二醇中间还有一段「看起来好转」的假恢复期</td><td>靠<b>暴露事件</b>，不靠生理信号（生理信号出现时已晚）</td><td>Merck / iCatCare <span class="badge b-strong">strong</span></td></tr>
+        <tr><td><b>中毒 —— 抗凝鼠药</b></td><td>凝血指标升高延迟 <b>2–5 天</b>，出血多在 <b>3–7 天</b></td><td><b>天级</b>（且暴露当天「正常」不能排除）</td><td>Merck <span class="badge b-strong">strong</span></td></tr>
+        <tr><td><b>外伤内出血 / 车祸</b></td><td><b>数小时–数天</b>，且「能站能走」不代表没有内伤</td><td><b>小时级</b>，以「事件 + 后续观察窗」为主</td><td>VIN / Merck <span class="badge b-mid">moderate</span></td></tr>
+        <tr><td><b>输尿管梗阻</b></td><td>医疗管理 <b>24–72 小时</b>无效即需手术</td><td><b>天级</b>（但砂盆行为可能完全正常）</td><td>Merck <span class="badge b-strong">strong</span></td></tr>
+        <tr><td><b>CHF 失代偿</b></td><td>呼吸频率升高在前，<b>数小时–数天</b></td><td><b>每日 1–2 次</b>（共识给的就是这个频率）</td><td>ACVIM 2020 <span class="badge b-strong">strong</span></td></tr>
+        <tr><td><b>ATE 发作</b></td><td>发作本身是<b>分钟级</b>，但「高危状态」可持续<b>数月</b></td><td><b>无法预警发作</b>；只能压缩「发作 → 到院」的延迟</td><td>Smith 2003 / Guillaumin 2024 <span class="badge b-mid">moderate</span></td></tr>
+        <tr><td><b>心源性猝死</b></td><td><b>无前兆</b></td><td><b>原理上不可预警</b></td><td>ACVIM 2020 <span class="badge b-strong">strong</span></td></tr>
+        <tr><td><b>CKD 漂移</b></td><td>体重下降在确诊前 <b>3 年</b>即已开始</td><td><b>周–月级</b></td><td>Freeman 2016 <span class="badge b-strong">strong</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout ok">
+    <div class="ct">这张表的读法</div>
+    <p>
+      上表有两个数量级：<b>小时级</b>（尿闭、中毒、外伤）与<b>周–月级</b>（CKD 漂移）；
+      中间的 CHF 是<b>天级</b>。任何一套监测系统的<b>采样与上报粒度</b>只能选一个区间做深。
+      本项目选择的是「离家时段的事件流 + 相对自身基线的漂移」——这个选择<b>天然对应天级与周级</b>，
+      而<b>不对应小时级</b>。因此「突发急症预警」不应作为本系统的宣称，
+      而应作为一条明确的边界交给「摄像头事件 + 人工分诊」去承担。
+    </p>
+  </div>
+
+  <h3 id="s-sy-asym">4.3 假阴性与假阳性的代价不对称——但要按信号分层</h3>
+  <p>
+    在急症场景里，漏报的代价可能是死亡，误报的代价是主人焦虑、跑一趟医院、以及对产品的信任。
+    代价不对称通常意味着<b>应当故意把阈值放低</b>。可搬用的取舍比例已经存在：
+    VetTriS 分诊系统做到了<b>漏检 0.6%、过检 9.8%</b>——即「宁可多叫 10% 的人来，也不漏掉一个」。
+  </p>
+  <div class="callout risk">
+    <div class="ct">但这个策略不能无差别地用</div>
+    <p>
+      对「长时间不动 / 躲藏 / 活动量下降」这类信号，低阈值会制造海量误报，因为
+      <b>猫本来就一天睡 12–16 小时</b>，而 2022 ISFM 急性疼痛指南明确指出
+      「Signs of pain may be subtle and misinterpreted; for example, when a cat simply reduces movement and
+      <b>'freezes' due to fear</b>」，iCatCare 也独立指出「<b>a cat that appears shut down may be far more
+      distressed than the one that vocalises or paces</b>」。
+      → 正确做法是<b>分层</b>：对「突然完全不能走后腿」「张口呼吸」这类<b>高特异度、几乎不可能由正常行为产生</b>的信号用极低阈值；
+      对「活动减少」「不动」这类<b>低特异度</b>信号只做基线漂移展示，<b>不发急症级告警</b>。
+    </p>
+  </div>
+
+  <h3 id="s-sy-migrate">4.4 对本项目「基线哨兵 + 离家事件流」的可迁移结论</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>信号</th><th>颈部项圈能否承载</th><th>验证状态</th><th>建议的产品角色</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>睡眠呼吸频率</b>（居家、人工计数）</td>
+          <td><b>否</b>——用户按键输入</td>
+          <td><b>有</b>：ACVIM 共识 LOE medium + 两篇一手研究</td>
+          <td class="num">★ 做成「引导主人记录」的功能：零硬件成本、有共识背书、可导出给兽医。默认不自动读</td>
+        </tr>
+        <tr>
+          <td><b>活动量 / 跳跃</b></td>
+          <td>是</td>
+          <td>年龄效应 <span class="badge b-strong">strong</span>；DJD 早筛 AUC 0.78 <span class="badge b-mid">moderate</span></td>
+          <td>只做「相对这只猫自身基线」的漂移，<b>不判定原因</b>（正常衰老与疾病方向相同）</td>
+        </tr>
+        <tr>
+          <td><b>体重</b></td>
+          <td><b>否</b>（力学问题）</td>
+          <td><b>有</b>：CKD 确诊前 12 个月 −8.9%、3 年前已开始</td>
+          <td>交给固定式或人工录入；这是肾病方向<b>最值得投入</b>的一项</td>
+        </tr>
+        <tr>
+          <td><b>如厕频次 / 时长 / 不排便天数</b></td>
+          <td><b>否</b>（发生在猫砂盆）</td>
+          <td><b>有</b>（含独立团队研究，但样本小）</td>
+          <td>固定式；且必须先解决<b>多猫个体归属</b>，否则数据不可用</td>
+        </tr>
+        <tr>
+          <td><b>体温</b></td>
+          <td>只能测体表 / 皮肤温</td>
+          <td>猫红外温与直肠温<b>无相关</b> <span class="badge b-strong">strong</span></td>
+          <td>只报「体表温度相对自身基线的变化」，<b>绝不换算为核心体温</b>，<b>绝不做急症告警</b></td>
+        </tr>
+        <tr>
+          <td><b>心率 / HRV</b></td>
+          <td>技术上可测</td>
+          <td><b>无任何猫用项圈验证</b>；且诊室应激使读数达 176 / 195 / 226 bpm</td>
+          <td>不作为可依赖读数展示；若展示必须同时标注测量条件</td>
+        </tr>
+        <tr>
+          <td><b>发声事件</b></td>
+          <td>是</td>
+          <td>只有「数量」这一层（IRR 由受控视频研究支撑）</td>
+          <td>只做「有声 / 无声」计数，<b>不做语义</b>（与 <code>AGENTS.md</code> §3.2 一致）</td>
+        </tr>
+        <tr>
+          <td><b>呼吸急促 / 张口呼吸 / 后肢拖行 / 姿态异常</b></td>
+          <td><b>否</b>——视觉量</td>
+          <td>临床描述 <span class="badge b-strong">strong</span>；<b>无验证过的自动识别</b></td>
+          <td><b>市面空位</b>。若要碰，形态上必须走摄像头，且只能做「事件 + 建议咨询」，不能做判定</td>
+        </tr>
+        <tr>
+          <td><b>面部疼痛表情（FGS）</b></td>
+          <td><b>否</b>——全在头部</td>
+          <td>人用量表已验证；<b>AI 自动评分未成熟</b>（R² 0.115、generalizability 差）</td>
+          <td>只做「提示主人自己去对照 FGS 量表」，<b>不做自动评分</b></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="s-sy-wording">4.5 措辞纪律：UI 可说什么、不可说什么</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>❌ 不可说</th><th>✅ 可说</th></tr></thead>
+      <tbody>
+        <tr><td>「检测到心脏问题，请立即就医」</td><td>「过去 3 天静息呼吸事件节律相对基线上升 X」（<b>并附：如出现张口呼吸、后肢不能站立，请立即联系急诊</b>）</td></tr>
+        <tr><td>「体温 38.5，正常」</td><td>「体表温度相对自身基线变化 X °C（<b>体表温度不能换算为核心体温</b>）」</td></tr>
+        <tr><td>「心率 180，它不舒服」</td><td>不展示单次心率；若必须展示，同时给出测量条件与「诊室读数不作为基线」的说明</td></tr>
+        <tr><td>「睡眠呼吸频率 32，可能是心衰」</td><td>「睡眠呼吸频率连续多次超过 30 次/分，<b>建议尽快联系兽医评估</b>（此值为共识建议的评估阈值，<b>不构成诊断</b>）」</td></tr>
+        <tr><td>「你的猫在疼痛」</td><td>「检测到 3 次『长时间静止』区间（&gt; Y 分钟），基线为 0 次。<b>恐惧与疼痛都可能产生这种表现，无法区分</b>」</td></tr>
+        <tr><td>「本产品可提前预警突发疾病」</td><td>「本产品汇总你不在家时的事件与比值，并提示相对<b>这只猫自己基线</b>的变化；<b>不构成诊断，也不能替代急诊分诊</b>」</td></tr>
+        <tr><td>「项圈可以筛查肾病/心脏病」</td><td>「下列指标项圈<b>测不到</b>，需要固定式传感器或人工记录：体重、排尿、进食、睡眠呼吸频率」</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><b>必须常驻的边界句</b>（建议固定出现在每一条提示附近）：</p>
+  <div class="callout">
+    <p>
+      关联不等于诊断。文献记录的是「这些可观察变化与某些状况<b>同时出现</b>」，
+      而猫的急症<b>没有一项特异的居家信号</b>。本页只描述相对这只猫自身基线的变化，不判断原因、不判断感受。
+      <b>任何疑似急症，请直接联系执业兽医或急诊机构，不要等待本页给出结论。</b>
+    </p>
+  </div>
+</section>
+
+<section id="s-conclusion">
+  <h2><span class="num">5</span>结论与建议</h2>
+
+  <h4>对「做一个能在猫突发急症时提醒主人的项圈」的直接回答</h4>
+  <p>
+    <b>能做，但它只能承担三段中的两段，而且不是最重要的那一段。</b>
+    按本报告的证据，这条链路上实际有三段：
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>环节</th><th>谁最适合承担</th><th>现有证据</th></tr></thead>
+      <tbody>
+        <tr><td><b>① 感知</b>——事件与量有没有发生</td><td>项圈（活动、发声、姿态事件）+ 固定式（体重、如厕）+ 摄像头（呼吸、步态）</td><td>项圈行为分类 κ 0.64–0.76；固定式的 CKD 识别 F1 89.9–92.7%；摄像头侧<b>无验证</b></td></tr>
+        <tr><td><b>② 判断</b>——这是不是急症</td><td><b>没有任何设备能承担</b>。目前只有①结构化分诊系统（VetTriS κ 0.69、漏检 0.6%）②受训的人</td><td>无任何设备做过端到端急症预警验证</td></tr>
+        <tr><td><b>③ 响应</b>——到场与转诊</td><td>人工远程分诊 + 急诊机构（VetTriage 这类服务最接近闭环，但不接设备数据）</td><td>FATE 37% 到院 6 小时内安乐死 → 这一环决定结局</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    因此项圈正确的自我定位是 <b>①的一个传感器 + ②的入口</b>：它负责「在场」和「把变化留成记录」，
+    然后把判断**交给结构化的问题清单与兽医**。任何把项圈宣传成「急症侦察兵」的措辞，都与现有证据不符。
+  </p>
+
+  <h4>建议按此顺序推进</h4>
+  <ol>
+    <li>
+      <b>先做「趋势 → 分诊提示」，而不是「阈值告警」。</b>
+      把每一次提示写成<b>一个可回答的问题 + 转诊路径</b>（例如：出现的信号是否属于
+      「张口呼吸 / 后肢不能站立 / 反复进砂盆无尿 / 持续呕吐超过一天两次」这类高特异度清单？）。
+      这是唯一被验证有效的一环：结构化工具能把主人做到 96% 敏感度。
+    </li>
+    <li>
+      <b>把「睡眠呼吸频率」做成引导主人人工记录的功能。</b>
+      它是本报告找到的唯一有 ACVIM 共识（LOE medium）+ 两篇一手研究支撑的居家指标，
+      <b>零硬件成本</b>，且可导出为兽医可用的记录。这一条的性价比高于任何新的传感投入。
+    </li>
+    <li>
+      <b>明确划掉三件事</b>：体温预警（体表温与核心温无相关）、项圈呼吸频率读数（无验证）、
+      疼痛 / 疾病判定（无验证，且 AI 自动评分尚未成熟）。把这三条写进产品边界文档，而不是留给日后争论。
+    </li>
+    <li>
+      <b>若要做「急症可见信号」，形态上走摄像头。</b>
+      呼吸急促（ATE 中 91%）与后肢拖行（66%）是本报告找到的最强急症居家信号，
+      而它们都是视觉量；市面摄像头产品<b>全部停留在事件通知</b>，这是最明确的一个产品空位。
+      但仍须遵守：只做事件与提示，不做判定。
+    </li>
+  </ol>
+
+  <h4>本报告的已知不足</h4>
+  <ul>
+    <li>多数临床研究<b>只读到摘要</b>（付费墙），个别数字来自厂商新闻稿或经二次摘要解读，已在正文逐条标注。</li>
+    <li>产品侧的核对是<b>页面级快照</b>（2026-10-03），价格与订阅大面积未获取，不作为定价依据。</li>
+    <li>「没有研究做过 X」均为<b>本次检索范围内的未找到</b>，不等于不存在。</li>
+    <li>检索以英文与中文为主，可能存在语言偏倚；厂商资助研究较多，可能存在发表偏倚。</li>
+  </ul>
+</section>
+
+<section id="s-limits">
+  <h2><span class="num">6</span>局限与未核实清单</h2>
+
+  <h3>6.1 禁止使用（<span class="badge b-gray">unverified</span>）</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>主张</th><th>原因</th></tr></thead>
+      <tbody>
+        <tr><td>猫用项圈<b>呼吸频率</b>的任何参考值或精度</td><td>无任何验证研究；唯一的猫心肺可穿戴验证是 20 只麻醉猫 20 分钟，且用的是人用婴儿设备</td></tr>
+        <tr><td>猫用穿戴 <b>HRV</b> 的任何参考值</td><td>无任何验证研究</td></tr>
+        <tr><td><b>IRIS AKI 分级</b>阈值</td><td>本次未能读到正文（MSD AKI 章节抓取截断、IRIS PDF 无法解析）</td></tr>
+        <tr><td>「猫输尿管梗阻<b>患病率正在上升</b>」</td><td>未找到任何一手量化证据；只能写「临床诊断意识提高」</td></tr>
+        <tr><td>「睡眠呼吸频率升高 → 心衰」的<b>敏感度 / 特异度</b></td><td>未找到一手研究。&lt;30 次/分是<b>共识目标值</b>，不是诊断截断值</td></tr>
+        <tr><td>猫<b>临床</b>胰腺炎患病率</td><td>只有尸检数据（n = 115，总体 67%、临床正常猫 45%），引用时必须标明是<b>尸检率</b></td></tr>
+        <tr><td>线性异物的<b>穿孔率 / 死亡率</b>百分比</td><td>本次读到的最佳队列（n = 56）<b>无一只发生脓性腹膜炎、全部存活</b>，不能据以给出人群数字</td></tr>
+        <tr><td>主人对居家监测设备的<b>依从率 / 脱落率</b>（猫）</td><td>未找到猫的数据（只有犬数据）。可引用的最接近表述是 Ljungvall 2014「Data acquisition was considered <b>easy or non-problematic</b> by most participants」</td></tr>
+        <tr><td><b>坠楼高度越高伤情越重</b></td><td>1987 年队列的经典说法未被更新队列确认（n = 1125、n = 120）→ 见 6.2</td></tr>
+        <tr><td>茶树油等精油的<b>剂量与时间窗</b></td><td>仅确认被列为猫毒物，未取得一手数值</td></tr>
+        <tr><td>「MSD 给猫单列的<b>低体温 / 高热即急症阈值</b>」</td><td>相关页面 404，未读到</td></tr>
+        <tr><td><b>Tably</b>（Sylvester.ai）的在售状态与验证</td><td>站点已跳转 / 抓取失败；未找到产品自身的同行评审</td></tr>
+        <tr><td><b>Invoxia Minitailz</b> 的心率 / 心律异常功能</td><td>产品页 404、帮助中心 403；媒体报道属新闻稿级，不得当验证</td></tr>
+        <tr><td><b>PrettyLitter</b> 的尿 pH / 血检测功能</td><td>页面未访问成功，未核实</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>6.2 必须展示为区间或标注冲突（<span class="badge b-dispute">disputed</span>）</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>参数 / 话题</th><th>冲突双方</th><th>处理</th></tr></thead>
+      <tbody>
+        <tr><td><b>猫正常体温参考区间</b></td><td>36.7–38.9 °C（CLSI 法，n = 200，作者警告旧区间会误判）vs 37.2–39.5 °C vs 38.1–39.2 °C；发热定义 39.0 / 39.2 / 39.4–41.1 °C 并存</td><td>必须展示为区间 + 注明来源与测量部位，<b>不得合并成单一数字</b></td></tr>
+        <tr><td><b>呼吸频率</b></td><td>教科书 16–40 vs 家中静息中位 27（16–60）vs 午睡中位 20（9–28）vs 诊室中位 64（28–176）vs 诊室 &gt;80 提示心源性</td><td>四种测量条件下的四个不同量；统计基线只用居家睡眠 / 静息</td></tr>
+        <tr><td><b>坠楼高度与损伤严重度</b></td><td>经典队列提示存在高度相关模式 vs 更新队列（n = 1125、n = 120）未确认，后者明确报告「无显著相关」</td><td>不得把高度当严重度代理量</td></tr>
+        <tr><td><b>ATE 的溶栓治疗</b></td><td>ACVIM 2020：「Thrombolytic treatment is <b>not recommended</b> for cats with ATE（LOE high）」vs MATTERS 2026（n = 183）：溶栓组再通率 54% vs 20%、功能恢复 36% vs 14%，但出院存活无差异且<b>猝死率更高</b></td><td>展示为冲突；可用于说明「证据仍在移动」，<b>不得单方面引用任一侧</b></td></tr>
+        <tr><td><b>「红旗」的构成</b></td><td>iCatCare 把「多饮 + 不愿进食 + 体重下降」列为中毒信号；VIN / Merck 的红旗集中在呼吸与循环</td><td>按疾病分述，并给不同时间尺度；<b>不得把体重下降当作急性红旗</b></td></tr>
+        <tr><td><b>「红色 = 急症」的语义</b></td><td>iCatCare 的 Traffic Light Assessment 中的「红色」可为过度活跃或过度嗜睡，是<b>收容 / 寄养应激</b>工具而非急症分诊</td><td>不得把它当作居家急症分级依据</td></tr>
+        <tr><td><b>两个「15%」（HCM）</b></td><td>CatScan 的 14.7%（收容中心超声筛查）vs ACVIM 引用的「约 15%」（一般猫群估计）vs 转诊人群的 9.1%</td><td>数值接近但人群不同，<b>必须写清人群</b>，不得合并</td></tr>
+        <tr><td><b>心率</b></td><td>静息表 120–140 vs 分诊表 150–220（教学医院实测 176 / 195 / 226）</td><td>不是数值冲突而是<b>语境冲突</b>；展示为区间并注明测量条件</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>6.3 本次抓取失败、未能作为依据的来源</h3>
+  <ul>
+    <li>MDPI 全文（403）、ScienceDirect（403）、Wiley（403）、nature.com 文章页（跨域跳转）、PubMed 页面（203 空响应）</li>
+    <li>AAHA / AVMA 的原始 PDF 与 Telehealth 远程监测页面（被重定向，<b>未能二次核实原文页面</b>）</li>
+    <li>Bayer Veterinary Care Usage Study 原始报告（PDF 不可解析；相关数字只来自新闻稿层级 → 本报告未采用其具体百分比）</li>
+    <li>IRIS 官方 AKI / CKD 分级 PDF（404 或不可解析）</li>
+    <li>Invoxia、PrettyLitter、Airvet（429）、Joii Pet Care（403）、Trupanion（403）、Sylvester.ai</li>
+    <li>各量表的 PDF（FMPI、MI-CAT(C) 等）抓取层拒绝 <code>application/pdf</code></li>
+  </ul>
+
+  <h3>6.4 方法学局限</h3>
+  <ul>
+    <li><b>仅摘要居多</b>：多数临床研究为付费墙，本报告逐条标注了「仅摘要」，并以 Europe PMC REST 的摘要原文做了交叉核对。</li>
+    <li><b>二手来源</b>：少数数字（如 AVMA 新闻稿中的百合中毒比例、EveryCat 摘要中的尾牵拉伤数据）明确标注为二手或新闻稿层级。</li>
+    <li><b>厂商资助偏倚</b>：多篇「设备能看出病」的研究由设备方资助或由设备方作者完成，已在对应位置逐条披露（Purina/Petivity、JARMeC、Aratana）。</li>
+    <li><b>ACVIM 共识的利益冲突应一并披露</b>：该共识作者群体与 Boehringer Ingelheim、CEVA、IDEXX、Nestlé Purina、Royal Canin、Zoetis 等企业存在咨询、演讲或研究资助关系（原文披露段落）。这不削弱其关于居家呼吸频率的建议，但读者应当知道。</li>
+    <li><b>阴性结论的边界</b>：所有「未找到」均指本次检索范围，受检索词、数据库覆盖与语言限制影响。</li>
+    <li><b>报告由 AI 辅助完成</b>：检索、交叉核实与撰写使用了 AI 工具；所有数值与引语均标注来源，厂商材料与同行评审材料分列。</li>
+  </ul>
+</section>
+
+<section id="s-refs">
+  <h2><span class="num">参考文献</span></h2>
+  <p class="refs">
+    标注：<b>[全文]</b> = 读到全文或逐字核对；<b>[摘要]</b> = 仅读到摘要（付费墙）；<b>[二手]</b> = 经二次来源转述。
+  </p>
+
+  <h3>A. 心脏急症与居家呼吸频率监测</h3>
+  <ol class="refs">
+    <li>Luis Fuentes V, Abbott J, Chetboul V, et al. ACVIM consensus statement guidelines for the classification, diagnosis, and management of cardiomyopathies in cats. <i>J Vet Intern Med</i> 2020;34(3):1062-1077. DOI <a href="https://doi.org/10.1111/jvim.15745">10.1111/jvim.15745</a> · PMID 32243654 · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7255676/">PMC7255676</a> — <b>[全文]</b></li>
+    <li>Payne JR, Brodbelt DC, Luis Fuentes V. Cardiomyopathy prevalence in 780 apparently healthy cats in rehoming centres (the CatScan study). <i>J Vet Cardiol</i> 2015;17(Suppl 1):S244-57. DOI <a href="https://doi.org/10.1016/j.jvc.2015.03.008">10.1016/j.jvc.2015.03.008</a> · PMID 26776583 — <b>[摘要]</b></li>
+    <li>Payne JR, et al. Risk factors associated with sudden death in cats with hypertrophic cardiomyopathy. <i>J Vet Cardiol</i> 2015;17(Suppl 1):S318-28. DOI <a href="https://doi.org/10.1016/j.jvc.2015.09.008">10.1016/j.jvc.2015.09.008</a> — <b>[摘要]</b></li>
+    <li>Ljungvall I, Rishniw M, Porciello F, Häggström J, Ohad D. Sleeping and resting respiratory rates in healthy adult cats and cats with subclinical heart disease. <i>JFMS</i> 2014;16(4):281-290. DOI <a href="https://doi.org/10.1177/1098612X13508940">10.1177/1098612X13508940</a> · PMID 24170428 · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11383104/">PMC11383104</a> — <b>[摘要]</b></li>
+    <li>Porciello F, Rishniw M, Ljungvall I, Ferasin L, Haggstrom J, Ohad DG. Sleeping and resting respiratory rates in dogs and cats with medically-controlled left-sided congestive heart failure. <i>Vet J</i> 2016;207:164-168. DOI <a href="https://doi.org/10.1016/j.tvjl.2015.08.017">10.1016/j.tvjl.2015.08.017</a> · PMID 26639825 — <b>[摘要]</b></li>
+    <li>Dijkstra E, Teske E, Szatmári V. Respiratory rate of clinically healthy cats measured in veterinary consultation rooms. <i>Vet J</i> 2018;234:96-101. DOI <a href="https://doi.org/10.1016/j.tvjl.2018.02.014">10.1016/j.tvjl.2018.02.014</a> · PMID 29680402 — <b>[摘要]</b></li>
+    <li>Smith SA, Tobias AH, Jacob KA, Fine DM, Grumbles PL. Arterial thromboembolism in cats: acute crisis in 127 cases (1992-2001) and long-term management with low-dose aspirin in 24 cases. <i>J Vet Intern Med</i> 2003;17(1):73-83. PMID 12564730 — <b>[摘要]</b></li>
+    <li>Rossi G, Stachel A, Lynch AM, Olby NJ. Intervertebral disc disease and aortic thromboembolism are the most common causes of acute paralysis in dogs and cats presenting to an emergency clinic. <i>Vet Rec</i> 2020;187(10):e81. DOI <a href="https://doi.org/10.1136/vr.105844">10.1136/vr.105844</a> — <b>[摘要]</b></li>
+    <li>Borgeat K, et al. Arterial thromboembolism in cats: a retrospective study of 250 cases. <i>J Vet Intern Med</i> 2014;28(1):102-108. DOI <a href="https://doi.org/10.1111/jvim.12249">10.1111/jvim.12249</a> — <b>[摘要]</b></li>
+    <li>Guillaumin J. Feline Aortic Thromboembolism: Recent advances and future prospects. <i>JFMS</i> 2024;26(6). DOI <a href="https://doi.org/10.1177/1098612X241257878">10.1177/1098612X241257878</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11274361/">PMC11274361</a> — <b>[全文]</b></li>
+    <li>Cambournac M, Damoiseau C, Guillaumin J, Goy-Thollot I, Pouzot-Nevoret C. Multicentre aortic thromboembolism thrombolysis evaluation in a retrospective study of 183 cats: the MATTERS study. <i>Front Vet Sci</i> 2026;13:1845133. DOI <a href="https://doi.org/10.3389/fvets.2026.1845133">10.3389/fvets.2026.1845133</a> — <b>[全文]</b></li>
+    <li>Lo ST, Walker AL, Georges CJ, Li RH, Stern JA. Dual therapy with clopidogrel and rivaroxaban in cats with thromboembolic disease. <i>JFMS</i> 2022;24(4):277-283. DOI <a href="https://doi.org/10.1177/1098612X211013736">10.1177/1098612X211013736</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8830184/">PMC8830184</a> — <b>[全文]</b></li>
+    <li>Jalilian M, et al. Hypertrophic cardiomyopathy in cats: clinical prevalence, risk factors, and outcomes of arterial thromboembolism in a referral population in Tehran, Iran (2020-2024). <i>BMC Vet Res</i> 2026;22:266. DOI <a href="https://doi.org/10.1186/s12917-026-05428-5">10.1186/s12917-026-05428-5</a> — <b>[摘要]</b></li>
+    <li>Dickson D, et al. Predictors of cardiac versus non-cardiac causes of respiratory distress in cats. <i>J Small Anim Pract</i> 2018;59(2):75-84. DOI <a href="https://doi.org/10.1111/jsap.12732">10.1111/jsap.12732</a> — <b>[摘要]</b></li>
+    <li>Chalifoux NV, et al. Clinical features and risk factors for airway disease versus cardiac disease in cats with respiratory distress. <i>JFMS</i> 2021;23(12):1098-1108. DOI <a href="https://doi.org/10.1177/1098612X21996145">10.1177/1098612X21996145</a> — <b>[摘要]</b></li>
+    <li>Griffin FC, et al. Heart rate assessment in healthy cats in a veterinary teaching hospital. <i>JFMS</i> 2021;23(4):364-369. DOI <a href="https://doi.org/10.1177/1098612X20959046">10.1177/1098612X20959046</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10812216/">PMC10812216</a> — <b>[全文]</b></li>
+  </ol>
+
+  <h3>B. 消化道、肾与泌尿、外伤与中毒</h3>
+  <ol class="refs">
+    <li>Gollnick HR, Schmiedt CW, et al. Gastrointestinal foreign bodies in cats. <i>JFMS</i> 2023;25(6). DOI <a href="https://doi.org/10.1177/1098612X231178140">10.1177/1098612X231178140</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10811983/">PMC10811983</a> — <b>[全文]</b></li>
+    <li>De Cock HEV, et al. Prevalence and histopathology of chronic pancreatitis in cats. <i>Vet Pathol</i> 2007;44(1):39-49. DOI <a href="https://doi.org/10.1354/vp.44-1-39">10.1354/vp.44-1-39</a> — <b>[二手]</b>（<b>尸检</b>患病率）</li>
+    <li>Freeman LM, Lachaud MP, Matthews S, Rhodes L, Zollers B. Evaluation of Weight Loss Over Time in Cats with Chronic Kidney Disease. <i>J Vet Intern Med</i> 2016;30(5):1661-1666. DOI <a href="https://doi.org/10.1111/jvim.14561">10.1111/jvim.14561</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5032880/">PMC5032880</a> — <b>[全文]</b></li>
+    <li>George ZM, Quimby JM, Jones S, Brusach KB, Rudinsky AJ. Quantification of defecation frequency in cats with and without chronic kidney disease. <i>JFMS</i> 2025;27(7). DOI <a href="https://doi.org/10.1177/1098612X251348011">10.1177/1098612X251348011</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12276494/">PMC12276494</a> — <b>[全文]</b></li>
+    <li>Mortier F, et al. Home sampling of urine in cats. <i>J Vet Intern Med</i> 2023;37(4):1401-1408. DOI <a href="https://doi.org/10.1111/jvim.16800">10.1111/jvim.16800</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10365041/">PMC10365041</a> — <b>[全文]</b></li>
+    <li>Luna Alves APPA, et al. Effect of litter substrate on urine specific gravity measurement in cats. <i>JFMS</i> 2025;27(7). DOI <a href="https://doi.org/10.1177/1098612X251314710">10.1177/1098612X251314710</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12228917/">PMC12228917</a> — <b>[全文]</b></li>
+    <li>Pontiero A, Bulgarelli C, Ciuffoli E, et al. Triage body temperature predicts outcome in cats at emergency department admission: a retrospective study of 1440 cases. <i>JFMS</i> 2025;27(1). DOI <a href="https://doi.org/10.1177/1098612X241291295">10.1177/1098612X241291295</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11733880/">PMC11733880</a> — <b>[全文]</b></li>
+    <li>Barton JC, Didier MD, Silvestrini P, German AJ, Ferriani R. A noninvasive method of temperature measurement using a noncontact handheld infrared thermometer fails to correlate with rectal temperature in dogs and cats. <i>JAVMA</i> 2022;260(7):752-757. DOI <a href="https://doi.org/10.2460/javma.21.09.0403">10.2460/javma.21.09.0403</a> — <b>[摘要]</b></li>
+    <li>Levy JK, et al. Reference interval for rectal temperature in healthy confined adult cats. <i>JFMS</i> 2015;17(11):950-952. · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10816251/">PMC10816251</a> — <b>[全文]</b></li>
+    <li>Whitney WO, Mehlhaff CJ. High-rise syndrome in cats. <i>JAVMA</i> 1987;191(11):1399-1403. — <b>[摘要]</b></li>
+    <li>Candela Andrade M, et al. High-rise syndrome in cats: 1125 cases. <i>JFMS</i> 2025. DOI <a href="https://doi.org/10.1177/1098612X251334096">10.1177/1098612X251334096</a> — <b>[摘要]</b></li>
+    <li>Haghi M, et al. Fall injuries in cats: 120 cases. <i>Vet Med Sci</i> 2026;e71002 — <b>[摘要]</b></li>
+    <li>Peacock RE, et al. Permethrin toxicity in cats: a retrospective study of 34 cases. <i>J Vet Emerg Crit Care</i> 2015;25(5):597-605. — <b>[摘要]</b></li>
+    <li>Groesser NH, Klootwijk L, Ruys LJ. Evaluation of a 5-Point Triage System for Veterinary Emergency Patients in 164 Cats and Dogs: VetTriS. <i>J Vet Emerg Crit Care</i> 2025;35(6):637-646. DOI <a href="https://doi.org/10.1111/vec.70068">10.1111/vec.70068</a> — <b>[摘要]</b></li>
+    <li>Williams K, Jones A, Thornton S. Owner recognition of emergencies in small animal practice. <i>Vet Rec</i> 2017. DOI <a href="https://doi.org/10.1136/vr.104050">10.1136/vr.104050</a> — <b>[摘要 + 新闻稿]</b></li>
+    <li>Wizenty KD, Doherr MG. Triage categories of out-of-hours emergency presentations in dogs and cats. <i>Vet Sci</i> 2026;13(9):899. DOI <a href="https://doi.org/10.3390/vetsci13090899">10.3390/vetsci13090899</a> — <b>[摘要]</b></li>
+    <li>Kogan LR, et al. Cat owner perceptions of pain and willingness to seek veterinary care. <i>JFMS</i> 2024;26(10). DOI <a href="https://doi.org/10.1177/1098612X241272885">10.1177/1098612X241272885</a> — <b>[摘要]</b></li>
+    <li>Rojsiripornchai T, et al. Owner assessment of acute pain in cats. <i>Animals</i> 2025;15(19):2801 — <b>[摘要]</b></li>
+    <li>Steagall PV, et al. 2022 ISFM Consensus Guidelines on the Management of Acute Pain in Cats. <i>JFMS</i> 2022;24(1):4-30. DOI <a href="https://doi.org/10.1177/1098612X211066268">10.1177/1098612X211066268</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10845386/">PMC10845386</a> — <b>[全文]</b></li>
+  </ol>
+
+  <h3>C. 传感、算法与设备验证</h3>
+  <ol class="refs">
+    <li>Smit M, et al. The Use of Triaxial Accelerometers and Machine Learning Algorithms for Behavioural Identification in Domestic Cats. <i>Sensors</i> 2023;23(16):7165. DOI <a href="https://doi.org/10.3390/s23167165">10.3390/s23167165</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10458840/">PMC10458840</a> — <b>[全文]</b></li>
+    <li>Montout AX, et al. Accelerometer-derived classifiers for early detection of degenerative joint disease in cats. <i>Vet J</i> 2025;311:106352. DOI <a href="https://doi.org/10.1016/j.tvjl.2025.106352">10.1016/j.tvjl.2025.106352</a> — <b>[摘要]</b></li>
+    <li>Langenfeld-McCoy N, et al. Enhancing Detection of Feline Chronic Kidney Disease Through Smart Litter Box Monitoring. <i>Animals</i> 2026;16(9):1319. DOI <a href="https://doi.org/10.3390/ani16091319">10.3390/ani16091319</a> — <b>[摘要]</b>（<b>厂商资助</b>）</li>
+    <li>Melek Ş, Orhun ÖT, Şenocak MG, Arslan T. Evaluation of a Wearable Device for Cardiorespiratory Monitoring in Healthy Anaesthetised Cats. <i>Vet Med Sci</i> 2026;12(5):e71134. DOI <a href="https://doi.org/10.1002/vms3.71134">10.1002/vms3.71134</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC13426328/">PMC13426328</a> — <b>[全文]</b></li>
+    <li>Yamazaki A, et al. Utility of a novel activity monitor assessing physical activities and sleep quality in cats. <i>PLoS One</i> 2020;15(7):e0236795. DOI <a href="https://doi.org/10.1371/journal.pone.0236795">10.1371/journal.pone.0236795</a> — <b>[摘要]</b>（设备方参与，持 pending 专利）</li>
+    <li>Martvel F, et al. Automated pain recognition in cats. <i>Sci Rep</i> 2024;14:28006. DOI <a href="https://doi.org/10.1038/s41598-024-78406-2">10.1038/s41598-024-78406-2</a> — <b>[摘要]</b></li>
+    <li>Steagall PV, et al. Feline Grimace Scale performance in brachycephalic cats. <i>JAVMA</i> 2026. DOI <a href="https://doi.org/10.2460/javma.26.04.0301">10.2460/javma.26.04.0301</a> — <b>[摘要]</b></li>
+    <li>Bezerra B, et al. Vision-based feline posture classification. <i>Front Vet Sci</i> 2026;13:1881772. DOI <a href="https://doi.org/10.3389/fvets.2026.1881772">10.3389/fvets.2026.1881772</a> — <b>[摘要]</b></li>
+    <li>Ngai J, et al. Large language models and feline pain scoring. <i>Sci Rep</i> 2025;15:43461. DOI <a href="https://doi.org/10.1038/s41598-025-27404-z">10.1038/s41598-025-27404-z</a> — <b>[摘要]</b></li>
+    <li>Evangelista MC, et al. Facial expressions of pain in cats: the development and validation of a Feline Grimace Scale. <i>Sci Rep</i> 2019;9:19128. DOI <a href="https://doi.org/10.1038/s41598-019-55693-8">10.1038/s41598-019-55693-8</a> — <b>[摘要]</b></li>
+    <li>Bertin F, et al. ACVIM AI Task Force statement. <i>J Vet Intern Med</i> 2026;40(1):aalaf045. DOI <a href="https://doi.org/10.1093/jvimsj/aalaf045">10.1093/jvimsj/aalaf045</a> — <b>[摘要]</b></li>
+    <li>Zhao Y, et al. Wearable technology in veterinary medicine: a review. <i>Animals</i> 2025;15(7):1033. DOI <a href="https://doi.org/10.3390/ani15071033">10.3390/ani15071033</a> — <b>[摘要]</b></li>
+  </ol>
+
+  <h3>D. 指南、权威参考与转诊资源</h3>
+  <ol class="refs">
+    <li>MSD Veterinary Manual — <a href="https://www.msdvetmanual.com/cat-owners/digestive-disorders-of-cats/vomiting-in-cats">Vomiting in Cats</a> — <b>[全文]</b></li>
+    <li>MSD Veterinary Manual — <a href="https://www.msdvetmanual.com/digestive-system/the-exocrine-pancreas/pancreatitis-in-dogs-and-cats">Pancreatitis in Dogs and Cats</a> — <b>[全文]</b></li>
+    <li>Merck Veterinary Manual — <a href="https://www.merckvetmanual.com/urinary-system/urolithiasis-in-small-animals/urethral-obstruction-in-small-animals">Urethral Obstruction in Small Animals</a> — <b>[全文]</b></li>
+    <li>Merck Veterinary Manual — <a href="https://www.merckvetmanual.com/urinary-system/noninfectious-diseases-of-the-urinary-system-in-small-animals/obstructive-uropathy-in-dogs-and-cats">Obstructive Uropathy in Dogs and Cats</a> — <b>[全文]</b></li>
+    <li>Merck Veterinary Manual — <a href="https://www.merckvetmanual.com/digestive-system/infectious-diseases-of-the-gastrointestinal-tract-in-small-animals/feline-panleukopenia">Feline Panleukopenia</a> — <b>[全文]</b></li>
+    <li>MSD Veterinary Manual — <a href="https://www.msdvetmanual.com/circulatory-system/various-cardiovascular-diseases-in-dogs-and-cats/arterial-thromboembolism-in-dogs-and-cats">Arterial Thromboembolism in Dogs and Cats</a> — <b>[全文]</b></li>
+    <li>MSD Veterinary Manual — <a href="https://www.msdvetmanual.com/special-pet-topics/emergencies/evaluation-and-initial-treatment-of-dog-and-cat-emergencies">Evaluation and Initial Treatment of Dog and Cat Emergencies</a> — <b>[全文]</b></li>
+    <li>International Cat Care — <a href="https://icatcare.org/articles/urethral-obstruction-in-cats">Urethral obstruction in cats</a> · <a href="https://icatcare.org/articles/diarrhoea-in-cats">Diarrhoea</a> · <a href="https://icatcare.org/articles/inappetence-in-cats">Inappetence</a> · <a href="https://icatcare.org/articles/chronic-kidney-disease-ckd-in-cats">CKD</a> · <a href="https://icatcare.org/articles/cats-and-poisons/">Cats and poisons</a> — <b>[全文]</b></li>
+    <li>2021 AAHA/AVMA Telehealth Guidelines for Small-Animal Practice（结论与 Remote Monitoring 章节）— <b>[原文页面本次复核被重定向，未能二次核实]</b></li>
+    <li>ASPCA Animal Poison Control — <a href="https://www.aspca.org/pet-care/aspca-poison-control">(888) 426-4435</a> — <b>[全文]</b></li>
+    <li>Pet Poison Helpline — <a href="https://www.petpoisonhelpline.com/">(855) 764-7661</a> — <b>[全文]</b></li>
+  </ol>
+
+  <h3>E. 产品与厂商资料（仅作「它宣称了什么」的记录）</h3>
+  <ol class="refs">
+    <li>PetPace — <a href="https://petpace.com/cats/">petpace.com/cats</a> · <a href="https://petpace.com/specs/">/specs</a> · <a href="https://petpace.com/scientific-publications/">/scientific-publications</a></li>
+    <li>Dinbeat — <a href="https://dinbeat.com/en/">dinbeat.com</a></li>
+    <li>Tractive — <a href="https://tractive.com/en/pd/gps-tracker-cat">GPS Tracker Cat</a> · <a href="https://tractive.com/en/fp/health-monitoring-for-dogs-and-cats">Health Monitoring</a></li>
+    <li>Purina Petivity — <a href="https://www.petivity.com/products/smart-litter-box-monitor">Smart Litter Box Monitor</a> · <a href="https://getodie.com/petivity/">Odie Wellness Plan</a></li>
+    <li>Whisker — <a href="https://www.whisker.com/litter-robot-4">Litter-Robot 4</a> · <a href="https://www.whisker.com/vet-approved">Vet Approved（自家营销页）</a></li>
+    <li>PETKIT — <a href="https://petkit.fr/petkitApp">PETKIT App</a>（含「预防泌尿系统疾病」表述）</li>
+    <li>Sure Petcare — <a href="https://www.surepetcare.com/en-gb/felaqua-connect">Felaqua Connect</a> · <a href="https://www.surepetcare.com/en-gb/pet-feeder/microchip-pet-feeder-connect">Microchip Pet Feeder Connect</a></li>
+    <li>Furbo — <a href="https://furbo.com/us/products/furbo-360-cat-camera">360° Cat Camera</a></li>
+    <li>Petcube — <a href="https://petcube.com/">petcube.com</a></li>
+    <li>VetTriage — <a href="https://vettriage.com/">vettriage.com</a></li>
+    <li>FitBark — <a href="https://help.fitbark.com/en/articles/5252108">帮助中心（订阅说明）</a></li>
+    <li>Tably / Sylvester.ai — <b>未访问成功</b>（站点已跳转 / 抓取失败）</li>
+    <li>Invoxia Minitailz — <b>未访问成功</b>（404 / 403）</li>
+    <li>PrettyLitter — <b>未访问成功</b></li>
+  </ol>
+
+  <h3>F. 本报告的配套简报（原始检索记录）</h3>
+  <ol class="refs">
+    <li><a href="briefs/cat-acute-trauma-toxicosis-owner-recognition.md">外伤、中毒与主人识别能力：逐条带来源与等级的检索简报</a>（21 KB，含全部 URL 与「仅摘要 / 二手」标注）</li>
+  </ol>
+</section>
+
+<section id="s-appendix">
+  <h2><span class="num">附录</span>检索策略与判据</h2>
+
+  <h3>A.1 检索时间与渠道</h3>
+  <ul>
+    <li><b>检索日期</b>：2026-10-03（产品页面核对同日）。</li>
+    <li><b>文献渠道</b>：Europe PMC REST API（用于取摘要原文与核实 DOI）、PMC 开放全文、NCBI efetch（用于逐字核对指南原文）、PubMed 书目。</li>
+    <li><b>权威参考</b>：MSD / Merck Veterinary Manual、International Cat Care、AAHA、ACVIM、VIN。</li>
+    <li><b>产品渠道</b>：各品牌官网与商品页、应用说明页；经销商页仅作地名核对。</li>
+  </ul>
+
+  <h3>A.2 代表性检索式</h3>
+  <ul>
+    <li>心脏：<code>sleeping respiratory rate cats heart failure</code> · <code>ACVIM consensus cardiomyopathies cats</code> · <code>arterial thromboembolism cats retrospective</code> · <code>acute paralysis cats emergency diagnosis</code></li>
+    <li>消化与肾：<code>gastrointestinal foreign body cats outcome</code> · <code>feline pancreatitis prevalence</code> · <code>chronic kidney disease cats weight loss before diagnosis</code> · <code>ureteral obstruction cats</code></li>
+    <li>外伤与中毒：<code>high-rise syndrome cats</code> · <code>permethrin toxicity cats</code> · <code>ethylene glycol cats minimum lethal dose</code> · <code>triage body temperature cats outcome</code></li>
+    <li>传感与算法：<code>cat wearable validation accelerometer</code> · <code>machine learning cat disease detection</code> · <code>smart litter box chronic kidney disease</code> · <code>automated feline grimace scale</code></li>
+    <li>依从与分诊：<code>owner compliance home monitoring pets</code> · <code>veterinary teletriage accuracy</code> · <code>triage system validation cats dogs</code></li>
+    <li>产品（中文）：宠物智能项圈 猫 心率监测 异常提醒 · 智能猫砂盆 健康监测 疾病预警 · 猫 智能项圈 呼吸频率</li>
+  </ul>
+
+  <h3>A.3 纳入与排除标准</h3>
+  <div class="grid g2">
+    <div class="card">
+      <h4>纳入</h4>
+      <ul>
+        <li>研究对象含<b>家猫</b>的同行评审研究、共识声明与权威教材章节</li>
+        <li>直接给出「居家可观察信号 → 需就医」措辞的机构页面</li>
+        <li>给出了<b>可核实的性能数字</b>（n、AUC、敏感度/特异度、F1、κ）的研究</li>
+        <li>在售产品的<b>官方页面原文</b>（仅用于记录宣称）</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>排除 / 降级</h4>
+      <ul>
+        <li><b>犬研究</b>一律标注「犬」且不作为猫的依据；混合研究只取猫的分层数据</li>
+        <li>厂商新闻稿、媒体报道、用户证言 → 只作线索，<b>不作验证</b>（标 <span class="badge b-weak">weak</span>）</li>
+        <li>页面为 JS 骨架或抓取失败 → 标「未获取」，<b>不以推测补齐</b></li>
+        <li>无一手来源的数字 → <span class="badge b-gray">unverified</span>，<b>禁止展示</b></li>
+        <li>来源冲突 → <span class="badge b-dispute">disputed</span>，展示为区间 + 冲突说明</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>A.4 数值处理规则</h3>
+  <ol>
+    <li><b>不跨人群合并</b>：筛查人群、转诊人群、急诊人群的患病率分别标注，不得平均。</li>
+    <li><b>不跨测量条件合并</b>：呼吸频率、心率、体温一律带测量条件；诊室读数不作为基线。</li>
+    <li><b>区分「队列内频率」与「人群患病率」</b>：如呕吐 96% 是「异物手术猫中的症状频率」，不是「呕吐猫中异物的比例」。</li>
+    <li><b>区分「目标值」与「诊断截断值」</b>：如睡眠呼吸频率 &lt;30 次/分是共识目标值，无敏感度/特异度。</li>
+    <li><b>利益冲突随数字同行</b>：凡引用设备厂商参与的研究，必须同时披露资助与作者关系。</li>
+  </ol>
+</section>
+
+
+</main>
+
+<footer>
+  <p>
+    <b>报告 07 · 猫突发状况的居家监测与预警</b> — 归属：本项目作者（行为与健康传感证据线）。
+    检索日期 2026-10-03。本报告为团队内部归档与引用材料；引用时请保留作者署名。
+  </p>
+  <p>
+    本报告由 AI 辅助完成检索、交叉核实与撰写；全部数值与引语均标注来源，厂商材料与同行评审材料分列。
+    <b>内容不构成兽医诊断、治疗或分诊建议。</b>任何疑似急症，请立即联系执业兽医或急诊机构。
+  </p>
+</footer>
+
+</div>
+<script>
+(function(){
+  var bar=document.getElementById('progress');
+  function onScroll(){
+    var h=document.documentElement;
+    var max=h.scrollHeight-h.clientHeight;
+    bar.style.width=(max>0?(h.scrollTop/max*100):0)+'%';
+  }
+  document.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+
+  var links=[].slice.call(document.querySelectorAll('nav.toc a'));
+  var targets=links.map(function(a){return document.querySelector(a.getAttribute('href'));}).filter(Boolean);
+  if(!('IntersectionObserver' in window)||!targets.length) return;
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(!e.isIntersecting) return;
+      links.forEach(function(l){l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id);});
+    });
+  },{rootMargin:'-10% 0px -75% 0px'});
+  targets.forEach(function(t){io.observe(t);});
+})();
+</script>
+</body>
+</html>

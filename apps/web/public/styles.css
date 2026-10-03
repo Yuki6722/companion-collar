@@ -238,6 +238,27 @@ body {
   border-radius: 6px;
 }
 
+/* ---- 首屏提示卡：说明这页最值得看的东西，避免演示时找不到重点 ---- */
+
+.intro-card {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #fffdf8 0%, #fff8ec 100%);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.intro-card .panel-title {
+  margin-top: 0;
+}
+
+.intro-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
 /* ---- 猫的行为面板：分段小标题、行为状态行、突发演示按钮 ---- */
 
 .panel-subtitle {
