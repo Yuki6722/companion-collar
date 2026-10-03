@@ -437,6 +437,18 @@ test('突发种类与定义一一对应', () => {
   assert.equal(INCIDENT_KINDS.length, Object.keys(INCIDENT_DEFS).length);
 });
 
+test('突发演示时长是为「人眼可看」定的真实秒数（不是倍率下的秒数）', () => {
+  // 这条断言守的是一个**渲染契约**：apps/web 的行为运行时对突发段**不乘演示倍率**
+  // （见 cat-behavior.ts 的 update）。契约成立的前提是 demoDurationS 本身就是
+  // 「给人看的秒数」。若有人把某个突发的演示时长改到 2 秒以下，点下去就等于没反应；
+  // 改到几分钟以上，演示又会卡住不动。这里把可用的区间钉住。
+  for (const kind of INCIDENT_KINDS) {
+    const d = INCIDENT_DEFS[kind].demoDurationS;
+    assert.ok(d >= 10, `突发「${INCIDENT_DEFS[kind].label}」演示仅 ${d}s，太短会看不到`);
+    assert.ok(d <= 120, `突发「${INCIDENT_DEFS[kind].label}」演示 ${d}s 过长，会像卡住`);
+  }
+});
+
 test('锚点 id 清单与锚点表一致（跨包契约）', () => {
   // 单一事实来源是 CAT_ANCHOR_IDS；simulator 与 apps/web 各自按它建表。
   // 这条断言保证「契约里的 id」不会多于或少于实际可用的锚点。

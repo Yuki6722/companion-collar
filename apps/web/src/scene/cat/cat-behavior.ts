@@ -136,7 +136,15 @@ export class CatBehaviorRuntime {
     const step = this.paused ? 0 : Math.min(dt, 0.1) + Math.max(0, elapsed - Math.min(dt, 0.1));
 
     if (step > 0) {
-      this.t = Math.min(this.timeline.durationS, this.t + step * this.timeScale);
+      // ⚠️ 突发段**不乘演示倍率**。
+      //
+      // 为什么：`demoDurationS` 已经是「给人看的秒数」（freezing 的 10 分钟真实时长
+      // 本来就被压缩成 60 秒）。若再乘一次 20× 倍率，一次 15 秒的抽搐只渲染 0.75 秒，
+      // 用户点下去几乎看不到东西——这正是「突发演示没反应」这类反馈的来源。
+      // 因此突发段按真实时间推进，其余行为仍按倍率推进节律。
+      const current = activityAt(this.timeline, this.t);
+      const realTime = current.incidentKind !== undefined;
+      this.t = Math.min(this.timeline.durationS, this.t + step * (realTime ? 1 : this.timeScale));
       if (this.t >= this.timeline.durationS) this.t = this.timeline.durationS;
     }
 
