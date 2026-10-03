@@ -10,13 +10,24 @@
 #
 # 分支纪律（AGENTS.md §10 / 计划 §11）：PR 只跑门禁与构建，不发布；
 # 只有 main 上的推送才触发 deploy。
+#
+# ⚠️ 当前状态：自动触发已关闭，仅保留 workflow_dispatch（手动）。
+# 原因：GitHub Pages 尚未启用（仓库协作者为 write 权限，调 Pages API 实测返回 404，
+# 需仓库所有者操作），因此每次推送到 main 都会在 deploy 阶段以
+# 「Failed to create deployment (status: 404)」变红，污染 Actions 历史。
+# 恢复自动触发的步骤（Pages 启用后）：
+#   1) 所有者打开 Settings → Pages，Source 选 "GitHub Actions"
+#   2) 把下面的 on: 恢复为 push: branches: [main] + pull_request + workflow_dispatch
+#   3) 手动 Run workflow 一次，确认 deploy 变绿
+# 在 Pages 启用前，请用 `pnpm verify` 在本地代替 CI 门禁。
+#   注意：本仓库的 test 脚本经测试运行器派生子进程，在 DSH 沙箱内会报 EPERM；
+#   沙箱内的等价做法见 AGENTS.md §6（逐文件直跑）。
 
 name: pages
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  # 自动触发已关闭：仅在 Actions 页面手动 Run workflow 时执行。
+  # 恢复 push / pull_request 触发见文件头注释中的步骤。
   workflow_dispatch:
 
 # 最小权限：默认只读，仅在 deploy job 内单独提权
