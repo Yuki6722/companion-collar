@@ -15,3 +15,7 @@ export * from './home.ts';
 export * from './claims.ts';
 // 行为层：词汇、证据参数登记表、节律、时间线引擎（含猫的锚点能力契约）
 export * from './behavior/index.ts';
+// 生理读数层：项圈三通道（心率/呼吸/体表温）的读数有效性、分层基线、同条件漂移、睡眠呼吸频率
+export * from './vitals/index.ts';
+// 生理状态层：状态 → 心率/呼吸/体动的注入规则与项圈可观测特征（抽搐 / 呕吐）
+export * from './physiology/index.ts';

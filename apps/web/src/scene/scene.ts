@@ -14,6 +14,7 @@ import { buildRoom } from './build-room.ts';
 import { ENV_MANIFEST, MODEL_MANIFEST, loadAssets } from './assets.ts';
 import type { AssetReport } from './assets.ts';
 import { buildCat } from './cat/cat-model.ts';
+import type { CatRig } from './cat/cat-model.ts';
 import { CatController } from './cat/cat-controller.ts';
 import { CatBehaviorRuntime } from './cat/cat-behavior.ts';
 import type { BehaviorStatus } from './cat/cat-behavior.ts';
@@ -133,6 +134,11 @@ export class HomeScene {
   private onVisibilityBound: () => void;
   private onContextLostBound: (e: Event) => void;
   private labelsVisible = true;
+  /** 项圈硬件与触须无干涉区的显示状态（第三阶段的形态可视化） */
+  private collarRig: CatRig | null = null;
+  /** 项圈默认可见：它是产品形态本身，不该藏在参数后面（`?collar=off` 可关） */
+  private collarVisible = true;
+  private whiskerZoneVisible = false;
 
   constructor(opts: SceneOptions) {
     this.canvasHost = opts.canvasHost;
@@ -229,6 +235,11 @@ export class HomeScene {
 
     const catRig = buildCat(mats, this.settings.furShells);
     root.add(catRig.root);
+    this.collarRig = catRig;
+    // 项圈默认隐藏：它承载的是「形态方案」这一条信息，不是场景的默认外观。
+    // `?collar=on` 或 HUD 开关把它打开；`?collar=zone` 连无干涉区一起打开。
+    catRig.collar.visible = this.collarVisible;
+    catRig.whiskerZone.visible = this.whiskerZoneVisible;
     this.cat = new CatController(catRig, { reducedMotion: opts.reducedMotion });
     this.behaviorOnStatus = opts.onBehaviorStatus ?? null;
 
@@ -403,6 +414,30 @@ export class HomeScene {
     return this.behavior?.status().incident ?? null;
   }
 
+  /** 当前演示时刻（会话内秒）。手机预览按它去查生理读数，保证与画面同一时刻。 */
+  simTimeS(): number {
+    return this.behavior?.getTimeS() ?? 0;
+  }
+
+  /**
+   * 换一条时间线（由调用方提供），并从 `startAtS` 继续跑。
+   *
+   * 为什么需要它：突发演示曾经在场景内部**自己**重建时间线，于是出现两条时间线——
+   * 画面跑的那条，与仿真数据（生理读数、事件流）那条。手机预览要显示"此刻的读数"时，
+   * 这个问题会立刻暴露成"手机上的数和猫在做的事对不上"。
+   * 现在改为：由持有会话的一侧（`screens/home.ts`）重建**带注入突发的会话**，
+   * 再把它的时间线交给场景。全场景只有一条时间线。
+   */
+  applyTimeline(timeline: CatBehaviorTimeline, startAtS = 0): void {
+    if (!this.cat) return;
+    this.behaviorTimeline = timeline;
+    this.behavior = new CatBehaviorRuntime(timeline, this.cat, {
+      startAtS: Math.max(0, startAtS),
+      // ⚠️ 复用同一个回调字段：这是「状态回应只允许存在一处」的纪律（见 triggerIncident 的注释）。
+      onStatus: this.onBehaviorStatus,
+    });
+  }
+
   setReducedMotion(on: boolean): void {
     this.cat?.setReducedMotion(on);
   }
@@ -440,6 +475,41 @@ export class HomeScene {
   /** 自检用：当前生效的突发动作幅度。用来区分「标签在报」与「身体真的在动」。 */
   catIncidentMotion(): Record<string, number> | null {
     return this.cat?.incidentMotionSnapshot() ?? null;
+  }
+
+  /**
+   * 显示/隐藏项圈硬件（带体 + 电子仓 + ECG 电极 + 体表热敏电阻）。
+   *
+   * 为什么把硬件做进 3D 场景：三个通道的**位置**就是它们的能力边界。
+   * 「电极在颈侧、热敏电阻在颈腹侧」这件事，看一眼比读一段文字更有效。
+   */
+  setCollarVisible(on: boolean): void {
+    this.collarVisible = on;
+    if (this.collarRig) this.collarRig.collar.visible = on;
+  }
+
+  isCollarVisible(): boolean {
+    return this.collarVisible;
+  }
+
+  /** 显示/隐藏触须无干涉区（面部触须是独立感觉器官，硬件不得进入该体积）。 */
+  setWhiskerZoneVisible(on: boolean): void {
+    this.whiskerZoneVisible = on;
+    if (this.collarRig) this.collarRig.whiskerZone.visible = on;
+  }
+
+  isWhiskerZoneVisible(): boolean {
+    return this.whiskerZoneVisible;
+  }
+
+  /** 自检用：项圈与无干涉区的显示状态。 */
+  collarState(): { collar: boolean; whiskerZone: boolean; parts: number } {
+    const rig = this.collarRig;
+    return {
+      collar: rig?.collar.visible ?? false,
+      whiskerZone: rig?.whiskerZone.visible ?? false,
+      parts: rig?.collar.children.length ?? 0,
+    };
   }
 
   /**

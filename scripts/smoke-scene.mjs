@@ -160,7 +160,7 @@ const withIncident = records.find((r) => r.catIncident);
 if (withIncident) {
   check(
     '注入的突发出现在快照里',
-    withIncident.catIncident === 'labored-breathing',
+    withIncident.catIncident === 'seizure',
     `catIncident=${withIncident.catIncident}`,
   );
 } else {
@@ -199,15 +199,95 @@ if (withIncident) {
     (withIncident.catMotion?.tremorAmp ?? 0) > 0,
     `catMotion=${JSON.stringify(withIncident.catMotion)}`,
   );
-  // ★ 反过来也要断言：**触发突发不是靠重载页面，而是靠运行中重建时间线**。
+  // ★ 反过来也要断言：**触发突发不是靠重载页面，而是靠运行中换一条时间线**。
   // 曾经这里漏接头顶标签的回调，表现为「点了抽搐：身体在抽、标签显示休息」。
-  // 那条路径（triggerIncident）与初始构造是两条代码路径，只测初始构造抓不到，
+  // 那条路径（触发突发后重建运行时）与初始构造是两条代码路径，只测初始构造抓不到，
   // 因此必须断言「突发期间标签也在报突发」。
   check(
-    '突发期间头顶标签同步报出突发（triggerIncident 路径）',
+    '突发期间头顶标签同步报出突发（运行中换时间线的路径）',
     (withIncident.catLabel ?? '').includes('抽搐'),
     `catLabel=${withIncident.catLabel}`,
   );
+}
+
+// ---------------------------------------------------------------- App 预览（右栏 iPhone 机模）
+
+// 第四阶段：右栏改成 App 预览。断言三件事——它挂上了、它能收起展开、它显示的是**有效性**而不只是数字。
+const appSnaps = records.filter((r) => r.app);
+if (appSnaps.length > 0) {
+  check('App 预览已挂载', appSnaps.length > 0, `${appSnaps.length} 条快照带 app 字段`);
+  check(
+    'App 预览默认展开',
+    appSnaps.some((r) => r.app.collapsed === false),
+    '所有快照都处于收起状态',
+  );
+  const tabs = new Set(appSnaps.map((r) => r.app.tab));
+  check('App 页签可以切换', tabs.size >= 3, `只见到 ${[...tabs].join('、')}`);
+  check(
+    'App 的读数是数值而不是占位',
+    appSnaps.some((r) => typeof r.app.readings.hr?.value === 'number'),
+    '没有任何快照带回数值读数',
+  );
+  // ★ 关键断言：抽搐期间体动指数 0.95，呼吸通道必然不可用。
+  // 手机必须显示"不可用"，而不是把一个坏值当读数——这是第三阶段的读数有效性在界面上的落点。
+  const during = appSnaps.find((r) => r.catIncident);
+  check(
+    '突发期间 App 把不可用的读数标出来（不是照抄数字）',
+    during ? during.app.readings.rr?.validity !== 'valid' : false,
+    `rr validity=${during?.app.readings.rr?.validity}`,
+  );
+  check(
+    '事件流页签渲染出了事件行',
+    appSnaps.some((r) => r.app.tab === 'events' && r.app.eventRows > 0),
+    `events 快照的 eventRows=${appSnaps.find((r) => r.app.tab === 'events')?.app.eventRows}`,
+  );
+
+  // ★ 第四阶段：读数变化提示。三条断言分别对应「判出来了」「画红了」「弹出来了」——
+  // 缺任何一条，用户看到的都是"点了抽搐但 App 没反应"。
+  const alerting = appSnaps.find((r) => r.app.alert?.notify);
+  check(
+    '注入突发后 App 判定为需要提醒',
+    Boolean(alerting),
+    '没有任何快照带 app.alert.notify=true',
+  );
+  check(
+    '提醒时至少一路数字被标红',
+    Boolean(alerting && (alerting.app.alert.red ?? []).length > 0),
+    `red=${JSON.stringify(alerting?.app.alert.red)}`,
+  );
+  check(
+    '提醒弹窗真的出现在机身里（不只是内部状态）',
+    appSnaps.some((r) => r.app.alert?.popup),
+    '没有任何快照带 app.alert.popup=true',
+  );
+  check(
+    '突发期间 App 识别出急性生理窗口',
+    appSnaps.some((r) => r.app.alert?.acute),
+    '没有任何快照带 app.alert.acute=true',
+  );
+} else {
+  console.log('  · 日志里没有 App 预览字段，跳过 App 断言（可能是旧版页面）');
+}
+
+// ---------------------------------------------------------------- 项圈形态可视化
+
+// 第三阶段新增：项圈硬件（带体 / 电子仓 / ECG 电极 ×2 / 体表热敏电阻）与触须无干涉区。
+// 断言它们的**存在与数量**，而不是外观——"项圈没挂上"或"无干涉区挂错了父节点"
+// 都无法靠"模型加载成功"发现。
+//
+// 第四阶段起项圈**默认可见**（它就是产品形态：猫脖子上那个带传感器的项圈），
+// 因此这里直接断言首屏快照里就有它，不再依赖 `?collar=on`。
+const withCollar = records.find((r) => r.collar?.collar === true);
+if (withCollar) {
+  check(
+    '项圈默认挂在猫脖子上，且部件齐全（带体 + 电子仓 + 双电极 + 热敏电阻）',
+    withCollar.collar.parts === 5,
+    `parts=${withCollar.collar.parts}`,
+  );
+  check('触须无干涉区可独立显示', withCollar.collar.whiskerZone === true);
+} else {
+  failures.push('首屏快照里没有项圈（它应该默认可见）');
+  console.error('  ✗ 首屏快照里没有项圈（它应该默认可见）');
 }
 
 if (failures.length > 0) {

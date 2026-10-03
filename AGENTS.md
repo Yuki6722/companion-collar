@@ -239,16 +239,18 @@ node scripts/smoke-scene.mjs                       # 读浏览器回传的自检
 AGENTS.md                  ← 本文件
 packages/core/             [C] 领域类型 · 稳健基线 · 漂移检测 · 居家资源清单规则 · 措辞政策
   src/behavior/               行为词汇 · 证据参数登记表 · 节律 · 时间线引擎
-packages/simulator/        [A] 仿真数据生成器 · DeviceAdapter · 行为时间线
+  src/vitals/                 项圈三通道：读数有效性 · 分层基线 · 同条件漂移 · 睡眠呼吸频率
+  src/physiology/             状态程序：抽搐/呕吐时的心率·呼吸·体动注入规则与项圈可观测特征
+packages/simulator/        [A] 仿真数据生成器 · DeviceAdapter · 行为时间线 · 生理读数仿真 · 曲线导出
 apps/web/                  [B] 静态站（tsc + 浏览器 import map，无打包器）
   public/assets/              CC0 3D 资产（模型 / 平铺贴图 / HDRI）+ CREDITS.md
   src/scene/                  3D 场景：layout（权威坐标）· build-* · cat/ · materials · textures
-    cat/                        猫模型 · 控制器 · **行为运行时 / 锚点映射 / 位移推进**
-  src/screens/                家居场景 / 工程自检
-docs/research/             六份研究报告（团队共同依据，含归属说明）
-docs/design/               产品定义 · 证据政策 · 验证方案 · 三日计划 · 03/04 家居场景各阶段
+    cat/                        猫模型（含**项圈硬件与触须无干涉区**）· 控制器 · 行为运行时 · 位移推进
+  src/screens/                家居场景（含右栏 **App 预览机模**）/ **生理读数** / **居家资源** / 工程自检
+docs/research/             七份研究报告（团队共同依据，含归属说明）
+docs/design/               产品定义 · 证据政策 · 验证方案 · 三日计划 · 03/04 家居场景各阶段 · 05 项圈生理读数 · 06 状态程序 · 07 布局与 App 预览
 docs/design/shots/         场景截图（人工核对的画面证据）
-docs/hardware/             项圈规格 · 传感器位置 · 真机路线
+docs/hardware/             项圈规格 · 传感器位置 · 失效源定义 · 真机验证路线
 scripts/                   构建 · three vendoring · 资产抓取 · 措辞门禁 · 场景自检 · 部署
 data/                      运行时数据（不入库）
 ```
@@ -286,18 +288,45 @@ data/                      运行时数据（不入库）
   **手动突发演示**。调研见 [`docs/research/05`](docs/research/05-cat-home-behavior-repertoire.md)
   与 [`06`](docs/research/06-cat-acute-observables.md)，
   设计与验收见 [`docs/design/04-home-scene-stage2.md`](docs/design/04-home-scene-stage2.md)
-- ✅ 门禁全绿：typecheck 3/3、测试 83/83、措辞门禁通过、构建 136 个文件
+- ✅ 门禁全绿（**第二阶段验收时的记录**）：typecheck 3/3、测试 83/83、措辞门禁通过、构建 136 个文件
+- ✅ **项圈生理读数（第三阶段）**：`@camp/core/src/vitals/`（读数有效性、分层基线、同条件漂移、
+  睡眠呼吸频率）、`simulator` 的三通道**读数/真值分离**仿真（运动伪迹、项圈移位、固件拒收、情境偏移）、
+  `apps/web` 的 `#/vitals` 屏与 3D 项圈硬件（含触须无干涉区）。
+  设计与验收见 [`docs/design/05-collar-vitals.md`](docs/design/05-collar-vitals.md)，
+  规格见 [`docs/hardware/01-collar-spec.md`](docs/hardware/01-collar-spec.md)
+- ✅ 措辞门禁通过；`core` 的 vitals 层单测 20 项、`simulator` 的 vitals 层单测 9 项全绿
+- ✅ **生理状态程序（抽搐 / 呕吐时心率与呼吸怎么变）**：`@camp/core/src/physiology/`
+  （多时相状态机、项圈可观测特征、曲线生成）、`simulator` 把状态机接进已有的读数链路
+  （替掉平铺的固定百分比表）、`pnpm sim:curves` 导出带真值的曲线 JSON、
+  `#/vitals` 屏新增状态程序一节。设计与证据表见
+  [`docs/design/06-physiology-state-program.md`](docs/design/06-physiology-state-program.md)。
+  单测：core 15 项 + simulator 10 项全绿
+- ✅ **场景页布局与 App 预览（iPhone 机模）**：右栏改为**可收起的 iPhone 机模**（实时 / 事件流 /
+  漂移 / 档案四个页签，实时页按演示时钟取会话读数并标出无效窗口）；居家资源清单移出主界面，
+  成为独立页面 `#/resources`；左栏精简为「操作 + 折叠的图层与画质」。
+  ★ 同时**关掉了 stage2 §10 的接缝 1**：场景不再自己生成时间线，改用会话里的 `behaviorTimeline`；
+  突发演示改为由 `screens/home.ts` 重建**带注入突发的会话**后交给场景，
+  于是画面、事件流、手机读数共用同一条时间轴。设计与验收见
+  [`docs/design/07-app-mockup-layout.md`](docs/design/07-app-mockup-layout.md)
+- ✅ **读数变化提示与项圈形态（第四轮反馈）**：左栏突发按钮收敛为**抽搐 / 呕吐**两个；
+  读数随手动突发产生相应变化（心率/呼吸走生理状态机；**体表温新增发作期响应**，慢通道且有上限、
+  由发作本身驱动而非由核心温推算）；`@camp/core/src/vitals/alerts.ts` 统一判据，
+  App 端**数字变红 + 弹窗「宠物状态异常」**（正文逐条列出可核查的证据 + 边界句 + 转诊路径）；
+  项圈默认可见。误报率实测 **0.5–0.7%/天窗口**，并由单测钉在 < 1%。
+  设计与验收见 [`docs/design/08-alerts-and-collar.md`](docs/design/08-alerts-and-collar.md)
 
 待办：
 - ⏳ `simulator`：注入**渐进漂移**（线性斜坡）+ `truth.injectedDrift` + 回归断言（Day 1，A）
 - ⏳ `core`：`eventRateByKind` / `summarizeAwayWindows` / 离家窗口异常检测（Day 2，C）
 - ⏳ `apps/web` 三屏：事件流 / 漂移报告 / 宠物档案（含离家时段）（Day 2，B）
-- ⏳ `apps/web`：把 `screens/home.ts` 接到 `generateSession` 的 `behaviorTimeline`
-  （目前场景用本地按同一套规则生成的时间线，见 stage2 §10 接缝 1）
-- ⏳ 项圈规格与形态方案（Day 1–3，A）
+  —— 这三个页签**已在 App 预览机模里出了第一版**，但独立大屏版本仍未做
 - ⏳ 5–10 人前后测：漂移识别率（Day 3，C）
 - ⏳ **GitHub Pages 启用**（建议提前跑通，避免 Day 3 卡壳）
 - ⏳ 家居场景第三阶段候选：用户自助编辑 `HOME_RESOURCES`；「现状 / 达标」双布局对比
+- ⏳ 生理读数后续：真机 `DeviceAdapter` 实现；体表温 vs 直肠温的裁决实验（见 hardware §4.2）
+- ⏳ 生理状态程序后续：给 `labored-breathing` / `withdrawal` / `freezing` 建立生理时相
+  （目前走兜底平表）；`INCIDENT_DEFS.seizure.demoDurationS` 是否从 15 s 提到 30 s
+  以容纳完整恢复段（见 design 06 §6.3）
 
 阶段 tag：`v0.0.1`（骨架）→ `v0.1.0`（Day1）→ `v0.2.0`（Day2）→ `v1.0.0`（Day3）
 

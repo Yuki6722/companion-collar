@@ -166,15 +166,66 @@ export interface HomeResourceSummary {
 }
 
 
+// ---------------------------------------------------------------- 生理读数
+
+/** 项圈的三个生理通道。刻意只有这三个：血压需要阻断动脉，项圈形态下物理不成立。 */
+export type VitalKey = 'hr' | 'rr' | 'temp';
+
+/**
+ * 一次读数的**有效性**。这不是精度分级，而是「这次到底有没有测到」。
+ *
+ * 为什么必须有它：项圈在猫跑动、翻身、蹭家具时照样会吐出一个数字，
+ * 而那个数字与生理量无关。把「坏值 + 原因」保留成一等数据，
+ * 界面才能把不可用的读数**划线展示**，而不是假装它不存在、也不是把它当读数用。
+ */
+export type ReadingValidity =
+  | 'valid'
+  | 'motion-artifact'
+  | 'poor-contact'
+  | 'rejected-out-of-range';
+
+/**
+ * 测量条件。
+ *
+ * 为什么它不是可选标签而是核心字段：同一只猫的心率与呼吸频率，
+ * 「睡眠 / 家中静息 / 活动 / 诊室」四个条件下的中位数可以相差一倍以上
+ * （诊室实测心率 176±35 → 195 → 226 bpm；呼吸频率诊室中位 64 vs 家中静息 27 vs 午睡 20）。
+ * 不按条件分层的基线对比，测出来的是**情境差异**，不是身体变化。
+ */
+export type MeasurementCondition = 'sleep' | 'resting' | 'active' | 'post-event' | 'clinic';
+
+/** 单通道的读数质量。`score` 是接触/体动/灌注的综合质量，0–1。 */
+export interface ReadingQuality {
+  validity: ReadingValidity;
+  score: number;
+  /** 聚合窗口（秒）：该读数是多长时间的聚合值 */
+  windowS: number;
+}
+
 // ---------------------------------------------------------------- 会话与采样
 
 export interface Sample {
   /** 会话内相对秒数 */
   t: number;
+  /** 心率**读数**（仅有效窗口写入；无效窗口请在 `readingQuality` 里说明原因） */
   hrBpm?: number;
   hrvRmssdMs?: number;
+  /** 呼吸频率**读数** */
   rrBpm?: number;
-  tempC?: number;
+  /**
+   * 体表温**读数**（°C）。
+   *
+   * ⚠️ 这是项圈真正能测的那一项：贴颈热敏电阻读的是被毛表面温度。
+   * 它与核心温**无相关**（Kendall τ ≈ −0.01），因此**不得**换算为核心温，
+   * 核心温真值只存在于 `truth.vitals[].tempCoreC`（仿真才有）。
+   */
+  tempSurfaceC?: number;
+  /** 各通道的有效性：无效时不要读对应的数值字段 */
+  readingQuality?: Partial<Record<VitalKey, ReadingQuality>>;
+  /** 该采样点在什么条件下取得。跨条件做基线对比会测出情境差异，不是身体变化。 */
+  measurementCondition?: MeasurementCondition;
+  /** 体动强度（0–1）。伪迹与拒答的驱动量，单独记便于断言。 */
+  motionIndex?: number;
   activity?: number;
   posture?: string;
   vocalization?: number;
@@ -188,6 +239,24 @@ export interface Sample {
    */
   activityId?: string;
   anchorId?: string;
+  /**
+   * 生理状态（`@camp/core` 的 `PhysiologyStateId`）。
+   *
+   * 只在**非 idle** 时写入：常驻状态是绝大多数采样点，逐点写一个 `'idle'` 会让
+   * 会话文件凭空多出一列无信息字段。缺省即 idle。
+   *
+   * ⚠️ 它是**仿真真值的一部分**（「此刻注入到哪一段」），不是对猫的判断；
+   * 面对用户的文案只能说「当前处于哪一段动作」，不得写成任何状况名称。
+   */
+  physiologyState?: string;
+  /**
+   * 该采样点的机械频带能量（0–1）：8–15 Hz 抖动、1.5–3 Hz 躯干起伏。
+   *
+   * 为什么单独给出来而不只给 `motionIndex`：单看体动强度无法区分
+   * 「高频抖动」与「低频用力」——而这两者恰恰是抽搐与呕吐在颈部最可分的特征。
+   */
+  tremorPower?: number;
+  retchPower?: number;
 }
 
 export type SimEventKind =
@@ -224,6 +293,22 @@ export interface Session {
 export interface SimTruth {
   /** 潜在舒适度曲线（0–1，1 为最舒适） */
   comfortCurve: Array<{ t: number; value: number }>;
+  /**
+   * 生理**真值**序列（拟生理值，只在仿真里存在）。
+   *
+   * 为什么与 `samples` 分开：`samples` 里放的是**设备读数**，
+   * 这里放的是「如果有一台完美仪器会读到什么」。两者之间的差距
+   * （运动伪迹、接触不良、情境偏移、体表温与核心温无关）正是本阶段要展示的东西。
+   * 若把真值混进读数通道，任何"换算算法"都会在评估中表现完美——那是自证预言。
+   */
+  vitals?: Array<{
+    t: number;
+    hrTrueBpm: number;
+    rrTrueBpm: number;
+    /** 核心温真值（°C）。项圈**测不到**这一项 */
+    tempCoreC: number;
+    condition: MeasurementCondition;
+  }>;
   /** 注入的居家资源缺口 */
   injectedGaps: PillarId[];
   /** 各环境通道到生理信号的注入滞后（秒） */

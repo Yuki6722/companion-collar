@@ -37,6 +37,13 @@ export interface BehaviorStatus {
   anchorLabel: string;
   /** 演示时钟（当日小时数，0–24） */
   hourOfDay: number;
+  /**
+   * 行为时间线内的当前时刻（会话内秒）。
+   *
+   * 为什么单独给一个"原始秒数"：手机预览要按同一时刻去查仿真会话的生理读数，
+   * 而 `hourOfDay` 是被 24 取模过的、无法反推会话内的绝对时刻。
+   */
+  timeS: number;
   /** 当前突发（若有） */
   incident: CatIncidentKind | null;
   /** 是否在移动中 */
@@ -135,6 +142,7 @@ export class CatBehaviorRuntime {
       anchorId: seg.anchorId,
       anchorLabel: CAT_ANCHOR_LABELS[seg.anchorId] ?? place?.label ?? seg.anchorId,
       hourOfDay: hourOfDay(this.t),
+      timeS: this.t,
       incident: incident?.kind ?? null,
       moving: this.plan !== null,
       segmentIndex: this.timeline.segments.indexOf(seg),

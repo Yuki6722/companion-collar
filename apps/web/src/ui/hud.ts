@@ -1,21 +1,22 @@
 /**
- * 场景 HUD：猫的行为（自主 / 手动 / 突发演示）、机位、图层、画质、资源清单、加载进度、降级提示。
+ * 场景 HUD：猫的行为（自主 / 手动 / 突发演示）、机位、图层与画质、加载进度、降级提示。
  *
  * 边界纪律（三条，都会出现在界面上）：
  *   1. 猫的两种状态是**手动演示档位**，不是系统推断——文案由 `BOUNDARY_NOTE` 提供，不得改写掉。
- *   2. 资源清单里 `unknown` 必须显示为「需你确认」，不能因为没数据就看起来合格。
- *   3. 突发演示是**你手动触发的动画**，不命名任何状况、不构成诊断——文案由
+ *   2. 突发演示是**你手动触发的动画**，不命名任何状况、不构成诊断——文案由
  *      `INCIDENT_BOUNDARY_NOTE` 与 `INCIDENT_REFERRAL_NOTE` 提供，不得改写掉。
+ *   3. 居家资源清单**不在这一层**：它是独立报告，见 `#/resources` 页（`ui/resource-list.ts`）。
+ *      放在场景右栏时，它会把「猫在做什么」和「App 预览」都挤掉。
  */
-import { INCIDENT_BOUNDARY_NOTE, INCIDENT_DEFS, INCIDENT_KINDS, INCIDENT_REFERRAL_NOTE, PILLAR_LABELS } from '@camp/core';
-import type { CatIncidentKind, HomeResourceSummary, PillarId } from '@camp/core';
+import { INCIDENT_BOUNDARY_NOTE, INCIDENT_DEFS, INCIDENT_REFERRAL_NOTE } from '@camp/core';
+import type { CatIncidentKind } from '@camp/core';
 import type { AssetReport } from '../scene/assets.ts';
 import type { BehaviorStatus } from '../scene/cat/cat-behavior.ts';
 import type { CatStateId } from '../scene/cat/cat-states.ts';
 import { CAT_STATES, BOUNDARY_NOTE } from '../scene/cat/cat-states.ts';
 import type { QualityChoice } from '../scene/quality.ts';
 import type { SceneStats } from '../scene/scene.ts';
-import { el, tierBadge } from './dom.ts';
+import { el } from './dom.ts';
 
 export interface PresetSpec {
   id: string;
@@ -27,6 +28,15 @@ export interface PresetSpec {
   /** true 表示坐标由调用方给定（不落到场景的预设表里） */
   custom?: boolean;
 }
+
+/**
+ * 左栏「突发演示」里可手动触发的动作。
+ *
+ * 只留两个：**抽搐**与**呕吐**——它们是"动作 + 多时相生理过程"都完整建模的两个，
+ * 也是 App 端读数变化与提示演示最需要的两个。
+ * 其余三种仍在 `core` 的 `INCIDENT_DEFS` 里，可用 `?incident=` 触发，只是不占左栏。
+ */
+export const MANUAL_INCIDENT_KINDS: readonly CatIncidentKind[] = ['seizure', 'vomit'];
 
 export interface HudCallbacks {
   onCatState: (id: CatStateId) => void;
@@ -42,6 +52,10 @@ export interface HudCallbacks {
   onManualCat: () => void;
   /** 触发一次突发演示 */
   onIncident: (kind: CatIncidentKind) => void;
+  /** 项圈硬件的显隐（第三阶段：形态方案可视化） */
+  onCollar: (on: boolean) => void;
+  /** 触须无干涉区的显隐 */
+  onWhiskerZone: (on: boolean) => void;
 }
 
 export class Hud {
@@ -55,7 +69,6 @@ export class Hud {
   private readonly hint: HTMLElement;
   private readonly statsLine: HTMLElement;
   private readonly issues: HTMLElement;
-  private readonly checklistBody: HTMLElement;
   private readonly fatal: HTMLElement;
   private readonly presetHost: HTMLElement;
   private readonly callbacks: HudCallbacks;
@@ -63,7 +76,16 @@ export class Hud {
   private readonly behaviorLine: HTMLElement;
   private readonly incidentLine: HTMLElement;
 
-  constructor(callbacks: HudCallbacks, initial: { labels?: boolean; highlights?: boolean; status?: boolean } = {}) {
+  constructor(
+    callbacks: HudCallbacks,
+    initial: {
+      labels?: boolean;
+      highlights?: boolean;
+      status?: boolean;
+      collar?: boolean;
+      whiskerZone?: boolean;
+    } = {},
+  ) {
     this.callbacks = callbacks;
 
     this.canvasHost = el('div', { class: 'scene-host' });
@@ -112,8 +134,13 @@ export class Hud {
     this.hint = el('p', { class: 'state-hint' });
 
     // ---- 突发演示
+    //
+    // 左栏只保留两个按钮：**抽搐**与**呕吐**。它们是两个"动作 + 生理过程"都完整建模的突发
+    // （见 `docs/design/06-physiology-state-program.md`），也是 App 端提示演示最需要的两个。
+    // 其余三种（呼吸急促 / 僵直不动 / 躲藏退避）仍在 `core` 的词汇表里，
+    // 可以用 `?incident=labored-breathing` 触发，只是不再占用左栏。
     const incidentRow = el('div', { class: 'state-row' });
-    for (const kind of INCIDENT_KINDS) {
+    for (const kind of MANUAL_INCIDENT_KINDS) {
       const def = INCIDENT_DEFS[kind];
       const button = el(
         'button',
@@ -156,8 +183,12 @@ export class Hud {
     ]);
 
     // ---- 图层与画质
-    const layersPanel = el('section', { class: 'panel panel-layers' }, [
-      el('h2', { class: 'panel-title', text: '图层与画质' }),
+    //
+    // 为什么折叠起来：这些是**看房间时的调节项**，不是主线信息。
+    // 原来五六个开关 + 统计行常驻左栏，把「猫在做什么」挤到了下面——
+    // 演示时最常被用到的只有前两个，其余收进 details，需要时再展开。
+    // 工程信息（三角面数、资产问题）也一并收进来，它们属于「排查」而不是「观看」。
+    const layersBody = el('div', { class: 'panel-body' }, [
       this.switchRow('显示资源标签', initial.labels ?? true, (on) => this.callbacks.onLabels(on)),
       this.switchRow('显示猫头顶的状态', initial.status ?? true, (on) =>
         this.callbacks.onStatusLabel(on),
@@ -165,39 +196,24 @@ export class Hud {
       this.switchRow('高亮猫的关键资源', initial.highlights ?? false, (on) =>
         this.callbacks.onHighlights(on),
       ),
+      // 项圈硬件默认**开**（它就是产品形态：猫脖子上那个带传感器的项圈）；
+      // 无干涉区默认关，它是约束标注、讲解时才需要。
+      this.switchRow('显示项圈与电极位置', initial.collar ?? true, (on) =>
+        this.callbacks.onCollar(on),
+      ),
+      this.switchRow('标注触须无干涉区', initial.whiskerZone ?? false, (on) =>
+        this.callbacks.onWhiskerZone(on),
+      ),
       this.qualityRow(),
       (this.statsLine = el('p', { class: 'stats-line', text: '统计：等待渲染…' })),
       (this.issues = el('p', { class: 'issue-line' })),
     ]);
+    const layersPanel = el('details', { class: 'panel panel-layers panel-fold' }, [
+      el('summary', { class: 'panel-title', text: '图层与画质' }),
+      layersBody,
+    ]) as HTMLDetailsElement;
 
-    // ---- 资源清单
-    this.checklistBody = el('div', { class: 'checklist-body' });
-    const checklist = el('aside', { class: 'checklist' }, [
-      el('header', { class: 'checklist-head' }, [
-        el('h2', { class: 'panel-title', text: '居家资源清单' }),
-        el('p', {
-          class: 'panel-foot',
-          text: '按 AAFP/ISFM 健康猫科环境五大支柱核对。清单与房间用同一份布局数据。',
-        }),
-      ]),
-      this.checklistBody,
-    ]);
-
-    // ---- 首屏提示：让「猫在自主行动」这件事一眼可见，而不是藏在面板里
-    const intro = el('div', { class: 'intro-card' }, [
-      el('h2', { class: 'panel-title', text: '这里有只会自己活动的猫' }),
-      el('p', {
-        class: 'panel-foot',
-        text: '猫按仿真数据自己走动、跳上跳下、抓挠、进食、躲藏。左侧「猫的行为」面板可切到手动演示档位，或触发一次突发动作演示。',
-      }),
-      el('ul', { class: 'intro-list' }, [
-        el('li', { text: '「猫特写」机位会实时跟随它当前所在位置' }),
-        el('li', { text: '想先看房间：点「全景」并关掉资源标签' }),
-        el('li', { text: '所有数据均为仿真，不构成任何诊断' }),
-      ]),
-    ]);
-
-    const panels = el('div', { class: 'hud-panels' }, [intro, catPanel, cameraPanel, layersPanel]);
+    const panels = el('div', { class: 'hud-panels' }, [catPanel, cameraPanel, layersPanel]);
 
     this.progressBar = el('div', { class: 'progress-bar' });
     this.progressText = el('p', { class: 'progress-text', text: '正在准备场景…' });
@@ -218,7 +234,6 @@ export class Hud {
     this.root = el('div', { class: 'scene-screen' }, [
       this.canvasHost,
       panels,
-      checklist,
       this.loading,
       this.fatal,
     ]);
@@ -309,51 +324,8 @@ export class Hud {
     this.statsLine.textContent = `统计：${stats.fps} fps · ${(stats.triangles / 1000).toFixed(0)}k 三角面 · ${stats.drawCalls} 次绘制 · ${stats.models} 个扫描模型`;
   }
 
-  setChecklist(summary: HomeResourceSummary): void {
-    this.checklistBody.replaceChildren();
-    const pillars = Object.keys(PILLAR_LABELS) as PillarId[];
-    const statusZh: Record<string, string> = { ok: '达标', gap: '缺口', unknown: '需你确认' };
-    for (const pillar of pillars) {
-      const checks = summary.checks.filter((c) => c.pillar === pillar);
-      if (checks.length === 0) continue;
-      const okCount = checks.filter((c) => c.status === 'ok').length;
-      const details = el('details', {
-        class: 'pillar',
-        attrs: { open: pillar === 'separated-resources' ? 'open' : 'false' },
-      });
-      details.append(
-        el('summary', { class: 'pillar-head' }, [
-          el('span', { class: 'pillar-label', text: PILLAR_LABELS[pillar] }),
-          el('span', {
-            class: 'pillar-count',
-            text: `${okCount}/${checks.filter((c) => c.status !== 'unknown').length} 项达标`,
-          }),
-        ]),
-      );
-      const list = el('ul', { class: 'check-list' });
-      for (const check of checks) {
-        const item = el('li', { class: `check check-${check.status}` });
-        item.append(
-          el('div', { class: 'check-line' }, [
-            el('span', { class: `check-status check-status-${check.status}`, text: statusZh[check.status] ?? check.status }),
-            el('span', { class: 'check-req', text: check.requirement }),
-            tierBadge(check.evidence),
-          ]),
-        );
-        item.append(el('p', { class: 'check-actual', text: check.actual }));
-        if (check.note) item.append(el('p', { class: 'check-note', text: check.note }));
-        list.append(item);
-      }
-      details.append(list);
-      this.checklistBody.append(details);
-    }
-    this.checklistBody.append(
-      el('p', {
-        class: 'panel-foot',
-        text: `房间内共记录 ${Object.values(summary.counts).reduce((n, v) => n + (v ?? 0), 0)} 个关键资源点（${summary.cats} 只猫）。清单只是提示，不构成兽医或行为学诊断。`,
-      }),
-    );
-  }
+  // 居家资源清单已移出场景页：它现在有自己的页面（`#/resources`，见 ui/resource-list.ts）。
+  // 留在右栏时，它与"看房间"互相遮挡，而它本身是一份**报告**，不是场景的操作控件。
 
   showFatal(message: string): void {
     this.fatal.removeAttribute('hidden');

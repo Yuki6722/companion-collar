@@ -11,6 +11,7 @@
  *   取值——不是遗漏，是设计。`CatIncidentKind` 的五个取值全部是**动作名**（抽搐、呼吸急促、
  *   僵直不动、躲藏退避、干呕），不是诊断名。关联不等于因果，更不等于诊断。
  */
+import type { SimEventKind } from '../types.ts';
 
 /** 姿势：猫此刻身体在摆什么形状。 */
 export type CatPosture =
@@ -396,6 +397,29 @@ export const INCIDENT_KINDS: readonly CatIncidentKind[] = [
   'withdrawal',
   'vomit',
 ];
+
+/**
+ * 事件流里的事件名。**面向用户的中文名只在这里定义一处**（与活动/姿势同一纪律）：
+ * 界面（含手机预览里的「事件流」页签）只消费这张表，不各自写一套。
+ *
+ * ⚠️ 与 `CatActivityId` 的区别：活动是"猫在做什么"（连续状态），事件是"发生了一次什么"
+ * （离散戳点）。抓挠既是一个活动段，也派生出一条 `scratch` 事件——两者不是重复定义。
+ */
+export const SIM_EVENT_LABELS: Readonly<Record<SimEventKind, string>> = {
+  scratch: '抓挠',
+  rub: '摩擦',
+  impact: '碰撞',
+  'head-shake': '甩头',
+  'posture-change': '姿势改变',
+  vocalization: '发声',
+  'elimination-outside-box': '盆外排泄',
+  hiding: '躲藏',
+};
+
+/** 取事件名；未登记时回退到原始 id（宁可露出英文，也不要猜一个中文名）。 */
+export function simEventLabel(kind: SimEventKind): string {
+  return SIM_EVENT_LABELS[kind] ?? kind;
+}
 
 /**
  * 常驻边界句。UI 必须原样展示，不得改写成「识别」「检出」这类措辞。

@@ -56,8 +56,6 @@ const SOURCES = {
   vanderleij2019: 'van der Leij et al. 2019, PLoS ONE 14(10): e0223492（随机对照试验，n=23 荷兰收容所猫）',
   isfm2022: '2022 ISFM 猫急性疼痛共识指南，JFMS 24(1): 4–30（PMC10845386）',
   ennoshima: 'Enomoto, Lascelles & Gruen 2020, JFMS 22(12): 1137–1147（汇总 n=249 DJD 疼痛猫 + 53 对照）',
-  dijkstra2018: 'Dijkstra, Teske & Szatmári 2018, Vet J 234: 96–101（诊室 88 只健康猫 + 家中视频观察）',
-  merck: 'MSD/Merck Veterinary Manual 汇总表（引自 Dukes\' Physiology of Domestic Animals, 12th ed.）',
 } as const;
 
 /** 需要在界面/文档里连带披露的利益冲突。 */
@@ -389,30 +387,10 @@ export const BEHAVIOR_PARAMS: readonly BehaviorParam[] = [
       range: [0.55, 0.99],
     },
   },
-  {
-    id: 'restingRespiratoryRate',
-    label: '静息呼吸频率',
-    value: [16, 40],
-    unit: '次/分',
-    evidence: {
-      tier: 'disputed',
-      source: `${SOURCES.merck}；${SOURCES.dijkstra2018}`,
-      note: '来源/语境冲突：教科书静息参考 16–40；同一批研究在**诊室**测得中位 64（区间 28–176），家中静息中位 27（16–60），家中午睡中位 20（9–28）。不是数值冲突而是**测量条件**差异。⚠️ 猫用项圈的呼吸频率**未取得验证研究**。',
-      range: [16, 40],
-    },
-  },
-  {
-    id: 'restingHeartRate',
-    label: '静息心率',
-    value: [120, 140],
-    unit: '次/分',
-    evidence: {
-      tier: 'disputed',
-      source: `${SOURCES.merck}；Griffin et al. 2021, JFMS 23(4): 364–369`,
-      note: '来源/语境冲突：MSD 静息表 120–140；MSD 分诊表给 150–220；教学医院实测门诊入口 176±35、检查室 195、处置区 226。「140–220」这一常见版本在本次检索中未取得可读一手来源，因此不使用。本项目只做**相对自身基线**的偏离。',
-      range: [120, 140],
-    },
-  },
+  // ⚠️ `restingRespiratoryRate` 与 `restingHeartRate` 已迁至
+  //    `core/src/vitals/params.ts` 的 `VITALS_PARAMS`。生理参数与行为参数
+  //    证据来源不同、读者不同，混在一张表里会让「文献给了区间的量」与
+  //    「文献根本没给的量」看起来同级。迁移理由见该文件头部注释。
 ];
 
 // ---------------------------------------------------------------- 操作化常量

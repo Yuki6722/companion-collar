@@ -60,6 +60,40 @@ export interface SceneSnapshot {
   slots?: Record<string, string | number>;
   /** 猫的世界坐标（保留两位小数）：用于断言状态切换真的把它挪到了另一个锚点 */
   catAt?: [number, number, number];
+  /**
+   * 项圈硬件与触须无干涉区。
+   *
+   * 为什么单独记：这两者是**形态方案**这一条信息的载体。只断言"模型加载成功"
+   * 无法发现"项圈没挂上"或"无干涉区跟着身体而不是跟着头"这两类故障。
+   */
+  collar?: { collar: boolean; whiskerZone: boolean; parts: number };
+  /**
+   * App 预览（右栏 iPhone 机模）。
+   *
+   * 为什么把它放进快照：这一屏的主叙事是「猫在做什么 ↔ 主人手机上显示什么」。
+   * 不记这些字段，就无法自动发现「手机没挂上」「读数不跟着时钟走」
+   * 「无效读数被当成有效值显示」这三类故障。
+   */
+  app?: {
+    collapsed: boolean;
+    tab: string;
+    hourOfDay: number;
+    readings: Record<string, { value: number | null; validity: string | null }>;
+    eventRows: number;
+    /**
+     * 读数变化提示的状态。
+     *
+     * 这三件事必须能自动验证，否则"数字变红 / 弹窗"这类故障只能靠肉眼发现：
+     * `notify` 该不该打扰、`popup` 弹窗有没有真的出现在 DOM 里、`red` 哪几路被标红。
+     */
+    alert?: {
+      notify: boolean;
+      red: string[];
+      popup: boolean;
+      acute: boolean;
+      reasons: number;
+    };
+  };
 }
 
 export interface DebugOptions {
@@ -118,12 +152,40 @@ export function installDebugHandle(
       call(handle, 'setCatState', 'calm');
     }, 12_000);
     window.setTimeout(() => post(), 14_500);
+    // App 预览的收起 / 展开：这是右栏唯一的东西，必须能自动验证它确实在切换
+    window.setTimeout(() => {
+      call(handle, 'app', 'off');
+    }, 15_000);
+    window.setTimeout(() => {
+      call(handle, 'app', 'on');
+    }, 15_600);
     window.setTimeout(() => {
       call(handle, 'setAutoCat', '');
       call(handle, 'incident', 'seizure');
     }, 16_000);
     // 抽搐自 16 s 起持续 15 s（演示时间），在它进行中回传一次
     window.setTimeout(() => post(), 18_000);
+    // 打开项圈与触须无干涉区并回传：让 `?debug=1&auto=1` 一次跑完就覆盖形态可视化。
+    window.setTimeout(() => {
+      call(handle, 'collar', 'zone');
+    }, 19_000);
+    window.setTimeout(() => post(), 21_000);
+    // 逐个切 App 的页签并回传：事件流 / 漂移 / 档案都要留下可断言的快照
+    window.setTimeout(() => {
+      call(handle, 'app', 'events');
+    }, 22_000);
+    window.setTimeout(() => post(), 22_500);
+    window.setTimeout(() => {
+      call(handle, 'app', 'drift');
+    }, 24_000);
+    window.setTimeout(() => post(), 24_500);
+    window.setTimeout(() => {
+      call(handle, 'app', 'profile');
+    }, 26_000);
+    window.setTimeout(() => post(), 26_500);
+    window.setTimeout(() => {
+      call(handle, 'app', 'live');
+    }, 28_000);
     // 抽搐结束后再回传一次：用来对照「突发期间」与「突发之后」的标签
     window.setTimeout(() => post(), 32_000);
   }
@@ -157,6 +219,18 @@ export function summarize(snap: SceneSnapshot): string {
     `catSegElapsed=${Number(snap.catSegmentElapsedS ?? 0).toFixed(0)}`,
     `catSegTotal=${Number(snap.catSegmentTotalS ?? 0).toFixed(0)}`,
     `catTremor=${Number(snap.catMotion?.tremorAmp ?? 0).toFixed(3)}`,
+    `collar=${snap.collar?.collar ? 1 : 0}`,
+    `whiskerZone=${snap.collar?.whiskerZone ? 1 : 0}`,
+    `collarParts=${snap.collar?.parts ?? 0}`,
+    `appCollapsed=${snap.app?.collapsed ? 1 : 0}`,
+    `appTab=${snap.app?.tab ?? 'none'}`,
+    `appHr=${snap.app?.readings.hr?.value ?? 'none'}`,
+    `appRrValid=${snap.app?.readings.rr?.validity ?? 'none'}`,
+    `appEvents=${snap.app?.eventRows ?? 0}`,
+    `appAlert=${snap.app?.alert?.notify ? 1 : 0}`,
+    `appPopup=${snap.app?.alert?.popup ? 1 : 0}`,
+    `appRed=${(snap.app?.alert?.red ?? []).join('+') || 'none'}`,
+    `appAcute=${snap.app?.alert?.acute ? 1 : 0}`,
     `tailFreq=${Number(snap.catPose.tailFreq ?? 0).toFixed(2)}`,
     `earFlatten=${Number(snap.catPose.earFlatten ?? 0).toFixed(2)}`,
     `pupil=${Number(snap.catPose.pupilScale ?? 0).toFixed(2)}`,

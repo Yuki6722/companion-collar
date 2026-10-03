@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { generateSession, SCENARIOS } from './index.ts';
 import type { ScenarioId } from './index.ts';
 import type { PetProfile, Species } from '@camp/core';
+import { sleepRespRateSummary, summarizeAvailability } from '../../core/src/index.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_OUT = path.resolve(HERE, '../../../data/sessions');
@@ -55,7 +56,7 @@ if (session.behaviorTimeline) {
   fs.writeFileSync(behaviorFile, JSON.stringify(session.behaviorTimeline, null, 2), 'utf8');
 }
 
-const hr = session.samples.map((s) => s.hrBpm ?? 0);
+const hr = session.samples.map((s) => s.hrBpm).filter((v): v is number => typeof v === 'number');
 const noise = session.samples.map((s) => s.noiseDbA ?? 0);
 console.log('场景      :', SCENARIOS[scenario].name);
 console.log('物种      :', profile.species);
@@ -64,6 +65,24 @@ console.log('时长      :', minutes, '分钟 →', session.samples.length, '个
 console.log('事件      :', session.events.length, '条');
 console.log('心率范围  :', Math.min(...hr).toFixed(1), '–', Math.max(...hr).toFixed(1), 'bpm');
 console.log('噪声范围  :', Math.min(...noise).toFixed(1), '–', Math.max(...noise).toFixed(1), 'dB(A)');
+
+// 生理读数：报出来的值不算数，**可用**的窗口才算数（详见 src/vitals.ts）。
+const availability = summarizeAvailability(session.samples);
+const pct = (x: number): string => `${(x * 100).toFixed(0)}%`;
+console.log(
+  '读数可用率:',
+  (['hr', 'rr', 'temp'] as const)
+    .map((k) => `${availability.channels[k].label} ${pct(availability.channels[k].validShare)}`)
+    .join('、'),
+  `（最受限：${availability.mostLimited ?? '无'}）`,
+);
+const sleepRr = sleepRespRateSummary(session.samples);
+console.log(
+  '睡眠呼吸  :',
+  sleepRr.medianBpm === null
+    ? '无可用睡眠读数'
+    : `中位数 ${sleepRr.medianBpm} 次/分，超阈值时段 ${sleepRr.overThresholdBouts} 个`,
+);
 console.log('注入缺口  :', session.truth?.injectedGaps.join(', ') || '（无）');
 console.log('注入滞后  :', JSON.stringify(session.truth?.injectedLags));
 const tl = session.behaviorTimeline;

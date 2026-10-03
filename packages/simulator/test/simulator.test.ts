@@ -47,14 +47,56 @@ test('采样数量与时长一致，且时间单调递增', () => {
   }
 });
 
-test('生理量落在生理合理区间', () => {
+test('生理量落在生理合理区间，且读数与真值分开存放', () => {
   const s = generateSession({ ...base, seed: 3, scenario: 'noise-event', durationMin: 120 });
+  // 原始读数（含无效窗口）只保证落在**固件量程**内：超出量程的读数会被拒收，根本不写进来。
+  const RANGE: Record<'hr' | 'rr' | 'temp', [number, number]> = {
+    hr: [40, 350],
+    rr: [3, 120],
+    temp: [25, 42],
+  };
+  // **可用**读数才保证落在生理区间内——这正是"无效读数不是数据"的可断言形式。
+  const VALID: Record<'hr' | 'rr' | 'temp', [number, number]> = {
+    hr: [60, 320],
+    rr: [5, 80],
+    temp: [30, 40],
+  };
+  let validRr = 0;
+
   for (const x of s.samples) {
-    assert.ok(x.hrBpm! > 60 && x.hrBpm! < 320, `心率越界: ${x.hrBpm}`);
     assert.ok(x.hrvRmssdMs! >= 6, `HRV 低于下限: ${x.hrvRmssdMs}`);
-    assert.ok(x.rrBpm! > 5 && x.rrBpm! < 80, `呼吸越界: ${x.rrBpm}`);
-    assert.ok(x.tempC! > 36 && x.tempC! < 41, `体温越界: ${x.tempC}`);
     assert.ok(x.noiseDbA! >= 0 && x.noiseDbA! < 130, `噪声越界: ${x.noiseDbA}`);
+    assert.ok(x.motionIndex! >= 0 && x.motionIndex! <= 1, `体动指数越界: ${x.motionIndex}`);
+    for (const key of ['hr', 'rr', 'temp'] as const) {
+      const q = x.readingQuality?.[key];
+      assert.ok(q, `采样 t=${x.t} 缺少 ${key} 通道的读数有效性`);
+      const raw = key === 'hr' ? x.hrBpm : key === 'rr' ? x.rrBpm : x.tempSurfaceC;
+      if (raw === undefined) {
+        assert.equal(q.validity, 'rejected-out-of-range', `${key} 缺值时只能是固件拒收`);
+        continue;
+      }
+      const [lo, hi] = RANGE[key];
+      assert.ok(raw >= lo && raw <= hi, `${key} 读数超出固件量程: ${raw}`);
+      if (q.validity === 'valid') {
+        const [vlo, vhi] = VALID[key];
+        assert.ok(raw >= vlo && raw <= vhi, `${key} 可用读数应落在生理区间: ${raw}`);
+      }
+    }
+    if (x.readingQuality!.rr!.validity === 'valid') validRr++;
+  }
+
+  // 呼吸读数只在低体动窗口可用——这不是缺陷，是本项目要展示的边界；
+  // 但它也不能是"永远不可用"，否则睡眠呼吸频率这条唯一有共识的协议就无从谈起。
+  assert.ok(validRr > 0, '至少应有部分窗口的呼吸读数可用');
+  assert.ok(validRr < s.samples.length, '呼吸读数不应全天候可用');
+
+  // 真值另有一份：体表温读数不是核心温，核心温只存在于 truth。
+  const truth = s.truth!.vitals!;
+  assert.equal(truth.length, s.samples.length, '真值序列应与采样一一对应');
+  for (const v of truth) {
+    assert.ok(v.hrTrueBpm > 60 && v.hrTrueBpm < 320, `心率真值越界: ${v.hrTrueBpm}`);
+    assert.ok(v.rrTrueBpm > 5 && v.rrTrueBpm < 80, `呼吸真值越界: ${v.rrTrueBpm}`);
+    assert.ok(v.tempCoreC > 36 && v.tempCoreC < 41, `核心温真值越界: ${v.tempCoreC}`);
   }
 });
 

@@ -14,6 +14,7 @@ import {
   NEGATION_MARKERS,
   OPERATIVE_CONSTANTS,
   POSTURE_DEFS,
+  SIM_EVENT_LABELS,
   activityAt,
   activityShare,
   activityWeightAt,
@@ -24,8 +25,9 @@ import {
   hourOfDayAt,
   incidentAt,
   isOwnerAwayHour,
+  simEventLabel,
 } from '../src/index.ts';
-import type { CatAnchorSpec, CatBehaviorTimeline } from '../src/index.ts';
+import type { CatAnchorSpec, CatBehaviorTimeline, SimEventKind } from '../src/index.ts';
 
 // ---------------------------------------------------------------- 夹具
 
@@ -496,6 +498,29 @@ test('突发演示时长是为「人眼可看」定的真实秒数（不是倍�
     assert.ok(d >= 10, `突发「${INCIDENT_DEFS[kind].label}」演示仅 ${d}s，太短会看不到`);
     assert.ok(d <= 120, `突发「${INCIDENT_DEFS[kind].label}」演示 ${d}s 过长，会像卡住`);
   }
+});
+
+test('事件名表：与 SimEventKind 一一对应，且都给了中文名', () => {
+  // 事件名是**面向用户的词汇**，只允许在 core 里定义一处（界面与手机预览都从它取）。
+  // 这条断言同时防止两件事：新加事件类型却忘了起名；起了名却没人用得上。
+  const kinds: SimEventKind[] = [
+    'scratch',
+    'rub',
+    'impact',
+    'head-shake',
+    'posture-change',
+    'vocalization',
+    'elimination-outside-box',
+    'hiding',
+  ];
+  assert.deepEqual(Object.keys(SIM_EVENT_LABELS).sort(), [...kinds].sort());
+  for (const kind of kinds) {
+    const label = simEventLabel(kind);
+    assert.ok(label.length > 0, `事件 ${kind} 缺少中文名`);
+    assert.doesNotMatch(label, /[a-z-]/i, `事件 ${kind} 的中文名不应包含英文或连字符：${label}`);
+  }
+  // 未登记的回退必须**露出原始 id**，而不是猜一个中文名
+  assert.equal(simEventLabel('not-a-kind' as SimEventKind), 'not-a-kind');
 });
 
 test('锚点 id 清单与锚点表一致（跨包契约）', () => {

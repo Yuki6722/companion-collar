@@ -11,7 +11,7 @@
  * `isDisputed` 之类属于内部实现，暴露出去会让公共 API 面变宽且易与既有导出重名。
  */
 
-// 词汇：行为、姿势、突发动作
+// 词汇：行为、姿势、突发动作、事件名
 export {
   ACTIVITY_DEFS,
   ACTIVITY_IDS,
@@ -20,6 +20,8 @@ export {
   INCIDENT_KINDS,
   INCIDENT_REFERRAL_NOTE,
   POSTURE_DEFS,
+  SIM_EVENT_LABELS,
+  simEventLabel,
 } from './vocabulary.ts';
 export type {
   ActivityDef,

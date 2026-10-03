@@ -38,6 +38,20 @@ export interface CatRig {
   breathParts: THREE.Object3D[];
   /** 毛壳层，便于画质切换时整体显隐 */
   furShells: THREE.Object3D[];
+  /**
+   * 项圈硬件（第三阶段的可视化）：带体、电子仓、ECG 电极、体表热敏电阻。
+   *
+   * 为什么把它做进模型而不是只在文档里画示意图：三个通道的**选型位置**决定了它们
+   * 各自能测到什么、测不到什么。把电极放在颈侧、把热敏电阻放在颈腹侧，
+   * 看的人一眼就能明白为什么"核心温"不在这个位置上。
+   */
+  collar: THREE.Group;
+  /**
+   * 触须无干涉区：面部触须是独立感觉器官，任何佩戴硬件都不许进入这个体积。
+   *
+   * 它默认隐藏（只在讲解/截图时打开），因为它是一个**约束标注**，不是外观。
+   */
+  whiskerZone: THREE.Group;
 }
 
 const FUR = 0xf0a860;
@@ -231,6 +245,79 @@ export function buildCat(_mats: MaterialLibrary, furLayers: number): CatRig {
   const tip = tail[5];
   if (tip) tip.scale.set(0.8, 0.8, 0.8);
 
+  // ---------------------------------------------------------------- 项圈硬件
+  //
+  // 位置即能力：颈部这一圈能承载什么，由解剖决定。
+  //   - ECG 干电极贴在**颈侧**（电极需要皮肤接触，被毛是主要障碍）；
+  //   - 体表热敏电阻贴在**颈腹侧**（贴皮测的是被毛表面温度，不是核心温）；
+  //   - 电子仓在**颈背侧**（远离下颌活动区，也远离触须）。
+  // 注释写在这里而不是文档里，是因为看代码的人往往比看文档的人多。
+  const collar = group('cat-collar');
+  collar.position.set(0, 0.032, 0.245);
+  const bandMat = new THREE.MeshStandardMaterial({ color: 0x3d3f45, roughness: 0.72, metalness: 0.12 });
+  const podMat = new THREE.MeshStandardMaterial({ color: 0x22242a, roughness: 0.45, metalness: 0.2 });
+  const electrodeMat = new THREE.MeshStandardMaterial({
+    color: 0x2f8f86,
+    roughness: 0.35,
+    metalness: 0.35,
+  });
+  const thermistorMat = new THREE.MeshStandardMaterial({ color: 0xb5651d, roughness: 0.55 });
+
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.0075, 8, 28), bandMat);
+  band.name = 'collar-band';
+  collar.add(band);
+
+  // 电子仓：颈背侧
+  const pod = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.013, 0.046), podMat);
+  pod.position.set(0, 0.076, -0.004);
+  pod.name = 'collar-pod';
+  pod.castShadow = true;
+  collar.add(pod);
+
+  // ECG 干电极 ×2：颈左右侧
+  for (const sx of [1, -1]) {
+    const electrode = new THREE.Mesh(new THREE.CylinderGeometry(0.0085, 0.0085, 0.005, 12), electrodeMat);
+    electrode.position.set(sx * 0.078, -0.008, 0);
+    electrode.rotation.z = Math.PI / 2;
+    electrode.name = sx > 0 ? 'collar-ecg-right' : 'collar-ecg-left';
+    collar.add(electrode);
+  }
+
+  // 体表热敏电阻：颈腹侧（贴皮）
+  const thermistor = new THREE.Mesh(new THREE.SphereGeometry(0.007, 12, 10), thermistorMat);
+  thermistor.position.set(0, -0.077, 0.002);
+  thermistor.name = 'collar-thermistor';
+  collar.add(thermistor);
+
+  // 项圈挂在 body 上（不挂 breathParts）：项圈不会随呼吸一起变形。
+  body.add(collar);
+
+  // ---------------------------------------------------------------- 触须无干涉区
+  const whiskerZone = group('cat-whisker-zone');
+  const zoneGeo = new THREE.SphereGeometry(1, 18, 12);
+  const zoneMesh = new THREE.Mesh(
+    zoneGeo,
+    new THREE.MeshBasicMaterial({
+      color: 0xd98324,
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false,
+    }),
+  );
+  zoneMesh.scale.set(0.19, 0.06, 0.09);
+  zoneMesh.position.set(0, -0.024, 0.09);
+  whiskerZone.add(zoneMesh);
+  const zoneEdges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(zoneGeo, 24),
+    new THREE.LineBasicMaterial({ color: 0xd98324, transparent: true, opacity: 0.55 }),
+  );
+  zoneEdges.scale.copy(zoneMesh.scale);
+  zoneEdges.position.copy(zoneMesh.position);
+  whiskerZone.add(zoneEdges);
+  // 挂在头上：它约束的是面部空间，头转到哪里它就跟到哪里。
+  head.add(whiskerZone);
+  whiskerZone.visible = false;
+
   return {
     root,
     body,
@@ -249,5 +336,7 @@ export function buildCat(_mats: MaterialLibrary, furLayers: number): CatRig {
     legs,
     breathParts: [torso, chest, hips],
     furShells,
+    collar,
+    whiskerZone,
   };
 }
