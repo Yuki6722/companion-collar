@@ -18,7 +18,7 @@ import { CatController } from './cat/cat-controller.ts';
 import { CatBehaviorRuntime } from './cat/cat-behavior.ts';
 import type { BehaviorStatus } from './cat/cat-behavior.ts';
 import { CAT_ANCHOR_SPECS } from './cat/anchor-map.ts';
-import { buildBehaviorTimeline } from '@camp/core';
+import { OPERATIVE_CONSTANTS, buildBehaviorTimeline } from '@camp/core';
 import type { CatBehaviorTimeline, CatIncidentKind } from '@camp/core';
 import type { CatStateId } from './cat/cat-states.ts';
 import { HotspotLayer } from './hotspots.ts';
@@ -55,9 +55,15 @@ export interface SceneOptions extends SceneCallbacks {
   behaviorTimeline?: CatBehaviorTimeline;
 }
 
-/** 自主行为时间线的默认长度：一整天。演示倍率由 timeline.timeScale 决定。 */
+/** 自主行为时间线的默认长度：一整天。演示倍率取自 core 的操作化常量。 */
 const DEFAULT_BEHAVIOR_DURATION_S = 24 * 3600;
-const DEFAULT_TIME_SCALE = 60;
+/**
+ * 演示倍率**只有一个事实来源**：core 的 `OPERATIVE_CONSTANTS.behaviorTimeScale`。
+ * 为什么不在这里写死：倍率决定「一个行为片段在屏幕上停留多久」，
+ * 改动它会同时影响观感与「一天能否在一场演示里走完」。写死在两处必然漂移。
+ */
+const DEFAULT_TIME_SCALE =
+  OPERATIVE_CONSTANTS.find((c) => c.id === 'behaviorTimeScale')?.value ?? 20;
 
 const CAMERA_FOV = 52;
 const CAMERA_START: [number, number, number] = [6.1, 3.05, 6.25];

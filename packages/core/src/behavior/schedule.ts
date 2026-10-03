@@ -57,11 +57,20 @@ export function activityWeights(
     // 巡逻：只在活跃时段
     locomoting: 1.3 * act,
     playing: 0.85 * act * act,
-    // 进食双峰落在约 04–08 / 16–20，与进食窗口对齐（Migny et al. 2026）
-    feeding: 0.9 * (hour < 4 || hour > 22 ? 0.25 : 1) * (0.3 + act),
-    drinking: 0.5,
+    // ---- 下面三项刻意加权 ----
+    //
+    // ⚠️ 这是**演示可读性**上的取舍，不是文献结论：文献给出的是这些行为的
+    // **日周期形状**（进食双峰约 04–08 / 16–20、砂盆使用约 04–08 / 20–24），
+    // 没有给「一天占用多少比例」。按真实占比它们各只有约 2%，在任何倍速下都短到看不见，
+    // 而这三件事恰好是主人最关心、也最常被问到的（吃喝、排泄）。
+    // 因此这里提高它们的**出现频率**，但**时段偏好保持不变**。
+    // 权重翻倍后仍远低于静息/高处停留，不会让猫整天在吃饭。
+    //
+    // 进食双峰与进食窗口对齐（Migny et al. 2026）
+    feeding: 2.4 * (hour < 4 || hour > 22 ? 0.25 : 1) * (0.3 + act),
+    drinking: 1.6,
     // 砂盆使用主要落在主人不活动或不在家时（约 04–08 / 20–24）
-    eliminating: 0.7 * (away ? 1.6 : 0.8),
+    eliminating: 1.9 * (away ? 1.6 : 0.8),
     scratching: 0.75,
     // 躲藏：文献里没有可靠的时长占比，因此权重刻意取低，只作为一次「退避」事件
     hiding: 0.16,
@@ -107,6 +116,13 @@ export function activityDurationS(activity: CatActivityId, hour: number, rng: Be
     const act = activityWeightAt(hour);
     // 夜里安静，休息片段明显拉长
     return rng.range(5 * 60, (18 + 34 * (1 - act)) * 60);
+  }
+  // 吃喝与用砂盆：给一个**可观察的窗口**。
+  // ⚠️ 真实片段时长未取得一手来源（params.ts 的同名项标 unverified），
+  // 这里的 45–150 秒是操作化常量：太短则演示里看不到，太长则变成站着不动。
+  if (activity === 'feeding' || activity === 'drinking' || activity === 'eliminating') {
+    const budget = constantValue('mealStintS', 90);
+    return rng.range(budget * 0.5, budget * 1.67);
   }
   const lo = constantValue('stintRestS', 20);
   const hi = constantValue('stintActiveS', 180);

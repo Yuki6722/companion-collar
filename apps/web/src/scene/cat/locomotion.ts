@@ -46,8 +46,17 @@ function easeInOut(k: number): number {
 /**
  * 从某锚点走向另一锚点。
  *
- * 弧线高度：高度差超过操作化常量 `jumpMinHeightM` 时算「攀跳」，给一条抛物线；
- * 只做水平移动时贴地走（弧高 0）。
+ * **为什么位移时长要单独算，而不是直接采用时间线给的那一段时长**：
+ *   演示倍率（1 秒当 N 秒）会把时间线的时长整体压缩。在 60× 下，一次移动的时间线时长
+ *   折算到真实时间只有 0.3–3 秒，肉眼读起来就是**瞬移**。
+ *   若把位移动画也绑到时间线时长上，「看清走路」与「一场演示看完一天」这两个目标
+ *   会直接冲突：要么猫瞬移，要么一天永远走不完。
+ *   做法是**把两者解耦**——位移只花「自己走得完」的时间，到得早就地站着等下一段。
+ *   猫既不加速跑，也不瞬移；时间线仍按倍率推进自己的节律。
+ *
+ * ⚠️ 这里**不能**用「时间线片段时长 × 倍数」去做动画时长：时间线里存在很长的移动段
+ * （例如一次长距离巡逻），乘完会得到上百秒的「慢动作走路」，比瞬移更糟。
+ * 因此上限必须由真实几何封顶（`maxTravelAnimS`）。
  */
 export function planTravel(from: CatTransform, to: CatAnchorPlace, durationS: number): TravelPlan {
   const target: CatTransform = {
@@ -58,14 +67,23 @@ export function planTravel(from: CatTransform, to: CatAnchorPlace, durationS: nu
   };
   const dy = Math.abs(target.y - from.y);
   const jumpGate = constantValue('jumpMinHeightM', 0.15);
+  const climbing = dy > jumpGate;
   // 攀跳的弧顶取高度差的一部分：太高会读成「飞」，太低则看不出跳
-  const arcHeight = dy > jumpGate ? Math.min(0.55, 0.25 + dy * 0.35) : 0;
+  const arcHeight = climbing ? Math.min(0.55, 0.25 + dy * 0.35) : 0;
+
+  // 按真实步速算需要多久；攀跳额外给一点蹬地与落地的时间
+  const walkSpeed = constantValue('walkSpeedMps', 0.45);
+  const flat = Math.hypot(target.x - from.x, target.z - from.z);
+  const naturalS = flat / walkSpeed + (climbing ? 0.9 : 0.25) + 0.35;
+  const cap = constantValue('maxTravelAnimS', 12);
+  // 用 `durationS` 只是为了在片段极短时别把动画压到读不出来；
+  // 真正的上限由真实几何封顶，绝不让长片段把走路拖成慢动作。
+  void durationS;
+
   return {
     from: { ...from },
     to: target,
-    // 位移时长由调用方（时间线的区间长度）给定，这里不自行估算速度——
-    // 否则画面与数据会各说各话。速度常量只在行为引擎估算区间长度时使用。
-    durationS: Math.max(0.2, durationS),
+    durationS: Math.max(0.9, Math.min(naturalS, cap)),
     arcHeight,
   };
 }

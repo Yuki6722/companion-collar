@@ -20,6 +20,14 @@ interface Transform {
 const POSE_KEYS = Object.keys(CAT_STATES.calm.pose) as (keyof CatPoseParams)[];
 
 /**
+ * 头的基准高度（相对躯干）。
+ *
+ * 与 `cat-model.ts` 里 `head.position.set(0, 0.05, 0.285)` 的 y 必须一致：
+ * 低头起伏是相对这个基准做偏移，写错会让猫的头整体上移或陷进躯干。
+ */
+const HEAD_BASE_Y = 0.05;
+
+/**
  * 驱动模式。
  *
  * 为什么必须显式区分：两种模式的**位置来源根本不同**——
@@ -130,8 +138,34 @@ export class CatController {
    */
   snapPoseFor(posture: CatPosture, immediate = false): void {
     const base = CAT_BASE_POSES[posture] ?? CAT_BASE_POSES.standing;
+    // 叠加「在做事」的头部动作配方（只有进食/饮水/用砂盆有）。
+    // 注意：本次调用带 `activity` 时用活动配方覆盖姿势基准，避免上一种行为的头部动作残留。
     this.externalPose = { ...base };
-    if (immediate) this.fromPose = { ...base };
+    if (immediate) this.fromPose = { ...this.externalPose };
+  }
+
+  /**
+   * 设置当前「在做什么」用于头部动作。
+   *
+   * 与 `snapPoseFor` 分开是为了让姿势切换（离散）与行为配方（可叠加）互不干扰：
+   * 姿势决定四肢与躯干，配方只补头部/尾部的小幅差异。
+   */
+  setActivityMotion(recipe: { headBobAmp: number; headBobFreq: number; tailFreq: number; weightShiftFreq: number } | null): void {
+    const base = { ...this.externalPose };
+    if (!recipe) {
+      this.externalPose = base;
+      return;
+    }
+    this.externalPose = {
+      ...base,
+      headBobAmp: recipe.headBobAmp,
+      headBobFreq: recipe.headBobFreq,
+      tailFreq: recipe.tailFreq,
+      weightShiftFreq: recipe.weightShiftFreq,
+      // 进食/饮水时尾巴基本不摆：大幅摆尾会让画面读起来像「不耐烦」而不是「在吃」
+      tailAmp: Math.min(base.tailAmp, 0.05),
+      headPitch: base.headPitch + 0.14,
+    };
   }
 
   /** 回到手动演示档位：从当前姿态与位置继续，保证不跳变。 */
@@ -255,10 +289,17 @@ export class CatController {
     const breath = micro(Math.sin(omega(pose.breathFreq)) * pose.breathAmp, 0);
     rig.body.scale.set(1 + breath * 0.35, 1 + breath, 1 + breath * 0.45);
 
-    // 头：俯仰 + 左右扫视
-    rig.head.rotation.x = pose.headPitch + micro(Math.sin(omega(0.35)) * 0.02);
+    // 头：俯仰 + 左右扫视 + 「在做事」的低头起伏。
+    // 进食/饮水/用砂盆三者的姿势都是蹲伏，只有头部动作能把它们区分开——
+    // 没有这一项，演示里看到的永远是「猫蹲着」（这正是「看不到喝水/吃粮/用砂盆」的原因之一）。
+    const bobAmp = pose.headBobAmp ?? 0;
+    const bobFreq = pose.headBobFreq ?? 0;
+    const headBob = bobAmp > 0 && !still ? Math.sin(omega(bobFreq)) * bobAmp : 0;
+    rig.head.rotation.x = pose.headPitch + headBob * 1.6 + micro(Math.sin(omega(0.35)) * 0.02);
     rig.head.rotation.y = micro(Math.sin(omega(pose.headYawFreq)) * pose.headYawAmp);
     rig.head.rotation.z = micro(Math.sin(omega(pose.headYawFreq * 0.6)) * pose.headYawAmp * 0.12);
+    // 头部整体也随之下沉一点，读起来像「低头去够食盆」而不只是「点头」
+    rig.head.position.y = HEAD_BASE_Y + headBob;
 
     // 耳朵：后压 + 抽动
     const twitch = micro(Math.sin(omega(6.5)) * pose.earTwitchAmp);
@@ -348,15 +389,19 @@ function clamp01(v: number): number {
 }
 
 function lerpPose(a: CatPoseParams, b: CatPoseParams, k: number): CatPoseParams {
-  const out = {} as Record<keyof CatPoseParams, number | boolean>;
+  const out = {} as Record<keyof CatPoseParams, number | boolean | undefined>;
   for (const key of POSE_KEYS) {
     const av = a[key];
     const bv = b[key];
     if (typeof av === 'boolean' || typeof bv === 'boolean') {
       // 布尔项（踩奶）按进度过半切换
       out[key] = k < 0.5 ? av : bv;
+    } else if (av === undefined && bv === undefined) {
+      // 可选的动作配方字段（headBobAmp 等）：两边都没有就不写入，
+      // 让 `?? 0` 的兜底逻辑继续生效，而不是被插值成 0。
+      continue;
     } else {
-      out[key] = lerp(av as number, bv as number, k);
+      out[key] = lerp(av ?? 0, bv ?? 0, k);
     }
   }
   return out as unknown as CatPoseParams;

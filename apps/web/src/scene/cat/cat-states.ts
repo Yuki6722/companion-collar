@@ -66,6 +66,15 @@ export interface CatPoseParams {
   legFold: number;
   /** 前爪踩奶（平静时的小动作） */
   knead: boolean;
+  /**
+   * 低头进食/饮水的幅度（米）。0 表示不做。
+   *
+   * 为什么需要它：进食与饮水在渲染上就是「蹲下」，与「蹲伏观察」几乎看不出区别，
+   * 只有头部上下起伏才读得出「在吃/在喝」。数值是操作化常量，不是文献数字。
+   */
+  headBobAmp?: number;
+  /** 低头起伏频率（次/秒） */
+  headBobFreq?: number;
 }
 
 export interface CatStateDef {
@@ -302,4 +311,24 @@ export const POSTURE_LABELS: Readonly<Record<CatPosture, string>> = {
   crouching: '蹲伏',
   walking: '行走',
   climbing: '攀跳',
+};
+
+/**
+ * 「在做事」的头部动作配方：让进食、饮水、用猫砂盆三件事**在画面上可分**。
+ *
+ * 为什么不能只靠姿势区分：三者的姿势都是《蹲伏》。没有头部与躯干的小幅度差异，
+ * 用户在演示里看到的永远是「猫蹲着」——这也正是「看不到喝水/吃粮/用砂盆」的原因之一。
+ * 数值是操作化常量，不是文献数字。
+ *
+ * ⚠️ 边界：这些只是**动作幅度**，不表示猫在表达什么。
+ */
+export const ACTIVITY_MOTION: Readonly<
+  Record<string, { headBobAmp: number; headBobFreq: number; tailFreq: number; weightShiftFreq: number }>
+> = {
+  // 进食：低头咬取，头部有节奏地小幅上下
+  feeding: { headBobAmp: 0.026, headBobFreq: 2.2, tailFreq: 0.8, weightShiftFreq: 0.5 },
+  // 饮水：低头更久更低，舌部动作更快、幅度更小
+  drinking: { headBobAmp: 0.014, headBobFreq: 4.2, tailFreq: 0.5, weightShiftFreq: 0.3 },
+  // 用砂盆：刨砂与蹲下的前后重心移动较明显
+  eliminating: { headBobAmp: 0.018, headBobFreq: 1.2, tailFreq: 0.4, weightShiftFreq: 1.1 },
 };

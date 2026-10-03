@@ -64,7 +64,7 @@ function activityOfIncident(kind: CatIncidentKind): CatActivityId {
  */
 export function buildBehaviorTimeline(input: CatBehaviorInput): CatBehaviorTimeline {
   const durationS = Math.max(0, input.durationS);
-  const timeScale = input.timeScale ?? 60;
+  const timeScale = input.timeScale ?? 1;
   const anchors: readonly CatAnchorSpec[] = input.anchors ?? [];
   const awayWindows = input.awayWindows ?? [];
   const rng = makeBehaviorRng(input.seed);

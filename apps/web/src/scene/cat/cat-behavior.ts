@@ -21,6 +21,7 @@ import type {
   CatPosture,
 } from '@camp/core';
 import type { CatController } from './cat-controller.ts';
+import { ACTIVITY_MOTION } from './cat-states.ts';
 import { anchorPlace } from './anchor-map.ts';
 import type { CatAnchorPlace } from './anchor-map.ts';
 import { GaitPhase, planTravel, restAt, travelAt } from './locomotion.ts';
@@ -156,15 +157,20 @@ export class CatBehaviorRuntime {
         this.plan = null;
         this.gait.reset();
       }
-      // 姿势切换：由控制器按新姿势重建基准参数
+      // 姿势切换：由控制器按新姿势重建基准参数；
+      // 同时把「在做什么」的头部动作配方叠上去——进食/饮水/用砂盆的姿势都是蹲伏，
+      // 只有头部动作能把它们区分开。
       this.controller.snapPoseFor(seg.posture, true);
+      this.controller.setActivityMotion(ACTIVITY_MOTION[seg.activity] ?? null);
     }
 
     if (this.plan) {
       const elapsedS = this.t - Math.max(0, this.planStartT);
       this.transform = travelAt(this.plan, elapsedS);
-      const phase = this.gait.advance(step, 1.9);
-      // 位移时把步态相位交给控制器，由它做躯干起伏与迈步
+      // 位移已结束（到得早）时不再走步态，原地站着等下一段——这样猫不会「原地踏步」，
+      // 也不会为了拖满时间线而放慢成蜗牛。
+      const arrived = elapsedS >= this.plan.durationS;
+      const phase = arrived ? 0 : this.gait.advance(step, 1.9);
       this.controller.setExternalTransform(this.transform, phase);
     } else {
       // 静止：位置贴合到当前锚点（位移结束时可能因缓动留有极小残差）

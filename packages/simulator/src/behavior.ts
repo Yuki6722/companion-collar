@@ -12,7 +12,7 @@
  *   本表与 `apps/web/src/scene/cat/anchor-map.ts` 都按它取 id，
  *   core 单测会断言两张表的 id 集合与之一致。
  */
-import { buildBehaviorTimeline } from '../../core/src/index.ts';
+import { OPERATIVE_CONSTANTS, buildBehaviorTimeline } from '../../core/src/index.ts';
 import type { CatAnchorSpec, CatBehaviorTimeline, CatIncidentKind } from '../../core/src/index.ts';
 
 /**
@@ -51,8 +51,14 @@ export interface BehaviorLayerOptions {
   injectIncidents?: ReadonlyArray<{ atS: number; kind: CatIncidentKind }>;
 }
 
-/** 行为层默认倍率：1 秒当 1 分钟，让「一天」在 24 分钟的演示里走完。 */
-export const DEFAULT_TIME_SCALE = 60;
+/**
+ * 行为层默认倍率。
+ *
+ * ⚠️ 从 core 的操作化常量读取，不在这里写死：倍率同时决定「一个行为片段在屏幕上停留多久」
+ * 与「一天能否在一场演示里走完」，写死在多处必然漂移（见 `OPERATIVE_CONSTANTS.behaviorTimeScale`）。
+ */
+export const DEFAULT_TIME_SCALE =
+  OPERATIVE_CONSTANTS.find((c) => c.id === 'behaviorTimeScale')?.value ?? 20;
 
 /**
  * 为一次会话生成行为时间线。
