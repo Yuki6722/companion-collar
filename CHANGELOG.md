@@ -12,76 +12,84 @@
   落地灯等饲主家具。设计、资产许可与验证方式见 [`docs/design/03-home-scene-stage1.md`](docs/design/03-home-scene-stage1.md)，
   截图见 `docs/design/shots/`。
 - **橘猫的两套手动演示状态**（平静舒适 / 激动不适）：参数化姿态、耳朵、尾巴、瞳孔、呼吸与动作幅度，
-  0.8 s 过渡且**可中途打断**。状态推进由 wall clock 推导而非逐帧累加 —— 否则后台标签降帧会卡住状态。
-  界面明确标注这是手动演示档位，**不是**系统对猫状态的推断。
+  0.8 s 过渡且**可中途打断**。姿态与位置都由 wall clock 推导而非逐帧累加——否则后台标签降帧会卡住状态。
+  界面明确标注这是手动演示档位，**不是**系统对猫状态或情绪的推断。
 - `@camp/core/src/home.ts`：居家资源清单规则（`summarizeHomeResources`）——
   把房间里的资源折算成 AAFP/ISFM 检查项，逐条带证据等级与来源；
-  **与房间内容无关的项固定 `unknown`**，界面显示「需你确认」，绝不因缺数据而默认合格；
+  **与房间内容无关的项固定 `unknown`**（界面显示「需你确认」），绝不因缺数据而默认合格；
   指南未给米制阈值的判据（分离距离、离通道距离、可俯瞰高度）标为**操作化常量**并写明理由。
   新增 11 项单测（`packages/core/test/home.test.ts`）。
-- `scripts/fetch-assets.mjs`：幂等抓取 CC0 资产（13.09 MB，含字节校验与许可清单生成）。
-- `scripts/smoke-scene.mjs`：场景自检断言 —— 读取浏览器回传的快照，验证渲染、资产替换与状态切换。
-- `apps/web/public/styles.css`、`scripts/dev-server.mjs` 的 `POST /__selftest` 端点（仅本地预览）。
+- `scripts/fetch-assets.mjs`：幂等抓取 CC0 资产（10.56 MB，含字节校验与许可清单生成）。
+- `scripts/smoke-scene.mjs`：场景自检断言——读取浏览器回传的快照，验证渲染、资产替换与状态切换。
+- `apps/web/public/styles.css`；`scripts/dev-server.mjs` 增加 `POST /__selftest` 端点（仅本地预览）。
 
 ### Changed
-- **家具风格统一为现代简约**（截图核对后逐件替换，取舍记录见设计文档 §4）：
-  - 边柜：`painted_wooden_cabinet`（做旧白 + 锈迹）→ `vintage_wooden_drawer_01`（柚木抽屉柜）；
-  - 置物架：`Shelf_01`（风化灰蓝金属）→ 程序化浅橡木开架（薄侧板 + 薄隔板 + 无背板）；
-  - 沙发：`sofa_03`（深色木框 + 织锦靠垫）→ 程序化现代低矮布艺款（米灰亚麻、方正座块、
-    细金属脚），并**正对东墙电视**（原先朝向反了，沙发是背对电视的）；
-  - CC0 库里没有现代款沙发与开架，因此这两件改为程序化：**扫描件负责材质真实，程序化负责风格可控**。
-  - 织纹按物件尺寸调强度：同一个 256px 织纹贴图铺在 2 m 宽的沙发上会读成「灯芯绒」，
-    现按面宽压低法线强度与织格尺寸（沙发/床品/地毯/猫毯分别取值）。
-- 资产总量 13.09 → **10.56 MB**（少两个扫描模型目录）；客厅机位改到沙发前方，能拍到沙发正面。
-- `apps/web` 从单页骨架改为**两屏 + hash 路由**：家居场景 / 工程自检；骨架自检内容迁移到 `screens/status.ts`。
-- `scripts/build-web.mjs` 新增 three vendoring：把 `three.module.js`/`three.core.js` 与**递归解析**出的
+- `apps/web` 从单页骨架改为**两屏 + hash 路由**：家居场景 / 工程自检（原骨架自检内容迁到 `screens/status.ts`）。
+- `scripts/build-web.mjs` 增加 three vendoring：把 `three.module.js`/`three.core.js` 与**递归解析**出的
   addon 依赖复制到 `dist/vendor/three/`，由 import map 指向同源路径（运行时零外链）。
+- 家具风格统一为现代简约（截图核对后逐件替换）：边柜 → 柚木抽屉柜；置物架 → 程序化浅橡木开架；
+  沙发 → 程序化现代低矮布艺款并**正对电视**。取舍记录见设计文档 §4。
 - `scripts/dev-server.mjs` 补齐 `.gltf/.glb/.bin/.hdr` MIME；`.gitattributes` 标注 3D 资产为二进制。
-- `README.md` 结构说明与快速开始同步（`apps/web` 已不是 Vite 站）。
-- **产品方向 v2**：从「感知参数可视化 + 居家资源核查」调整为 **「基线哨兵 + 离家事件流」**。
-  一句话定位：**你上班时，它经历了什么；以及，它是否正在慢慢变化。**
-  依据：「了解宠物感受」其实是四个问题，只有①不可回答（动物情绪体验不可直接测量）；
-  主人真正的盲区是③渐变 —— PLOS ONE 2026（n=647）显示主人漏掉**细微**信号，
-  AAFP 指南指出客户「被问到引导性问题前未意识到逐渐发生的变化」。
-  完整计划见 `docs/design/00-plan-3day-camp.md`。
-- `AGENTS.md` 同步重写：新增 §5.5.4（core 不得运行时跨包导入）、§5.5.5（措辞表单一事实来源）
 
 ### Verified
-- typecheck 3/3 通过（core / simulator / web）
-- 单元测试 **47/47** 通过（core profile 5、baseline 10、drift 10、home 11、simulator 11）
-- 措辞门禁通过；静态站构建产出 **122 个文件**
-- 场景自检通过：`models=6 tiles=3 env=1 placeholdersLeft=0 issues=0`，且切到激动后
-  尾巴/耳朵/瞳孔参数确实改变、两种状态落在不同锚点、切回平静后参数回到起点
+- typecheck 3/3 通过（core / simulator / web）；静态站构建产出 106 个文件
+- 单元测试 **27/27** 通过（core profile 5 + home 11、simulator 11）
+- 措辞门禁通过；场景自检 11/11 通过（`scripts/smoke-scene.mjs`）
 
 ### Added
-- `@camp/core/src/baseline.ts`：稳健基线（中位数 / MAD / 1.4826×MAD 等效标准差）。
-  样本不足返回 `null`（**绝不猜**）；常量信号标记 `degenerate`，`robustZ` 不会产生 Infinity。
-- `@camp/core/src/drift.ts`：漂移检测 —— 稳健效应量 + **置换检验** + **持续性判据**。
-  必须 `|delta| ≥ 1.0` **且** `p < 0.05` **且** `sustainedPct ≥ 0.6` 才报 `notable`，
-  以避免把**单次尖峰**误判为漂移。`describeDrift` 只描述变化，不描述感受。
-- `@camp/core/src/claims.ts`：措辞政策的**单一事实来源**（禁词表、允许宣称、否定标记、豁免目录）
-- `@camp/core/test/`：`baseline.test.ts`（10 项）、`drift.test.ts`（10 项）、`helpers.ts`
-- `apps/web` 无打包器构建：`scripts/build-web.mjs`（tsc + 浏览器 import map）、`scripts/dev-server.mjs`
-- `docs/research/`：三份研究报告归档（含归属说明）；`AGENTS.md`；`docs/design/` 计划与证据政策
+- **GitHub Pages 门禁与发布工作流** `.github/workflows/pages.yml`，分三个 job：
+  - `verify`：`pnpm typecheck` + `pnpm test` + `pnpm check:claims`。
+    措辞门禁进入 CI 后（见 `AGENTS.md` §4.3），「命中禁词即构建失败」才真正成立——
+    本地可以忘，CI 不会忘。
+  - `build`：`pnpm build` 后自检产物（`index.html`／`.nojekyll`／编译后的 `main.js` 与 `packages/core/src/index.js`），
+    再交给 `actions/upload-pages-artifact`。
+  - `configure-pages` 以 `enablement: true` 运行，尝试由 Actions 自行补齐 Pages 配置
+    （协作者仅有 `write` 权限时直接调 Pages API 返回 404，需仓库所有者操作）；该步骤刻意设为
+    `continue-on-error`，避免权限问题连带让门禁与构建变红。
+  - `deploy`：仅 `main` 推送时经 `actions/deploy-pages` 发布，PR 只跑门禁与构建。
+  - 权限取最小集（默认 `contents: read`，仅 `deploy` job 提权 `pages: write` + `id-token: write`）。
+- 站点以**项目子路径**形式发布（`https://<owner>.github.io/companion-collar/`）。
+  `apps/web/index.html` 的 import map 使用相对路径，构建产物自带 `.nojekyll`，因此子路径下无需额外改写。
 
 ### Fixed
-- **`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`**：workspace 包经 node_modules 符号链接解析，
-  Node 的类型剥离拒绝该路径下的文件。因此 `@camp/core` 不再在**运行时**导入任何 workspace 包；
-  置换检验改用 core 内部的最小 PRNG（`makeShuffleRng`），测试自带确定性抽样器。
-- 措辞门禁此前把禁词表硬编码在脚本里，导致「描述禁词表」本身就会命中禁词。
-  现收拢到 `core/src/claims.ts`，门禁与单元测试共用；`drift.test.ts` 直接遍历该表断言输出不含禁词。
-- 仿真器不再重复实现 PRNG —— 保留在 simulator（数据生成），core 只保留打乱用途的最小实现。
-
-### Verified
-- typecheck 3/3 通过（core / simulator / web）
-- 单元测试 **36/36** 通过（profile 5、baseline 10、drift 10、simulator 11）
-- 措辞门禁通过（扫描 25 个文件，豁免 5 个，12 条禁词）
-- 静态站构建产出 22 个文件
+- **测试脚本在 Node 24 下无法运行**：`packages/*/package.json` 的 `test` 由 `node --test test/`
+  改为 `node --test "test/*.test.ts"`。
+  症状：`Cannot find module '.../packages/core/test'`——Node 24 把目录参数当模块路径解析，
+  而非测试目录。CI 首跑（run #1）即在此处失败。
+  本地此前未暴露，是因为沙箱内按 `AGENTS.md` §6 的做法直接执行单个测试文件，绕开了目录参数。
+  glob 形式在本机与 Linux runner 上都能正确发现测试文件。
 
 ## [0.0.1] - 2026-10-02
 
-初始骨架：pnpm workspace、TypeScript strict + `erasableSyntaxOnly` 门禁、措辞门禁、
-无打包器构建、共享领域类型、确定性仿真器、三份研究报告归档。
+初始骨架。本日完成基础设施、共享领域模型、仿真器与文档归档。
+
+### Added
+- pnpm workspace 骨架：`packages/core`、`packages/simulator`、`apps/web`
+- TypeScript strict 基线 `tsconfig.base.json`，含 `erasableSyntaxOnly` 门禁
+- **措辞门禁** `scripts/check-claims.mjs`：白名单 + 12 条禁词扫描，
+  支持行级否定标记与文件级 `claims-check:ignore-file` 豁免
+- **无打包器构建**：`scripts/build-web.mjs`（tsc 编译 + import map）+ `scripts/dev-server.mjs`（零依赖静态服务器）
+- `@camp/core`：领域类型（`PetProfile`／`PerceptionProfile`／`PillarGap`／`Session`／`EvidenceTag`）、
+  档案推导（年龄分档、体型分档、项圈重量预算、相机机位高度）
+- `@camp/simulator`：确定性 PRNG（mulberry32）、四类场景（客厅的一天／多猫紧张／噪声事件／老年行动力）、
+  带**逐通道注入滞后**的真值数据生成、`DeviceAdapter` 接口与仿真实现、CLI
+- **三份研究报告归档**至 `docs/research/`，含归属说明与各自对本项目的关键结论
+- 文档：`AGENTS.md`（面向 AI agent 的契约）、`docs/design/00-plan-3day-camp.md`（已批准计划）、
+  `docs/design/02-evidence-policy.md`（证据分级与措辞纪律）
+
+### Notes
+- Git 采用工作区内 MinGit 便携版（`.tools/git/`），不入库、不污染系统；
+  github.com 直连超时，改走 npmmirror 镜像
+- pnpm store / cache 指向工作区内 `.tools/`——沙箱会拦截工作区外的写入
+- **TypeScript 钉在 `^5.9`**：`typescript@7` 是原生编译器预览版，需平台二进制包装不上
+- **不用打包器**：Vite 7 的 rolldown / lightningcss 原生二进制在本环境安装失败
+（`ERR_PNPM_SYMLINK_FAILED`）
+
+### Verified
+- `tsc -p` 三个包全部通过
+- 单元测试 16/16 通过（core 5、simulator 11）
+- 措辞门禁通过（扫描 20 个文件，豁免 4 个）
+- 静态站构建产出 16 个文件
 
 [Unreleased]: https://github.com/Yuki6722/companion-collar/compare/v0.0.1...HEAD
 [0.0.1]: https://github.com/Yuki6722/companion-collar/releases/tag/v0.0.1
