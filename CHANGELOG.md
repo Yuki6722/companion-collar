@@ -19,6 +19,19 @@
   - 权限取最小集（默认 `contents: read`，仅 `deploy` job 提权 `pages: write` + `id-token: write`）。
 - 站点以**项目子路径**形式发布（`https://<owner>.github.io/companion-collar/`）。
   `apps/web/index.html` 的 import map 使用相对路径，构建产物自带 `.nojekyll`，因此子路径下无需额外改写。
+- **饲主状态同步视图（第一阶段）**，把宠物的客观情况同步给饲主：
+  - `apps/web/src/owner-status.ts`：项圈读数（心率／心率变异性／呼吸／体温／活动量／姿态）、
+    环境读数（噪声／温度／光照）、心率趋势、触觉相关身体事件流、环境影像记录位、边界与转诊
+  - `apps/web/src/sparkline.ts`：零依赖 SVG 趋势线。空数组、单点、全等值一律退化为水平基线，
+    不制造「看起来很忙」的假波动
+  - `apps/web/src/main.ts`：改为驱动状态视图，含场景切换（沿用 simulator 四场景）与播放控制
+- `docs/design/03-owner-status-sync.md`：项目中心调整说明与第一阶段范围
+
+### Changed
+- **项目中心调整**：从「可视化宠物的感知世界」转为「把宠物的客观情况同步给饲主」。
+  缘由、第一阶段范围、以及四条硬约束（`AGENTS.md` §3.1–3.4）为何未被放宽，见
+  [`docs/design/03-owner-status-sync.md`](docs/design/03-owner-status-sync.md)。
+  原中心的感知参数与五大支柱规则**暂不删除**，去留待团队决定。
 
 ### Fixed
 - **测试脚本在 Node 24 下无法运行**：`packages/*/package.json` 的 `test` 由 `node --test test/`
