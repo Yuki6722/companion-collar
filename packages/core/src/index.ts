@@ -19,3 +19,5 @@ export * from './behavior/index.ts';
 export * from './vitals/index.ts';
 // 生理状态层：状态 → 心率/呼吸/体动的注入规则与项圈可观测特征（抽搐 / 呕吐）
 export * from './physiology/index.ts';
+// 商城层：项圈带（带体）的材质/大小/轻重目录，以及「这条带合不合身」的重量预算判定
+export * from './collar-shop.ts';

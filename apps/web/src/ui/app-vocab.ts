@@ -9,11 +9,14 @@
  *   于是机制留在 `app-phone.ts`，词留在本文件，狗版页面只需要 `vocab: DOG_APP_VOCAB` 一行。
  *
  * ⚠️ 四条纪律：
- *   1. **猫的那一份逐字不变**：`CAT_APP_VOCAB` 的每一项都等于重构前 `app-phone.ts`
- *      渲染出来的原文。锚点、突发、读数的名词**直接引用 `@camp/core` 的常量**，
- *      因此界面词汇与 core 之间也不会漂移。猫版画面不该有任何变化。
+ *   1. **读数那套措辞逐字不变**：锚点、突发、读数、边界句的名词**直接引用 `@camp/core` 的常量**，
+ *      因此界面词汇与 core 之间也不会漂移。
+ *      ★ 本轮（`档案` → `我的` + 商城）**猫版与原版有意不同**：第四个页签改名、
+ *      原档案页整体搬进「宠物档案」子视图，并新增电量 / 定位 / 商城三个子视图。
+ *      搬走的是**结构**，档案那几句文案（品种年龄、"改档案会重建会话"、仿真声明）一个字没删。
  *   2. **不新增对物种的判断**：本文件只提供**词**，不提供判据。突发该不该提醒、
- *      读数算不算变化，仍然只由 `@camp/core` 的 `*_DEFS` / `evaluateVitalAlerts` 决定。
+ *      读数算不算变化、一条带子合不合身，仍然只由 `@camp/core` 的
+ *      `*_DEFS` / `evaluateVitalAlerts` / `checkStrapFit` 决定。
  *   3. **边界句只换主语**：指到物种的边界句，狗版只把主语从猫换成狗，
  *      否定结构（不是 / 不构成 / 非诊断 / 不能）与整句语义一字不动；
  *      能直接引用 core 的狗版常量时优先引用，不自己另写一套。
@@ -96,6 +99,57 @@ export interface AppSpeciesVocab {
   profileRebuildNote: string;
   /** 实时页「演示时钟 HH:MM（…）」里那句倍率说明（猫版 20×、狗版 12×） */
   demoTimeScaleNote: string;
+
+  // ---------------------------------------------------------------- 「我的」页（原「档案」页）
+  /**
+   * 底部第四个页签的名字：`档案` → **`我的`**。
+   *
+   * ⚠️ 只换**显示文案**：页签的 id 仍然是 `'profile'`（`selectTab` / URL / 自检动作都按 id 走），
+   * 因此这次改造不会动到任何既有调用点。
+   */
+  tabMine: string;
+  /** 「我的」页第一个子项的标题与一句话描述（宠物档案＝原来的整个档案页） */
+  mineItemProfileTitle: string;
+  mineItemProfileDesc: string;
+  /** 第二个子项：项圈电量 */
+  mineItemBatteryTitle: string;
+  mineItemBatteryDesc: string;
+  /** 第三个子项：定位 */
+  mineItemLocationTitle: string;
+  mineItemLocationDesc: string;
+  /** 第四个子项：商城（本轮新增） */
+  mineItemShopTitle: string;
+  mineItemShopDesc: string;
+  /** 子视图里的返回入口文案 */
+  mineBackLabel: string;
+
+  /** 商城的标题 */
+  shopTitle: string;
+  /** 商城的一句话说明（**按物种换主语**：这只猫 / 这只狗） */
+  shopIntro: string;
+  /** 商城的三个维度分组标题 */
+  shopMaterialTitle: string;
+  shopSizeTitle: string;
+  shopGradeTitle: string;
+  /** 购买确认：按钮文案 + 确认后的一行状态文字（本项目不做真实下单流程） */
+  shopConfirmLabel: string;
+  shopConfirmedNote: string;
+  /** 商城的证据政策说明：每个数字都带等级，未核实的项不给数值 */
+  shopEvidenceNote: string;
+  /** 商城的边界句：克重只用于演示预算怎么算，不构成任何性能或舒适度结论 */
+  shopBoundaryNote: string;
+  /** 「为什么这只…的预算这么小」——按物种措辞，解释体重 2% 这条规则的后果 */
+  budgetScaleNote: string;
+
+  /** 「项圈电量」子视图：标题 / 说明 / 仿真边界句 */
+  batteryTitle: string;
+  batteryDesc: string;
+  batterySimNote: string;
+  /** 「定位」子视图：标题 / 说明 / 数据来源说明 / 边界句 */
+  locationTitle: string;
+  locationDesc: string;
+  locationSourceNote: string;
+  locationBoundaryNote: string;
 }
 
 // ---------------------------------------------------------------- 共用：由 core 派生的词
@@ -139,6 +193,28 @@ function driftNoteOf(noun: string): string {
 /** 档案页那句「重建会话」的说明：同样只换主语。 */
 function rebuildNoteOf(noun: string): string {
   return `改品种或年龄会**按新档案重建整段仿真会话**（同一种子），因此读数基线会跟着变——档案驱动的是"这只${noun}自己的基线"，不是种群平均值。`;
+}
+
+// ---------------------------------------------------------------- 我的页与商城：按物种措辞的句子
+
+/**
+ * 商城说明：只换主语。
+ *
+ * 它必须把「卖的是带体、不是整机」说在前面：商城里的克重只是带体 + 表盘，
+ * 不含摄像头等任何附加模块，否则用户会拿它去对整机重量。
+ */
+function shopIntroOf(noun: string): string {
+  return `这里卖的是项圈带（带体），不是整机。按材质 / 大小 / 轻重各选一项，屏上会实时算出这条带多重、加上表盘多重、以及它合不合这只${noun}的项圈重量预算。`;
+}
+
+/**
+ * 「为什么这只宠物的预算这么小」——按物种换主语，解释的是 core 的规则而不是界面的偏好。
+ *
+ * 这句话是这一页存在的理由：预算 = 体重 2% 是个**乘法**，于是越轻的个体，
+ * 允许的整圈重量越小，同一条带子对小体型更容易超预算。
+ */
+function budgetScaleNoteOf(noun: string): string {
+  return `预算按体重的 2% 缩放（工程经验值，证据等级 weak）：这只${noun}越轻，允许的整圈重量越小。所以同一条带子，小体型更容易超预算——这是重量规则的直接后果，不是这条带子的质量问题。`;
 }
 
 // ---------------------------------------------------------------- 猫
@@ -288,6 +364,55 @@ const DRIFT_LABELS: Readonly<Record<DriftChannelKey, string>> = {
   vocalization: '发声次数',
 };
 
+// ---------------------------------------------------------------- 我的页 / 商城：两物种共用的词
+
+/**
+ * 「我的」页与商城里**没有一句是物种措辞**的那些词，两个物种共用一份。
+ *
+ * 为什么共用而不是复制两份：这四句子项名、商城的维度标题、确认文案、以及电池与定位的
+ * 边界句，说的都是同一件事（项圈电量是仿真值、定位来自行为时间线、克重是工程估算）。
+ * 复制两份只会等着它们漂移——而漂移的表现形式恰好是"猫版说仿真、狗版忘了说"这类最不该出现的事。
+ * 只有**句子里出现物种**的那三处（`shopIntro` / `budgetScaleNote`）才按物种分别生成。
+ *
+ * ⚠️ 边界句里必须同时出现「仿真 / 推导」与否定结构，缺一不可（见 `claims.ts` 的政策）。
+ */
+const MINE_SHARED = {
+  /** 页签名：猫狗都是「我的」 */
+  tabMine: '我的',
+  mineItemProfileTitle: '宠物档案',
+  mineItemProfileDesc: '品种与年龄（可选）：改档案会按新档案重建整段仿真会话',
+  mineItemBatteryTitle: '项圈电量',
+  mineItemBatteryDesc: '表盘电量与充电状态（仿真值）',
+  mineItemLocationTitle: '定位',
+  mineItemLocationDesc: '它现在所在的位置，以及本会话到过的地方',
+  mineItemShopTitle: '商城',
+  mineItemShopDesc: '项圈带：材质 / 大小 / 轻重，并算出合不合身',
+  mineBackLabel: '返回',
+
+  shopTitle: '项圈商城 · 项圈带',
+  shopMaterialTitle: '材质',
+  shopSizeTitle: '大小（颈围）',
+  shopGradeTitle: '轻重',
+  shopConfirmLabel: '选择这条',
+  shopConfirmedNote: '已记下这次选择（本项目不做真实下单与支付流程，这只是界面上的确认动作）。',
+  shopEvidenceNote:
+    '每个数字都带证据等级：本页克重是工程方案里的量级（材料密度 × 常见厚度，或在售产品规格页汇总），不是实测值；证据等级为「未核实」的材质按本项目政策不给克重数字。',
+  shopBoundaryNote:
+    '这些克重只用于演示"重量预算怎么算"，不构成任何产品性能或佩戴舒适度的结论；本项目不造真硬件，也没有做过称重或佩戴测试。',
+
+  batteryTitle: '项圈电量',
+  batteryDesc: '表盘电量与充电状态：百分比由演示时钟推出，是仿真值。',
+  batterySimNote:
+    '仿真值：这条曲线由演示时钟推出（满电按约 18 演示小时线性放电，会话开头 30 分钟视作在充电座上），不是实测续航，也不代表任何真实设备的电池表现。',
+
+  locationTitle: '定位',
+  locationDesc: '它现在所在的位置（房间 / 院子里的具名锚点），以及本会话到过的地方。',
+  locationSourceNote:
+    '数据来源：场景推来的行为状态（当前锚点）与同一条行为时间线里的锚点序列——画面、事件流与这一页读的是同一份时间线，所以它每次都能复现。',
+  locationBoundaryNote:
+    '这里的"定位"是由行为时间线推出的所在位置（房间 / 院子里的具名锚点），不是卫星定位，也没有坐标精度；室内场景下更不该把它当成定位精度来读。',
+} as const;
+
 // ---------------------------------------------------------------- 两个实例
 
 /**
@@ -315,6 +440,10 @@ export const CAT_APP_VOCAB: AppSpeciesVocab = {
   alertReferralNote: VITAL_ALERT_REFERRAL,
   profileRebuildNote: rebuildNoteOf(CAT_NOUN),
   demoTimeScaleNote: '约 20×',
+  // 「我的」页（原「档案」页）：档案那一套文案全部保留，成为「宠物档案」子视图的内容
+  ...MINE_SHARED,
+  shopIntro: shopIntroOf(CAT_NOUN),
+  budgetScaleNote: budgetScaleNoteOf(CAT_NOUN),
 };
 
 /**
@@ -358,4 +487,8 @@ export const DOG_APP_VOCAB: AppSpeciesVocab = {
   alertReferralNote: DOG_INCIDENT_REFERRAL_NOTE,
   profileRebuildNote: rebuildNoteOf(DOG_NOUN),
   demoTimeScaleNote: '约 12×',
+  // 与猫版**同一份**结构：只有带物种主语的两句换成狗的（见 `MINE_SHARED` 的说明）
+  ...MINE_SHARED,
+  shopIntro: shopIntroOf(DOG_NOUN),
+  budgetScaleNote: budgetScaleNoteOf(DOG_NOUN),
 };
