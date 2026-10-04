@@ -200,6 +200,10 @@ pnpm build          # 静态站点 → apps/web/dist（无打包器，tsc 编译
 pnpm typecheck      # 全 workspace 类型检查（含 erasableSyntaxOnly 门禁）
 pnpm test           # node:test 单元测试
 pnpm check:claims   # 措辞门禁
+pnpm check:layout-dog  # 狗版场景的布局审计（不重叠 / 在界内 / 通道畅通 / 清单齐全）
+pnpm check:dog-motion  # 柴犬的运动审计（导航图连通 / 不瞬移 / 不倒着走 / 不穿实体）
+pnpm check:dog-pose    # 柴犬的姿态审计（17 种姿态 × 四只爪底都不穿地 + 抖动幅度 + 一次性"吐出" + 玩水动作 + 项圈镜头）
+pnpm check:dog-anchors # 锚点契约审计（core / simulator / web 三张锚点表必须逐字同序 + 映射无悬空）
 pnpm verify         # 以上三者串联（提交前必跑）
 pnpm sim:generate -- --seed 42 --scenario noise-event --minutes 240
 ```
@@ -216,7 +220,7 @@ pnpm sim:generate -- --seed 42 --scenario noise-event --minutes 240
 |---|---|---|
 | `pnpm -r <script>` | `Error: spawn EPERM` | 直接调用工具，见下 |
 | `node --test <目录>` | `Error: spawn EPERM`（runner 为每个文件派生进程） | **直接执行测试文件** |
-| 启动浏览器（Chrome/Edge 无头） | `mojo platform_channel.cc: Check failed` —— 进程间通信用命名管道，被拦截 | 场景自检改由**人在普通终端跑一次**，agent 只读日志断言（`scripts/smoke-scene.mjs`） |
+| 启动浏览器（Chrome/Edge 无头） | `mojo platform_channel.cc: Check failed` —— 进程间通信用命名管道，被拦截 | 场景自检改由**人在普通终端跑一次**，agent 只读日志断言（`scripts/smoke-scene.mjs`）· 画面类改动另跑 `scripts/check-layout-dog.mjs`（对布局数据做机械判定，不依赖浏览器） |
 
 ```bash
 # 沙箱内的等价验证方式
@@ -246,9 +250,15 @@ apps/web/                  [B] 静态站（tsc + 浏览器 import map，无打�
   public/assets/              CC0 3D 资产（模型 / 平铺贴图 / HDRI）+ CREDITS.md
   src/scene/                  3D 场景：layout（权威坐标）· build-* · cat/ · materials · textures
     cat/                        猫模型（含**项圈硬件与触须无干涉区**）· 控制器 · 行为运行时 · 位移推进
-  src/screens/                家居场景（含右栏 **App 预览机模**）/ **生理读数** / **居家资源** / 工程自检
+    dog/                        狗版场景：`layout-dog.ts`（房间 + 院子的权威坐标）· build-dog-{room,kitchen,furniture,gear} ·
+                                `build-yard.ts`（草坪挖池塘洞 / 栅栏 / 石板路 / 树 / 灌木 / 休闲区 / 池塘）·
+                                `garden-materials.ts`（室外材质）· `instancing.ts`（实例化 + 确定性散布）·
+                                **柴犬**：`dog-rig.ts`（骨架契约）· `dog-model.ts` · `dog-controller.ts`（17 种姿态）·
+                                `dog-nav.ts`（导航图 + 路径跟随，不瞬移/不倒着走）· `dog-behavior.ts`（运行时）
+  src/scene/dog-scene.ts      [B] 狗版场景装配（`#/dog`）：房间 + 院子 + 柴犬的自主行为
+  src/screens/                家居场景（含右栏 **App 预览机模**）/ **狗的生活场景**（`#/dog`）/ **生理读数** / **居家资源** / 工程自检
 docs/research/             七份研究报告（团队共同依据，含归属说明）
-docs/design/               产品定义 · 证据政策 · 验证方案 · 三日计划 · 03/04 家居场景各阶段 · 05 项圈生理读数 · 06 状态程序 · 07 布局与 App 预览 · 08 读数提示 · 09 项圈相机与 App 四模块
+docs/design/               产品定义 · 证据政策 · 验证方案 · 三日计划 · 03/04 家居场景各阶段 · 05 项圈生理读数 · 06 状态程序 · 07 布局与 App 预览 · 08 读数提示 · 09 项圈相机与 App 四模块 · 10 狗版房间与院子 · 11 柴犬与狗的行为
 docs/design/shots/         场景截图（人工核对的画面证据）
 docs/hardware/             项圈规格 · 传感器位置 · 失效源定义 · 真机验证路线
 scripts/                   构建 · three vendoring · 资产抓取 · 措辞门禁 · 场景自检 · 部署
@@ -322,6 +332,70 @@ data/                      运行时数据（不入库）
   现改为真实秒推进 + 走路时时间线局部刹车 + 段切换按需重规划，**只有跳跃允许忽略轨迹**；
   新增两个可断言仪器：**位移探针**（拦瞬移）与**项圈相机帧计数**。
   设计与验收见 [`docs/design/09-collar-camera-and-app-modules.md`](docs/design/09-collar-camera-and-app-modules.md)
+- ✅ **狗的生活场景（独立一屏 `#/dog`，房间 + 院子）**：猫版 `#/home` **原样保留**，两套场景可来回对照。
+  房间 **9.6 × 7.0 × 3.0 m**（猫版 7.2 × 5.6 × 2.75）+ 院子 **9.6 × 8.2 m**；
+  温暖日式：开放式厨房（含吊柜/油烟机/沥水架/岛台与三张吧台凳）、电视与电视柜、沙发茶几地毯、
+  低台床与衣柜、置物架、鞋柜、北墙木格栅、四扇推拉玻璃门与三扇窗；
+  狗的用品：食盆水盆（抬高木托架）、**两处软垫**（窗下日光位 / 卧室床边）、玩具篮、牵引绳挂钩、院内水盆；
+  院子：草坪（**带池塘洞的 ShapeGeometry**）、4 棵树（含一棵红枫）、
+  13 丛灌木与绿篱、石板路 3 条、藤架 + 休闲躺椅 + 小桌、椭圆小池塘（池壁/水面/压顶石/睡莲/水生植物）、
+  石灯笼、草坪灯、木栅栏与远景地面（**花坛与花丛按用户反馈已移除**，布局/建模/材质三处一并删净）。
+  ★ 本轮新增一个**不依赖浏览器的机械门禁** `scripts/check-layout-dog.mjs`（32 项断言：实体两两不重叠 /
+  不出界 / 洞口合法 / 通道净距 / 主通道必须从推拉门开着的那一格出屋 / 点名要素齐全 / 花坛已移除的决策守卫），
+  它在本轮**真的抓到了 3 处错误**并已修正。
+  设计与验收见 [`docs/design/10-dog-home-and-yard.md`](docs/design/10-dog-home-and-yard.md)
+- ✅ **柴犬模型与狗的行为（第六轮反馈）**：`#/dog` 里多了一只**程序化建模的柴犬**（`dog-model.ts`，含立耳 /
+  5 段卷曲蓬松尾巴 / 赤白双色短毛 / 饱满脸颊与眉点 / 6 部件项圈），姿态动画控制器
+  （`dog-controller.ts`：真步态循环、坐/趴/睡/喝/吃/排泄/玩耍/嗅闻、**抽搐四时相**与**呕吐三时相**），
+  以及 `@camp/core/src/behavior/dog.ts` 的**狗行为层**（12 种活动 · 狗的节律权重 · 时间线生成器 · 突发定义；
+  猫的行为层一行未改）。
+  ★ **「有轨迹、不倒着走、不瞬移」做成了结构上的不可能**：`dog-nav.ts` 的节点图 + 路径跟随，
+  三条不变量（位移 ≤ 速度×帧时 · 朝向恒等于前进方向且对齐度有死区 · 转头速率上限），
+  并由新增的机械门禁 `scripts/check-dog-motion.mjs` 按 60 Hz 逐帧模拟 **67 条路线 × 2 档速度**后断言（20 项）。
+  该审计在本轮**真的抓到了 5 处错误** + 1 处设计缺陷（"朝向差 89° 横向蹭过去"），均已修正。
+  ★ 集成时另发现两条真坑并修掉：`setPose()` 逐帧调用会重置过渡（姿态永远停在起点）；
+  时间线的突发时长是**演示秒**（12× 下 2.5 真实秒）而动画需要 15 真实秒，直接当段长会把抽搐切掉。
+  设计与验收见 [`docs/design/11-shiba-dog-and-behaviors.md`](docs/design/11-shiba-dog-and-behaviors.md)
+- ✅ **柴犬的四条硬化（第七轮反馈）**：
+  ① **抽搐有明显的原地抖动** —— 抖动拆成上下（~10 cm）与横向（侧倾摆幅 ~23°）两个独立幅度，
+  两个频率叠加以免读成规律振荡（原来只有 1.6 cm，几乎看不出）；
+  ② **呕吐会吐出呕吐物、10 真实秒后消失** —— 控制器给一次性事件 `consumeVomitEmit()`，
+  场景按狗当前朝向在**嘴前方**落一团不规则呕吐物，到期连几何一起清掉（按真实秒计时，
+  否则 12× 倍率下 0.83 秒就没了）；
+  ③ **两个突发原地发生、不许跑开** —— 突发段完全不寻路（`travelS = 0`），点击时新时间线的起点
+  接在 `atS` 而不是 `atS - 1`（否则会先走一秒再发作）；并新增仪器 `incidentDrift()`
+  逐帧记账，徽章里的 `dogIncidentDrift` **恒应为 0.000**；
+  ④ **两个动态机位** —— `狗特写`（相机挂在斜后方、按朝向每帧重算，不会钻进家具）与
+  `狗视角（项圈相机）`（相机站在前端镜头 `collar-camera` 上、渲染时隐藏狗自己；
+  名称与颈部高度由 `check:dog-pose` 断言，改名会被门禁拦住）。
+  姿态审计 37 → **48 项**。
+- ✅ **狗版的 App 预览（第八轮反馈）**：右栏加上与猫版**同一个组件**的 iPhone 机模
+  （实时 / 事件流 / 健康 / 档案），差异只来自注入的**物种词表** `ui/app-vocab.ts` 的 `AppSpeciesVocab`
+  —— 这是「共用机制、分开参数」在 UI 层的兑现。`vocab` **缺省即猫那套**，所以猫版页面一行未改。
+  ★ **指标真的按狗的标准**：`generateSession()` 按 `profile.species` 分派，狗走
+  `buildDogTimeline` + `SIM_DOG_ANCHORS`；`Session` 新增 `dogBehaviorTimeline?`（`behaviorTimeline` 原样保留，
+  不改联合类型）。实测同种子 24h 中位数：猫 hr **174.1** / 狗 **114.7**，HRV 44.8 / **69.8**，
+  活动词汇 11 种（含理毛/躲藏/砂盆）→ **12 种**（走动/小跑/奔跑/嗅闻…），锚点 13 → **15**
+  （草坪/排泄角/院内水盆…）；`DOG_BREEDS` 15 个品种（含柴犬 40 cm / 10 kg，toy→giant 五档全覆盖）。
+  ★ 同时补齐了「实时」页要用的**项圈相机离屏画面**（`dog-scene.ts` 的 `setPovCanvas` / `povState` /
+  `updatePovFeed`，8 fps 节流、渲染时隐藏狗自己），并让狗版页面也走
+  **会话作为单一数据源**（画面 / 事件流 / 手机读数共用同一条时间轴，猫版在 design 07 关掉的那个接缝）。
+  设计与验收见 [`docs/design/11-shiba-dog-and-behaviors.md`](docs/design/11-shiba-dog-and-behaviors.md) §6
+- ✅ **院子自由活动与四个交互（第九轮反馈）**：用户反馈"狗在院内只会在石板路上走动，
+  希望能在任何位置行动或玩耍，多增加一些交互，比如走到水池边会发生玩水的动作"。
+  ★ **病因不是行为层不想去，是导航图只铺了路面**：院子里的节点原本只有 10 个、全在三条石板路上。
+  改为**确定性生成 + 逐点剔除**（约 0.9 m 格距 → 剔除净距不足 → 只在合格直线段连边 → 探针格补漏）：
+  节点 **31 → 98**、边 **33 → 237**，另加 7 个具名互动点位（草坪四向 / 树下 / 灌木边 /
+  **`pond-edge` 距水面 0.10 m**）。★ 验收是可证伪的数：草坪按 0.5 m 取 **130 个样本点，
+  到最近节点的距离全部 ≤ 0.7 m（实测最坏 0.595 m）**；运动审计 20 → **32 项**。
+  ★ **四个院子互动**：玩水（前爪交替扒水 + 水花，两前腿相关系数 −1.000）· 草地打滚（滚转 0.50–1.20 rad）·
+  刨地 · 晒太阳（只在 07:00–19:59）。姿态 14 → **17**、活动 12 → **16**、锚点 15 → **20**。
+  ★ **手动触发入口**（左栏四个按钮）：12× 时钟下玩水平均每 13 真实分钟才轮到一次，
+  靠等是没法验收的。它复用现有路线机制（合成临时段走 `startSegment` 同一条路），
+  **不重建会话**（时间线与手机 App 的数据不受影响）；逐帧实测：最大位移比 **1.0000**、
+  朝向余弦 ≥ **0.219**、到点距离 **0.000 m**、单帧最大跳变 **0.015 m**。
+  ★ 新增第五道门禁 `check:dog-anchors`（core / simulator / web 三张锚点表必须逐字同序）。
+  设计与验收见 [`docs/design/11-shiba-dog-and-behaviors.md`](docs/design/11-shiba-dog-and-behaviors.md) §8
 
 待办：
 - ⏳ `simulator`：注入**渐进漂移**（线性斜坡）+ `truth.injectedDrift` + 回归断言（Day 1，A）
@@ -335,6 +409,20 @@ data/                      运行时数据（不入库）
 - ⏳ 生理状态程序后续：给 `labored-breathing` / `withdrawal` / `freezing` 建立生理时相
   （目前走兜底平表）；`INCIDENT_DEFS.seizure.demoDurationS` 是否从 15 s 提到 30 s
   以容纳完整恢复段（见 design 06 §6.3）
+- ⏳ **`layout-dog.ts` 的圆形障碍实际被建成了方块**（`circle()` 走到 `rect()`），
+  灌木/树干/置石/草坪灯在**斜向上被放大最多 41%**。后果：院子东北角等约 **3.5 m²** 草地
+  达不到 0.30 m 站位净距，导航图里没有布点（覆盖率断言也如实不把要求加在它头上）。
+  要真让那些地方可走，需让圆形占地走**真圆距离**（现在只有池塘有 `ellipse`），
+  并同步 `check-dog-motion.mjs` / `check-layout-dog.mjs` 的距离函数。
+  见 [`docs/design/11`](docs/design/11-shiba-dog-and-behaviors.md) §8.7
+- ⏳ 狗版场景后续：昼夜与天气；院子里的水景动画；**画面观感的人工逐张核对**
+  （§8.2 需要人在普通终端跑一次浏览器，目前「几何体量 / 占地关系 / 通道净距 / 洞口合法 /
+  运动学不变量 / 行为时间线」都是机器核对过的，**「柴犬看起来像不像柴犬」还没核对过**）
+- ⏳ **core 的三条边界句主语写死了猫**（`VITALS_BOUNDARY_NOTE` / `VITALS_SIM_NOTE` /
+  `VITAL_ALERT_REFERRAL` 里的"猫"/"公猫"）。狗版目前由 `apps/web/src/ui/app-vocab.ts`
+  **只换主语**兜着 —— 但边界句是领域政策，**理应住在 core 并按物种参数化**，
+  不该让 web 层改写。建议把这三条改成接受 `species` 的函数（保持猫的默认产出一字不变）。
+  见 [`docs/design/11`](docs/design/11-shiba-dog-and-behaviors.md) §6.1
 
 阶段 tag：`v0.0.1`（骨架）→ `v0.1.0`（Day1）→ `v0.2.0`（Day2）→ `v1.0.0`（Day3）
 
