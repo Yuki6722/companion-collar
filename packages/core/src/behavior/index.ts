@@ -70,3 +70,43 @@ export {
   incidentAt,
   tendencyAt,
 } from './engine.ts';
+
+// 狗的行为层（词汇、节律、时间线）。
+// 与猫层并列而不是合并：仓库纪律是「共用机制、分开参数」——机制（确定性采样、
+// 连续覆盖、突发覆盖层）在两边形状一致，但权重与硬约束各一套，混用等于两套参数漂移。
+export {
+  DOG_ACTIVITY_DEFS,
+  DOG_ACTIVITY_IDS,
+  DOG_ANCHOR_IDS,
+  DOG_ANCHOR_LABELS,
+  DOG_BEHAVIOR_STRIDE_S,
+  DOG_INCIDENT_BOUNDARY_NOTE,
+  DOG_INCIDENT_DEFS,
+  DOG_INCIDENT_KINDS,
+  DOG_INCIDENT_REFERRAL_NOTE,
+  DOG_POSTURE_LABELS,
+  buildDogTimeline,
+  chooseDogActivity,
+  dogActivityAt,
+  dogActivityShare,
+  dogActivityWeightAt,
+  dogActivityWeights,
+  dogIncidentAt,
+  dogNightFactor,
+  dogTendencyAt,
+} from './dog.ts';
+export type {
+  DogActivityDef,
+  DogActivityId,
+  DogAnchorCapability,
+  DogAnchorSpec,
+  DogBehaviorIncident,
+  DogBehaviorIncidentRequest,
+  DogBehaviorInput,
+  DogBehaviorSegment,
+  DogBehaviorTimeline,
+  DogIncidentDef,
+  DogIncidentKind,
+  DogIncidentPhase,
+  DogPosture,
+} from './dog.ts';

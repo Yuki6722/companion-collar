@@ -9,6 +9,7 @@ import type {
   CatBehaviorSegment,
   CatBehaviorTimeline,
 } from './behavior/contract.ts';
+import type { DogBehaviorTimeline } from './behavior/dog.ts';
 
 // ---------------------------------------------------------------- 基础枚举
 
@@ -288,6 +289,21 @@ export interface Session {
    * 读者不同、生命周期也不同（截图上只需要时间线）。
    */
   behaviorTimeline?: CatBehaviorTimeline;
+  /**
+   * 狗的行为时间线。仅当 `profile.species === 'dog'` 且行为层开启时存在。
+   *
+   * **为什么新增一个字段，而不是把 `behaviorTimeline` 改成联合类型**
+   * （`CatBehaviorTimeline | DogBehaviorTimeline`）：
+   *   猫页面读前者、狗页面读后者，两个消费方各自只需要一种时间线。改成联合类型以后，
+   *   **猫那一路的每一个消费点都得先做类型收窄**（否则取 `segments[i].activity` 时
+   *   拿到的是 `CatActivityId | DogActivityId`，所有按活动名的分支都要重写），
+   *   而猫版这一轮一行都不该改。新增字段的代价只是多一个可缺省属性，
+   *   收益是两侧的消费方**都不用改**，且「猫的会话里不会出现狗的时间线」由 `undefined` 直接表达。
+   *
+   * 它是「给渲染用的输入」，不是真值：狗的行为真值只此一处
+   * （`seed` / `timeScale` / `segments` / `incidents` / `budgetS` 全在里面）。
+   */
+  dogBehaviorTimeline?: DogBehaviorTimeline;
 }
 
 export interface SimTruth {

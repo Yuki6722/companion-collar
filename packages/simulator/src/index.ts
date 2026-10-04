@@ -9,7 +9,9 @@
  *   2. injectedGaps   → 资源缺口（供 evaluatePillars 验证）
  *   3. injectedLags   → 环境→生理的滞后（供相关分析验证）
  *
- * 另有一条**行为层**真值：猫的行为时间线与主动注入的突发演示（`injectedIncidents`）。
+ * 另有一条**行为层**真值：行为时间线与主动注入的突发演示（`injectedIncidents`）。
+ * 行为层按 `profile.species` 分派：猫走 `buildBehaviorTimeline`（结果放进 `behaviorTimeline`），
+ * 狗走 `buildDogTimeline`（结果放进 `dogBehaviorTimeline`）。两条路共用同一套生理读数链路。
  *
  * ⚠️ 导入路径纪律：本文件对 core 的**运行时**导入必须用相对路径，不能用 `@camp/core`。
  * `@camp/core` 是 pnpm 在 `node_modules` 下建的目录联接，而 Node 24 的类型剥离
@@ -19,15 +21,18 @@
  */
 import type {
   AdapterCapabilities,
+  CatActivityId,
   CatBehaviorTimeline,
   DeviceAdapter,
+  DogBehaviorTimeline,
   PetProfile,
   Sample,
   Session,
   SimEvent,
   SimTruth,
+  Species,
 } from '../../core/src/index.ts';
-import { activityAt, hourOfDayAt, incidentAt } from '../../core/src/index.ts';
+import { activityAt, dogActivityAt, dogIncidentAt, hourOfDayAt, incidentAt } from '../../core/src/index.ts';
 import {
   coreTempDeltaAt,
   episodeMotion,
@@ -36,7 +41,7 @@ import {
 } from '../../core/src/index.ts';
 import type { PhysiologyEpisodeKind } from '../../core/src/index.ts';
 import { Rng } from './prng.ts';
-import { SIM_CAT_ANCHORS, buildSessionBehavior } from './behavior.ts';
+import { SIM_CAT_ANCHORS, SIM_DOG_ANCHORS, buildSessionBehavior, buildSessionDogBehavior } from './behavior.ts';
 import type { BehaviorLayerOptions } from './behavior.ts';
 import { applyReading, createVitalsSimulator, makeSleepTracker } from './vitals.ts';
 import type { VitalsTruthRow } from './vitals.ts';
@@ -103,7 +108,13 @@ export interface SimConfig {
   sampleIntervalSec?: number;
   /** 是否在真值中记录注入缺口（默认按场景） */
   injectGaps?: boolean;
-  /** 行为层。缺省开启——猫的位移与行为事件都由它派生，不再是纯随机事件 */
+  /**
+   * 行为层。缺省开启——位移与行为事件都由它派生，不再是纯随机事件。
+   *
+   * ⚠️ 这张表的**内容按 `profile.species` 解释**：猫看 `anchors` / `awayWindows`，
+   * 狗看 `dogAnchors`（并把 `awayWindows` 忽略掉）。`injectIncidents` 是两边共用的，
+   * 它的 `kind` 放宽成猫狗两个种类的联合，由 `generateSession` 在运行时按物种过滤。
+   */
   behavior?: BehaviorLayerOptions;
 }
 
@@ -131,6 +142,12 @@ function ageBandOf(ageMonths: number): 'junior' | 'adult' | 'senior' | 'geriatri
  *
  * 环境 → 生理的映射刻意使用**逐通道不同滞后**，这样下游的滞后相关分析
  * 才有可被验证的对象（若所有通道零滞后，验证就成了自证）。
+ *
+ * 物种分派只有两处，且都只看 `cfg.profile.species`：
+ *   1. 生理基线（`baselines()`：狗 hr 95 / hrv 70 / rr 18，猫 hr 160 / hrv 45 / rr 26）；
+ *   2. 行为层（猫 `buildBehaviorTimeline`、狗 `buildDogTimeline`）。
+ * 读数链路、事件流、真值记录三者**完全共用**：狗的会话不是另写一条流水线，
+ * 而是同一条流水线的另一组参数。
  */
 export function generateSession(cfg: SimConfig): Session {
   const interval = cfg.sampleIntervalSec ?? 10;
@@ -160,15 +177,39 @@ export function generateSession(cfg: SimConfig): Session {
   // ---------------- 行为层 ----------------
   // 用**独立的种子**构建：行为层自带 RNG，不消耗主 `rng` 的随机流，
   // 因此「同种子字节级一致」的既有断言仍成立，且现有生理序列不被打乱。
+  //
+  // 物种分派：猫与狗各自一套行为参数（「共用机制、分开参数」，AGENTS.md §8），
+  // 因此这里是两条**并列**的路，而不是给猫的引擎加一个开关：
+  //   猫 → `buildBehaviorTimeline`（本轮一行未改，产出仍写 `behaviorTimeline`）
+  //   狗 → `buildDogTimeline`（16 种狗的活动、狗的节律、狗的锚点硬约束，
+  //        产出写进**新字段** `dogBehaviorTimeline`）
+  // 两条路产出的时间线都连续覆盖整段会话，因此下游（生理读数、事件流、真值）
+  // 只有「用哪个求值函数」这一处差别。
   const behaviorEnabled = cfg.behavior?.enabled ?? true;
-  const behaviorTimeline: CatBehaviorTimeline | undefined = behaviorEnabled
-    ? buildSessionBehavior(cfg.behavior?.seed ?? cfg.seed, durationS, {
-        timeScale: cfg.behavior?.timeScale,
-        awayWindows: cfg.behavior?.awayWindows,
-        anchors: cfg.behavior?.anchors ?? SIM_CAT_ANCHORS,
-        injectIncidents: cfg.behavior?.injectIncidents,
-      })
-    : undefined;
+  const isDog = cfg.profile.species === 'dog';
+  const behaviorSeed = cfg.behavior?.seed ?? cfg.seed;
+  const catTimeline: CatBehaviorTimeline | undefined =
+    behaviorEnabled && !isDog
+      ? buildSessionBehavior(behaviorSeed, durationS, {
+          timeScale: cfg.behavior?.timeScale,
+          awayWindows: cfg.behavior?.awayWindows,
+          anchors: cfg.behavior?.anchors ?? SIM_CAT_ANCHORS,
+          injectIncidents: cfg.behavior?.injectIncidents,
+        })
+      : undefined;
+  // ⚠️ 锚点必须显式传 `SIM_DOG_ANCHORS`：漏了它，狗的行为层会退化成「只有一块地面」，
+  //    时间线依旧连续、依旧确定，只是狗哪儿也不去——这是最不容易被肉眼发现的一类错。
+  const dogTimeline: DogBehaviorTimeline | undefined =
+    behaviorEnabled && isDog
+      ? buildSessionDogBehavior(behaviorSeed, durationS, {
+          timeScale: cfg.behavior?.timeScale,
+          // 刻意**不读** `cfg.behavior.anchors`：那是猫的锚点表类型，把它的类型撑成联合
+          // 会让每一处猫的调用点都要先收窄一次。狗的锚点由仿真器自己给，
+          // 20 个 id 与能力与 `apps/web/src/scene/dog/dog-nav.ts` 逐条一致（由单测的契约断言把守）。
+          dogAnchors: SIM_DOG_ANCHORS,
+          injectIncidents: cfg.behavior?.injectIncidents,
+        })
+      : undefined;
   // ---------------- 生理读数层 ----------------
   // 与行为层同样的理由用**独立种子**：不消耗主 `rng` 的随机流，
   // 因此「同种子字节级一致」的既有断言仍然成立。
@@ -245,8 +286,15 @@ export function generateSession(cfg: SimConfig): Session {
     let vocalization = Math.max(0, Math.round(Math.max(0, (noiseLagVocal - 50) / 12) + rng.normal(0, 0.4)));
 
     // ---------------- 行为层：当前活动、姿势与突发 ----------------
-    const seg = behaviorTimeline ? activityAt(behaviorTimeline, t) : undefined;
-    const incident = behaviorTimeline ? incidentAt(behaviorTimeline, t) : null;
+    // 两条时间线的结构是同一套（`t` / `durS` / `activity` / `posture` / `anchorId` /
+    // `incidentKind`），因此**只在这里按物种选一次求值函数**，之后的生理读数、事件派生、
+    // 真值记录全部共用——这是「共用机制、分开参数」在代码上的落点。
+    const seg = dogTimeline ? dogActivityAt(dogTimeline, t) : catTimeline ? activityAt(catTimeline, t) : undefined;
+    const incident = dogTimeline ? dogIncidentAt(dogTimeline, t) : catTimeline ? incidentAt(catTimeline, t) : null;
+    // 生理读数层（`vitals.ts`）的体动表与生理状态表都是按**猫的活动词汇**建的，本轮不改它。
+    // 狗的活动名先折成它认识的那个键；`Sample.activityId` 仍然写狗的原生活动名，
+    // 因此「采样 ↔ 时间线」的一致性断言在狗这边照样成立。
+    const vitalsActivity: CatActivityId = vitalsActivityKeyOf(seg?.activity ?? 'resting', cfg.profile.species);
 
     // ---------------- 生理状态机：把突发展开成多时相过程 ----------------
     //
@@ -268,7 +316,7 @@ export function generateSession(cfg: SimConfig): Session {
             hrBpm: base.hr,
             hrvRmssdMs: base.hrv,
             rrBpm: base.rr,
-            activity: seg.activity,
+            activity: vitalsActivity,
             episode: active.kind,
             episodeElapsedS: t - active.windowStartS,
             injected: true,
@@ -290,13 +338,13 @@ export function generateSession(cfg: SimConfig): Session {
     } else if (hadIncident) {
       sinceIncidentEndS += interval;
     }
-    const sleeping = behaviorTimeline
-      ? sleepTracker(seg?.activity ?? 'resting', incident ? incident.kind : null, interval)
+    const sleeping = behaviorEnabled
+      ? sleepTracker(vitalsActivity, incident ? incident.kind : null, interval)
       : false;
     const vitalStep = vitalsSim.next({
       t,
       hourOfDay: hourOfDayAt(t),
-      activity: seg?.activity ?? 'resting',
+      activity: vitalsActivity,
       incidentKind: incident?.kind ?? null,
       sleeping,
       ambientTempC,
@@ -316,13 +364,19 @@ export function generateSession(cfg: SimConfig): Session {
     vitalsTruth.push(vitalStep.truth);
 
     const posture = mapPosture(seg?.posture, burst > 0, incident !== null);
+    // 活动量折算表也是**分物种**的：狗的 16 个活动名里只有 4 个与猫表重名，
+    // 靠改名复用猫表会让「走动」拿到理毛档的取值，漂移基线就变成映射的产物了。
     const activityLevel = seg
-      ? activityLevelOf(seg.activity)
+      ? isDog
+        ? dogActivityLevelOf(seg.activity)
+        : activityLevelOf(seg.activity)
       : Math.max(0, 0.35 * (lightLag / 300) + rng.normal(0, 0.05));
 
     // 躲藏段抬高发声计数：Hare et al. 2025 显示主人不在场时发声率显著上升（IRR≈3.2）。
     // ⚠️ 该研究场景是兽医体检而非居家，因此这里只作为**方向性**通道联动，
     // 不构成「猫躲藏时一定叫得更多」的结论，也不做任何语义解读。
+    // 狗版**没有**加类似的物种联动：狗的活动表里没有躲藏段，而本仓库的研究集里
+    // 也没有一条能支撑「某个狗的活动段发声更多」的来源——没有依据就不编一条。
     if (incident === null && seg?.activity === 'hiding') {
       vocalization = Math.round(vocalization * 1.8);
     }
@@ -344,11 +398,15 @@ export function generateSession(cfg: SimConfig): Session {
     );
 
     // ---------------- 触觉相关身体事件（由行为段派生） ----------------
-    if (seg && behaviorTimeline) {
+    // 派生规则**分物种**：两张活动名词表几乎不重叠，套用猫的 switch 会让狗的事件流恒为空。
+    if (seg && behaviorEnabled) {
       const segKey = `${seg.t}:${seg.activity}`;
       if (segKey !== prevSegmentKey) {
         prevSegmentKey = segKey;
-        for (const ev of eventsFromBehaviorSegment(seg, t, rng)) events.push(ev);
+        const bodyEvents = isDog
+          ? eventsFromDogBehaviorSegment(seg, t, rng)
+          : eventsFromBehaviorSegment(seg, t, rng);
+        for (const ev of bodyEvents) events.push(ev);
       }
     } else if (rng.chance(0.02)) {
       // 行为层关闭时保留原先的随机事件，向后兼容
@@ -369,15 +427,17 @@ export function generateSession(cfg: SimConfig): Session {
     }
     prevIncidentKind = incident?.kind ?? null;
 
-    // 多猫紧张场景：砂盆外排泄与躲藏
-    if (cfg.scenario === 'multi-cat-tension') {
+    // 多猫紧张场景：砂盆外排泄与躲藏。
+    // ⚠️ 这是**猫版场景**的两条随机事件注入，因此只在猫那一路执行：
+    //    狗没有砂盆（「砂盆外」在狗的场地里没有对应物），也没有躲藏活动，
+    //    照搬过来会凭空造出两种与行为时间线对不上的事件。
+    if (!isDog && cfg.scenario === 'multi-cat-tension') {
       if (rng.chance(0.006)) events.push({ t, kind: 'elimination-outside-box', magnitude: 1 });
       if (rng.chance(0.05)) events.push({ t, kind: 'hiding', magnitude: Number(rng.range(0.3, 1).toFixed(2)) });
     }
   }
 
   const injectGaps = cfg.injectGaps ?? scenario.gaps.length > 0;
-  const injectedIncidents = (behaviorTimeline?.incidents ?? []).filter((i) => i.injected);
   const truth: SimTruth = {
     comfortCurve,
     injectedGaps: injectGaps ? [...scenario.gaps] : [],
@@ -385,19 +445,28 @@ export function generateSession(cfg: SimConfig): Session {
     seed: cfg.seed,
     scenario: cfg.scenario,
     vitals: vitalsTruth,
-    ...(behaviorTimeline
-      ? {
-          behavior: {
-            seed: behaviorTimeline.seed,
-            timeScale: behaviorTimeline.timeScale,
-            segments: behaviorTimeline.segments,
-            incidents: behaviorTimeline.incidents,
-            budgetS: behaviorTimeline.budgetS,
-          },
-          injectedIncidents,
-        }
-      : {}),
   };
+  // 行为真值的落点**按物种分开**：
+  //   猫 → `truth.behavior`（它的字段是按猫的活动词汇类型化的，原有断言依赖它）
+  //   狗 → 只写 `injectedIncidents`。狗的行为真值不塞进 `truth.behavior`，因为那里
+  //        的 `segments` 是 `CatBehaviorSegment[]` —— 硬塞狗的活动名要么是一句类型谎话、
+  //        要么得去改 core 的 `SimTruth`。狗的时间线本身已经带齐
+  //        `seed` / `timeScale` / `segments` / `incidents` / `budgetS`，唯一事实来源就是
+  //        `session.dogBehaviorTimeline` 那一处。
+  // 注入的突发两边都记：`DogBehaviorIncident` 与 `CatBehaviorIncident` 结构相同
+  // （狗的突发名本来就是猫联合的子集），因此这里不需要第二套字段。
+  if (catTimeline) {
+    truth.behavior = {
+      seed: catTimeline.seed,
+      timeScale: catTimeline.timeScale,
+      segments: catTimeline.segments,
+      incidents: catTimeline.incidents,
+      budgetS: catTimeline.budgetS,
+    };
+    truth.injectedIncidents = catTimeline.incidents.filter((i) => i.injected);
+  } else if (dogTimeline) {
+    truth.injectedIncidents = dogTimeline.incidents.filter((i) => i.injected);
+  }
 
   return {
     id: `sim-${cfg.scenario}-${cfg.seed}-${cfg.durationMin}m`,
@@ -407,7 +476,8 @@ export function generateSession(cfg: SimConfig): Session {
     samples,
     events,
     truth,
-    ...(behaviorTimeline ? { behaviorTimeline } : {}),
+    ...(catTimeline ? { behaviorTimeline: catTimeline } : {}),
+    ...(dogTimeline ? { dogBehaviorTimeline: dogTimeline } : {}),
   };
 }
 
@@ -483,12 +553,82 @@ function makeEpisodeTracker() {
 // ---------------------------------------------------------------- 行为 → 采样/事件的映射
 
 /**
+ * 狗的活动名 → 生理读数层（`vitals.ts`）认识的那个活动键。
+ *
+ * **为什么需要这一层映射**：读数层的体动表（`ACTIVITY_MOTION`）与生理状态表
+ * （`core/src/physiology` 的 `ACTIVITY_IDLE_OPS`）都是按猫的活动词汇建的，而这两个文件
+ * 本轮都不许改。若把狗的活动名原样传进去，两张表都查不到键、双双落到兜底值——
+ * 后果是「睡眠」与「走动」拿到同一个体动强度（缺省 0.2），运动伪迹门限与呼吸通道的
+ * 可用窗口随之全部失准，而这恰恰是本项目唯一能展示的边界（无效读数不是数据）。
+ *
+ * 映射只借用**一个语义：颈部体动的量级档**，不要求两边行为同义：
+ *   睡眠/休息 → `resting`（最低档，且它是睡眠判定认的「静息」）
+ *   坐/警觉   → `alert`（不动但有张力；**刻意不映射成 `resting`**，否则「坐 5 分钟」
+ *              会被静息时长判定当成睡着）
+ *   走/小跑   → `locomoting`（有位移的匀速运动）
+ *   奔跑      → `playing`（最高档，量级上对应冲刺时的颈部冲击）
+ *   玩耍      → `playing`
+ *   嗅闻      → `grooming`（低头贴地、小幅度持续体动）
+ *   进食/饮水/排泄 → `feeding` / `drinking` / `eliminating`（名字与量级都对得上）
+ *   ---- 本轮新增的四种院子互动，折法各自写清理由 ----
+ *   玩水      → `playing`：前肢反复拍打的颈部动作与「对物件挥爪扑击」同档，
+ *              猫表里没有更贴切的键（映射借用的只是**体动量级**，不是行为同义）
+ *   打滚      → `playing`：躯干大幅翻转为最高一档体动，与冲刺/扑击同量级
+ *   刨地      → `scratching`：前肢交替向体侧刮擦，与猫的抓挠是同一类颈部动作
+ *               （本仓库已知的真实混淆是抓挠/理毛，这里取的就是那个「刮擦」档）
+ *   晒太阳    → `resting`：长时间趴卧不动。**不能**映射成 `alert`，
+ *               否则日照停留会被静息时长判定排除在静息之外，反过来让睡眠判定失准
+ *
+ * ⚠️ 这是一张**操作化映射表**（本项目自定，用于让链路跑起来），不是行为学结论；
+ *    它不改任何面向用户的取值，`Sample.activityId` 写的仍是狗的原生活动名。
+ */
+const DOG_VITALS_ACTIVITY: Readonly<Record<string, string>> = {
+  sleeping: 'resting',
+  resting: 'resting',
+  sitting: 'alert',
+  alerting: 'alert',
+  walking: 'locomoting',
+  trotting: 'locomoting',
+  running: 'playing',
+  playing: 'playing',
+  sniffing: 'grooming',
+  eating: 'feeding',
+  drinking: 'drinking',
+  eliminating: 'eliminating',
+  'water-play': 'playing',
+  rolling: 'playing',
+  digging: 'scratching',
+  sunning: 'resting',
+};
+
+/**
+ * 取某活动在读数层里的键。
+ *
+ * 猫那一路是**恒等**的（活动名本来就是猫的词汇），这里的 `as CatActivityId` 只是把
+ * 「物种分派已经保证过」这件事写给类型系统：两条时间线在分派点之后共用同一条链路，
+ * 而 `predictPhysiologyAt` / `motionIndexOf` 的签名要求的是猫的活动名。
+ * 换句话说，这个断言换来的是「下游一行都不用改」，代价是一处必须被注释说明的窄化。
+ */
+function vitalsActivityKeyOf(activity: string, species: Species): CatActivityId {
+  if (species !== 'dog') return activity as CatActivityId;
+  return (DOG_VITALS_ACTIVITY[activity] ?? 'resting') as CatActivityId;
+}
+
+/**
  * 行为姿势 → 采样通道里的 `posture` 字符串。
  *
  * 沿用既有的四个取值（`resting` / `active` / `tense-upright` / `hiding`），
- * 而不是把 core 的六个姿势原样写进采样：`posture` 是**已有的通道**，
+ * 而不是把 core 的姿势原样写进采样：`posture` 是**已有的通道**，
  * 换掉取值集合会让既有分析与下游代码失效。
- * 完整的六个姿势保留在 `truth.behavior.segments` 里。
+ * 完整的姿势保留在时间线的 `segments` 里（猫在 `truth.behavior.segments`，
+ * 狗在 `session.dogBehaviorTimeline.segments`）。
+ *
+ * 狗版多出两个猫表里没有的姿势名：`moving`（四爪交替：走 / 小跑 / 奔跑 / 嗅闻）与
+ * `lowered`（低头压低：吃 / 喝 / 排泄 / 呕吐）。两者都折进 `active` ——
+ * 采样通道的取值集合**不变**，而它们都不是「不动」。
+ * 本轮新增的院子互动沿用同一条折法：`water-play` / `rolling` / `digging`
+ * （前肢拍水、侧身翻滚、前肢刨地）都折进 `active`；`sunning` 折进 `resting`
+ * ——它是趴卧不动的日照停留，与「休息」同一档。
  */
 function mapPosture(posture: string | undefined, burst: boolean, inIncident: boolean): string {
   if (inIncident || burst) return 'tense-upright';
@@ -497,8 +637,15 @@ function mapPosture(posture: string | undefined, burst: boolean, inIncident: boo
     case 'climbing':
     case 'standing':
     case 'crouching':
+    case 'moving':
+    case 'lowered':
+    case 'water-play':
+    case 'rolling':
+    case 'digging':
       return 'active';
     case 'lying':
+    // `down` 与 `lying` 是同一个身体形状（见 core 的 DogPosture），同样折进 resting
+    case 'down':
     case 'sitting':
     default:
       return 'resting';
@@ -528,6 +675,62 @@ function activityLevelOf(activity: string): number {
     case 'hiding':
       return 0.04;
     case 'resting':
+    default:
+      return 0.02;
+  }
+}
+
+/**
+ * 狗的 16 种活动 → 0–1 的活动量水平。
+ *
+ * 为什么不复用猫的那张表：两张活动名词表只有 4 个名字重合（`resting` / `drinking` /
+ * `eliminating` / `playing`），其余靠改名映射会让「走动」拿到「理毛」档的取值，
+ * 于是按活动量做的漂移基线就变成映射的产物，而不是行为的产物。
+ *
+ * 取值与猫表**同一个 0–1 尺度**（这样两个物种的 `Sample.activity` 仍可比），
+ * 顺序也照猫表：位移类 > 用力类 > 定点类 > 不动。全部是**操作化常量**，
+ * 不是实测能量消耗，也不构成任何关于犬只活动的宣称。
+ * 本轮新增的四种院子互动（玩水 / 打滚 / 刨地 / 晒太阳）按同一条纪律插在上面：
+ * 中高活动量的三个排在玩耍与走动之间，晒太阳落在最低档。
+ */
+function dogActivityLevelOf(activity: string): number {
+  switch (activity) {
+    case 'running':
+      return 0.9;
+    case 'playing':
+      return 0.7;
+    // ---- 本轮新增的四种院子互动 ----
+    // 打滚（0.65）与玩水（0.6）属于中高活动量：躯干/前肢都在持续用力，
+    // 但都短促（十几秒），低于冲刺与玩耍。刨地（0.5）介于走动与嗅闻之间
+    // ——前肢用力而躯干基本不动。晒太阳（0.02）是全表最低的一档，
+    // 与「休息」同档：它本来就是长时间趴卧不动。
+    // 取值与猫表**同一个 0–1 尺度**（这些判断是仿真参数，不是实测能量消耗）。
+    case 'rolling':
+      return 0.65;
+    case 'water-play':
+      return 0.6;
+    case 'digging':
+      return 0.5;
+    case 'trotting':
+      return 0.6;
+    case 'walking':
+      return 0.45;
+    case 'sniffing':
+      return 0.22;
+    case 'eliminating':
+      return 0.22;
+    case 'eating':
+    case 'drinking':
+      return 0.18;
+    case 'alerting':
+      return 0.12;
+    case 'sitting':
+      return 0.05;
+    case 'sunning':
+    case 'resting':
+      return 0.02;
+    case 'sleeping':
+      return 0.01;
     default:
       return 0.02;
   }
@@ -571,6 +774,80 @@ function eventsFromBehaviorSegment(
     case 'playing':
       out.push({ t, kind: 'impact', magnitude: mag() });
       break;
+    default:
+      break;
+  }
+  return out;
+}
+
+/**
+ * 由**狗**的行为区间派生事件流。
+ *
+ * 为什么不复用上面那张表：猫表是按猫的活动名（`scratching` / `grooming` / `hiding`…）
+ * 写的 switch，狗的活动名一个也对不上——直接复用不会报错，只会让狗的事件流**恒为空**，
+ * 而这正是「事件必须由行为派生」这条纪律最容易被悄悄破坏的地方。
+ * 事件**种类**沿用同一套 `SimEventKind`（不改 core 的词汇），只换派生规则。
+ *
+ * 映射只借用**一个语义：这段动作会在颈部产生哪一类机械事件**。它是操作化的，
+ * 不是行为学结论——本仓库的研究集里没有「狗在某个活动下产生多少次项圈事件」这类可引用的数字。
+ *
+ * 本轮新增的四种院子互动沿用同一条折法（列在下面各 case 的注释里）：
+ * 玩水 → 摩擦、打滚 → 碰撞、刨地 → 抓挠、晒太阳 → **不派生**（它在休息）。
+ *
+ * ⚠️ 两个取值在狗这条路上**刻意不出现**：
+ *   - `elimination-outside-box`：狗没有砂盆，「砂盆外」在狗的场地里没有对应物；
+ *     而且行为层把排泄**硬约束**在院子的排泄角（`DOG_DESTINATION_RULES`），
+ *     在那里排泄是它该做的事，记成「越界」是把正确行为描述成异常。
+ *   - `hiding`：狗的活动里没有躲藏段。与其为了让取值「看起来都用上了」
+ *     而编一个没有对应行为的事件，不如让它不出现在狗的事件流里。
+ */
+function eventsFromDogBehaviorSegment(
+  seg: { activity: string },
+  t: number,
+  rng: Rng,
+): SimEvent[] {
+  const out: SimEvent[] = [];
+  const mag = (): number => Number(rng.range(0.2, 1).toFixed(2));
+  switch (seg.activity) {
+    // 移动：颈部的姿态从「卧/坐」换成「四爪交替」，这是最直接的一类姿势改变。
+    // 走动单独记姿势改变，是因为它是狗最基础的活动，事件流里出现得最多也合理。
+    case 'walking':
+      out.push({ t, kind: 'posture-change', magnitude: mag() });
+      break;
+    // 小跑与嗅闻：项圈在颈部前后滑动、探头反复受力 → 记为摩擦。
+    // 玩水同理：前肢反复拍打时颈部持续小幅前后位移，项圈在皮毛上滑动。
+    case 'trotting':
+    case 'sniffing':
+    case 'water-play':
+      out.push({ t, kind: 'rub', magnitude: mag() });
+      break;
+    // 冲刺与玩耍：落地、急停、甩咬带来的冲击。狗没有猫那种上下攀跳的位移，
+    // 冲击只可能来自这几段。打滚同理：躯干与地面反复接触，是整个身体尺度上的碰撞。
+    case 'running':
+    case 'playing':
+    case 'rolling':
+      out.push({ t, kind: 'impact', magnitude: mag() });
+      break;
+    // 刨地：前肢交替刮擦地面，与猫的抓挠是同一类颈部动作（本仓库已知的混淆是
+    // 抓挠/理毛被项圈模型互换，这里取的就是那个「刮擦」档）。
+    case 'digging':
+      out.push({ t, kind: 'scratch', magnitude: mag() });
+      break;
+    // 定点行为（吃 / 喝 / 排泄 / 坐）：低头与起身，都属于姿势改变。
+    case 'eating':
+    case 'drinking':
+    case 'eliminating':
+    case 'sitting':
+      out.push({ t, kind: 'posture-change', magnitude: mag() });
+      break;
+    // 警觉张望：起立时的摆头甩耳是颈部出现的短促横向摆动。
+    // ⚠️ 这是**操作化映射**（把「颈部最容易被记成甩头的动作」对齐到一个活动），
+    //    不是行为学结论：狗的活动表里没有理毛那类天然会甩头的段。
+    case 'alerting':
+      out.push({ t, kind: 'head-shake', magnitude: mag() });
+      break;
+    // 休息、睡眠与晒太阳不派生身体事件——与猫版同一条纪律：
+    // 躺着不动时不该凭空出现抓挠或碰撞。
     default:
       break;
   }

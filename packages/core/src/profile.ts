@@ -104,5 +104,47 @@ export const CAT_BREEDS: readonly BreedOption[] = [
   { id: 'munchkin', label: '曼基康猫（短腿）', heightCm: 20, weightKg: 3.4, evidence: BREED_EVIDENCE },
 ];
 
+/**
+ * 犬种选项。形状与 `CAT_BREEDS` **完全一致**（同一个 `BreedOption`、同一份 `BREED_EVIDENCE`）。
+ *
+ * 取值口径（与猫版对齐，便于两边逐条对账）：
+ *   - `heightCm` 取**肩高**（不含头颈），成年典型值；
+ *   - `weightKg` 取成年典型值。
+ *
+ * 为什么这批值要**刻意覆盖多个体重档位**：`sizeClassOf('dog', weightKg)` 按 5 / 10 / 25 / 45 kg
+ * 分五档，而档位同时喂给两处下游——`baselines()` 的体型因子（肩高）与 `collarBudgetOf()`
+ * 的项圈工程预算（体重 2%）。若所有犬种都落在同一档，「换个品种基线跟着变」这件事在仿真里
+ * 就等于没发生，单测也测不出任何东西。因此这里让体重从 2.4 kg 一路铺到 60 kg。
+ *
+ * 主角是**柴犬**（`id: 'shiba'`，肩高约 40 cm、体重约 10 kg）：`#/dog` 场景里那只。
+ * 40 / 10 是柴犬成年个体的常见量级（肩高 38–41 cm、体重 8–11 kg），落在 `medium` 档。
+ *
+ * ⚠️ 与猫版同一条边界：这些是**公开品种资料的概略值**（`weak`），
+ * 本项目**未取得同行评审一手来源**，它们不代表任何个体的实测值，也不是任何度量宣称。
+ */
+export const DOG_BREEDS: readonly BreedOption[] = [
+  // 玩具档（< 5 kg）：贵宾的玩具型与吉娃娃，肩高 15–30 cm
+  { id: 'chihuahua', label: '吉娃娃', heightCm: 17, weightKg: 2.4, evidence: BREED_EVIDENCE },
+  { id: 'toy-poodle', label: '玩具贵宾犬', heightCm: 25, weightKg: 3.2, evidence: BREED_EVIDENCE },
+  // 小型档（5–10 kg）：日本狐狸犬（银狐）约 7 kg
+  { id: 'japanese-spitz', label: '日本狐狸犬', heightCm: 35, weightKg: 7.0, evidence: BREED_EVIDENCE },
+  // 中型档（10–25 kg）：柴犬是这一档的主角；柯基与法斗都是**矮身但结实**的体型，
+  // 因此肩高比柴犬低、体重反而略高——这正是「肩高与体重不同向」的典型，单测用它守住
+  // 「分档看体重、体型因子看肩高」这条两者不能互相替代的性质。
+  { id: 'shiba', label: '柴犬', heightCm: 40, weightKg: 10.0, evidence: BREED_EVIDENCE },
+  { id: 'welsh-corgi', label: '威尔士柯基犬', heightCm: 27, weightKg: 12.0, evidence: BREED_EVIDENCE },
+  { id: 'french-bulldog', label: '法国斗牛犬', heightCm: 30, weightKg: 12.5, evidence: BREED_EVIDENCE },
+  { id: 'beagle', label: '比格犬', heightCm: 38, weightKg: 11.0, evidence: BREED_EVIDENCE },
+  { id: 'border-collie', label: '边境牧羊犬', heightCm: 53, weightKg: 19.0, evidence: BREED_EVIDENCE },
+  { id: 'standard-poodle', label: '标准贵宾犬', heightCm: 55, weightKg: 23.0, evidence: BREED_EVIDENCE },
+  // 大型档（25–45 kg）
+  { id: 'labrador-retriever', label: '拉布拉多寻回犬', heightCm: 57, weightKg: 30.0, evidence: BREED_EVIDENCE },
+  { id: 'golden-retriever', label: '金毛寻回犬', heightCm: 58, weightKg: 31.0, evidence: BREED_EVIDENCE },
+  { id: 'german-shepherd', label: '德国牧羊犬', heightCm: 62, weightKg: 36.0, evidence: BREED_EVIDENCE },
+  { id: 'akita', label: '秋田犬', heightCm: 65, weightKg: 40.0, evidence: BREED_EVIDENCE },
+  // 巨型档（≥ 45 kg）：没有这一档，`sizeClassOf` 的最后一个分档就永远测不到
+  { id: 'great-dane', label: '大丹犬', heightCm: 78, weightKg: 60.0, evidence: BREED_EVIDENCE },
+];
+
 /** 年龄选项（月）。刻意覆盖四个年龄段，让「年龄 → 分档」这件事在界面上可验证。 */
 export const AGE_OPTIONS_MONTHS: readonly number[] = [6, 12, 36, 72, 108, 144, 180];
