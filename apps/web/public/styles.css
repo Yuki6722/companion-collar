@@ -199,10 +199,16 @@ body {
 .state-row {
   display: flex;
   gap: 8px;
+  /* 允许换行：院子里的活动有四个按钮（玩水 / 草地打滚 / 刨地 / 晒太阳），
+     左栏放不下一行 —— 不换行的话每个按钮会被压到 50 多像素，中文标签挤成两行看不清。 */
+  flex-wrap: wrap;
 }
 
 .state-btn {
   flex: 1 1 0;
+  /* 换行之后的**每行最少多宽**：够放最长的那个标签（草地打滚）且不挤成两行。
+     它只在放不下时生效，所以上面的两按钮行（自主行为 / 暂停、抽搐 / 呕吐）完全不变。 */
+  min-width: 72px;
   font: inherit;
   font-size: 13.5px;
   padding: 10px 8px;
@@ -363,6 +369,18 @@ body {
 .incident-btn:hover {
   border-color: #b45309;
   color: #7a4a12;
+}
+
+/* 院子里的活动按钮：与突发按钮**刻意长得不一样**，因为两者点下去的语义不同 ——
+   突发是"原地发生"，这一组是"走过去、然后做这件事"（实线 vs 虚线即这层区分）。 */
+.activity-btn {
+  border-style: solid;
+  font-size: 12.5px;
+}
+
+.activity-btn:hover {
+  border-color: #3f6212;
+  color: #33510f;
 }
 
 .preset-row {
@@ -1600,4 +1618,39 @@ body {
   .loading {
     transition: none;
   }
+}
+
+/*
+ * 狗版场景清单（`ui/dog-hud.ts`）。
+ *
+ * 为什么不做成逐项打勾的「清单核对」控件：这一屏交付的是**场景**，
+ * 清单的作用是让人一眼看到「这个场景里有什么」，不是一份需要交互的检查表。
+ * 三组（房间 / 狗的用品 / 院子）用小标题 + 紧凑列表分开即可。
+ */
+.dog-checklist {
+  list-style: none;
+  margin: 4px 0 10px;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.dog-checklist li {
+  position: relative;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  padding-left: 12px;
+}
+
+.dog-checklist li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.58em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
 }

@@ -516,6 +516,265 @@ export function catFurTextures(seed = 88, size = 512): CatFurMaps {
   };
 }
 
+// ---------------------------------------------------------------- 室外（狗版院子）
+
+/**
+ * 草地：底色 + 色斑 + 短笔触草叶。
+ *
+ * 为什么笔触要「短而斜」：草丛的视觉信息量来自**方向杂乱的亮暗短线**；
+ * 用规则的竖线会立刻读成"人造草皮"，而纯噪点在中等视距下又会糊成一块绿。
+ */
+export function grassTextures(seed = 131, size = 512): SimpleMaps {
+  const s = surface(size);
+  flat(s, '#4f7a34');
+  const rand = rng(seed);
+
+  // 大块色斑：让 4 m 见方的草地不至于变成一个颜色
+  for (let i = 0; i < 60; i++) {
+    const r = 30 + rand() * 120;
+    const g = s.ctx.createRadialGradient(rand() * size, rand() * size, 0, rand() * size, rand() * size, r);
+    const light = rand() > 0.5;
+    g.addColorStop(0, light ? 'rgba(126,166,74,0.35)' : 'rgba(58,88,40,0.35)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    s.ctx.fillStyle = g;
+    s.ctx.fillRect(0, 0, size, size);
+  }
+
+  // 草叶：短斜线，亮暗各半
+  for (let i = 0; i < 9000; i++) {
+    const x = rand() * size;
+    const y = rand() * size;
+    const len = 3 + rand() * 7;
+    const ang = -Math.PI / 2 + (rand() - 0.5) * 1.5;
+    s.ctx.globalAlpha = 0.1 + rand() * 0.3;
+    s.ctx.strokeStyle = rand() > 0.45 ? '#8fb457' : '#2f5522';
+    s.ctx.lineWidth = 0.7 + rand() * 1.1;
+    s.ctx.beginPath();
+    s.ctx.moveTo(x, y);
+    s.ctx.lineTo(x + Math.cos(ang) * len * 0.5, y + Math.sin(ang) * len);
+    s.ctx.stroke();
+  }
+  s.ctx.globalAlpha = 1;
+  // 少量枯黄点：全绿的草地看起来是塑料
+  for (let i = 0; i < 700; i++) {
+    s.ctx.globalAlpha = 0.1 + rand() * 0.25;
+    s.ctx.fillStyle = rand() > 0.5 ? '#b8a95c' : '#6f8a3c';
+    s.ctx.beginPath();
+    s.ctx.arc(rand() * size, rand() * size, 0.8 + rand() * 1.6, 0, Math.PI * 2);
+    s.ctx.fill();
+  }
+  s.ctx.globalAlpha = 1;
+  grain(s, seed + 1, 16);
+  seamBlend(s, 0.12);
+
+  const height = heightCanvas(size, (h) => h.ctx.drawImage(s.canvas, 0, 0), seed + 2);
+  const rough = surface(size);
+  flat(rough, '#e4e4e4');
+  grain(rough, seed + 3, 30);
+
+  return {
+    map: colorTexture(s.canvas),
+    roughnessMap: colorTexture(rough.canvas, false),
+    normalMap: normalFromHeight(height, 1.0),
+  };
+}
+
+/** 砾石：一堆椭圆石子。用于休闲区地坪与池边。 */
+export function gravelTextures(seed = 141, size = 256): SimpleMaps {
+  const s = surface(size);
+  flat(s, '#8d8880');
+  const rand = rng(seed);
+  for (let i = 0; i < 3200; i++) {
+    const rx = 2 + rand() * 5.5;
+    const ry = rx * (0.6 + rand() * 0.5);
+    const v = 0.55 + rand() * 0.45;
+    const c = Math.round(120 * v);
+    s.ctx.globalAlpha = 0.75 + rand() * 0.25;
+    s.ctx.fillStyle = `rgb(${c + 18},${c + 14},${c + 8})`;
+    s.ctx.beginPath();
+    s.ctx.ellipse(rand() * size, rand() * size, rx, ry, rand() * Math.PI, 0, Math.PI * 2);
+    s.ctx.fill();
+  }
+  s.ctx.globalAlpha = 1;
+  grain(s, seed + 1, 22);
+  seamBlend(s, 0.18);
+
+  const height = heightCanvas(size, (h) => h.ctx.drawImage(s.canvas, 0, 0), seed + 2);
+  const rough = surface(size);
+  flat(rough, '#dcdcdc');
+  grain(rough, seed + 3, 34);
+  return {
+    map: colorTexture(s.canvas),
+    roughnessMap: colorTexture(rough.canvas, false),
+    normalMap: normalFromHeight(height, 1.5),
+  };
+}
+
+/** 石板：灰蓝色板岩，带凿痕。用于石板路与池塘压顶。 */
+export function pavingTextures(seed = 161, size = 256): SimpleMaps {
+  const s = surface(size);
+  flat(s, '#8b8b88');
+  const rand = rng(seed);
+  for (let i = 0; i < 900; i++) {
+    s.ctx.globalAlpha = 0.05 + rand() * 0.18;
+    s.ctx.fillStyle = rand() > 0.5 ? '#e7e7e2' : '#4e4e4c';
+    s.ctx.beginPath();
+    s.ctx.ellipse(rand() * size, rand() * size, 6 + rand() * 26, 5 + rand() * 20, rand() * Math.PI, 0, Math.PI * 2);
+    s.ctx.fill();
+  }
+  // 凿痕：短而直的浅色划痕
+  for (let i = 0; i < 500; i++) {
+    const x = rand() * size;
+    const y = rand() * size;
+    const a = rand() * Math.PI;
+    const l = 4 + rand() * 14;
+    s.ctx.globalAlpha = 0.08 + rand() * 0.14;
+    s.ctx.strokeStyle = rand() > 0.5 ? '#d8d8d2' : '#3f3f3d';
+    s.ctx.lineWidth = 0.8 + rand();
+    s.ctx.beginPath();
+    s.ctx.moveTo(x, y);
+    s.ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
+    s.ctx.stroke();
+  }
+  s.ctx.globalAlpha = 1;
+  grain(s, seed + 1, 20);
+  seamBlend(s, 0.16);
+  const height = heightCanvas(size, (h) => h.ctx.drawImage(s.canvas, 0, 0), seed + 2);
+  const rough = surface(size);
+  flat(rough, '#cfcfcf');
+  grain(rough, seed + 3, 26);
+  return {
+    map: colorTexture(s.canvas),
+    roughnessMap: colorTexture(rough.canvas, false),
+    normalMap: normalFromHeight(height, 0.9),
+  };
+}
+
+/** 树皮：竖向沟槽 + 横向裂纹。树干与枝条共用。 */
+export function barkTextures(seed = 151, size = 256): SimpleMaps {
+  const s = surface(size);
+  flat(s, '#6a5340');
+  const rand = rng(seed);
+  // 竖向沟槽
+  for (let i = 0; i < 320; i++) {
+    const x = rand() * size;
+    const w = 1 + rand() * 4;
+    s.ctx.globalAlpha = 0.12 + rand() * 0.3;
+    s.ctx.fillStyle = rand() > 0.5 ? '#3f3024' : '#8b7157';
+    s.ctx.beginPath();
+    s.ctx.moveTo(x, 0);
+    for (let y = 0; y <= size; y += 16) {
+      s.ctx.lineTo(x + Math.sin((y / size) * Math.PI * (2 + rand())) * 3, y);
+    }
+    for (let y = size; y >= 0; y -= 16) {
+      s.ctx.lineTo(x + w + Math.sin((y / size) * Math.PI * (2 + rand())) * 3, y);
+    }
+    s.ctx.closePath();
+    s.ctx.fill();
+  }
+  // 横向裂纹
+  for (let i = 0; i < 90; i++) {
+    const y = rand() * size;
+    s.ctx.globalAlpha = 0.15 + rand() * 0.3;
+    s.ctx.strokeStyle = '#2b2018';
+    s.ctx.lineWidth = 0.7 + rand() * 1.6;
+    s.ctx.beginPath();
+    s.ctx.moveTo(rand() * size * 0.4, y);
+    s.ctx.lineTo(size * (0.5 + rand() * 0.5), y + (rand() - 0.5) * 5);
+    s.ctx.stroke();
+  }
+  s.ctx.globalAlpha = 1;
+  grain(s, seed + 1, 20);
+  seamBlend(s, 0.08);
+  const height = heightCanvas(size, (h) => h.ctx.drawImage(s.canvas, 0, 0), seed + 2);
+  return {
+    map: colorTexture(s.canvas),
+    normalMap: normalFromHeight(height, 2.0),
+  };
+}
+
+/**
+ * 树叶：成团的叶簇明暗。
+ *
+ * 树冠由若干团块组成（见 `build-yard.ts`），贴图只负责"一团叶子"的观感。
+ * 刻意不做 alpha 镂空：树冠是实体团块，镂空会在低画质档下露馅。
+ */
+export function foliageTextures(color = '#3f6b34', seed = 181, size = 256): SimpleMaps {
+  const s = surface(size);
+  flat(s, color);
+  const rand = rng(seed);
+  for (let i = 0; i < 2600; i++) {
+    // 叶簇：短椭圆，朝向杂乱
+    const x = rand() * size;
+    const y = rand() * size;
+    const r = 2 + rand() * 6;
+    s.ctx.globalAlpha = 0.12 + rand() * 0.34;
+    s.ctx.fillStyle = rand() > 0.5 ? '#ffffff' : '#000000';
+    s.ctx.beginPath();
+    s.ctx.ellipse(x, y, r, r * (0.45 + rand() * 0.4), rand() * Math.PI, 0, Math.PI * 2);
+    s.ctx.fill();
+  }
+  s.ctx.globalAlpha = 1;
+  grain(s, seed + 1, 22);
+  seamBlend(s, 0.14);
+  const height = heightCanvas(size, (h) => h.ctx.drawImage(s.canvas, 0, 0), seed + 2);
+  return {
+    map: colorTexture(s.canvas),
+    normalMap: normalFromHeight(height, 1.3),
+  };
+}
+
+/**
+ * 木栅栏板条：竖向板 + 板缝。整段栅栏用一个盒体 + 这张贴图，
+ * 既拿到"一条条竖板"的观感，又不必为每根板条付一次绘制调用。
+ */
+export function fenceSlatTextures(opt: { seed?: number; size?: number; slats?: number } = {}): SimpleMaps {
+  const seed = opt.seed ?? 171;
+  const size = opt.size ?? 256;
+  const slats = opt.slats ?? 8;
+  const s = surface(size);
+  flat(s, '#a5805a');
+  const rand = rng(seed);
+  const w = size / slats;
+  for (let i = 0; i < slats; i++) {
+    const x0 = i * w;
+    // 每块板轻微色差
+    s.ctx.globalAlpha = 0.12 + rand() * 0.2;
+    s.ctx.fillStyle = rand() > 0.5 ? '#ffffff' : '#000000';
+    s.ctx.fillRect(x0, 0, w, size);
+    s.ctx.globalAlpha = 1;
+    // 木纹（竖向）
+    for (let k = 0; k < 26; k++) {
+      const gx = x0 + 1 + rand() * (w - 2);
+      s.ctx.globalAlpha = 0.04 + rand() * 0.16;
+      s.ctx.strokeStyle = rand() > 0.5 ? '#5f4227' : '#c9a67c';
+      s.ctx.lineWidth = 0.5 + rand() * 1.2;
+      s.ctx.beginPath();
+      s.ctx.moveTo(gx, 0);
+      for (let y = 0; y <= size; y += 24) s.ctx.lineTo(gx + (rand() - 0.5) * 2, y);
+      s.ctx.stroke();
+    }
+    s.ctx.globalAlpha = 1;
+    // 板缝
+    s.ctx.fillStyle = '#3a2a1a';
+    s.ctx.fillRect(x0, 0, Math.max(1, Math.round(w * 0.09)), size);
+  }
+  grain(s, seed + 1, 20);
+  seamBlend(s, 0.06);
+
+  const height = heightCanvas(
+    size,
+    (h) => {
+      h.ctx.drawImage(s.canvas, 0, 0);
+    },
+    seed + 2,
+  );
+  return {
+    map: colorTexture(s.canvas),
+    normalMap: normalFromHeight(height, 1.4),
+  };
+}
+
 // ---------------------------------------------------------------- 环境
 
 /** 窗外天空：暖色地平线 + 冷色天顶。用于场景背景（只在窗口处可见）。 */

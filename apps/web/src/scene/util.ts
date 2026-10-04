@@ -85,3 +85,37 @@ export function repeatFor(texture: THREE.Texture, worldWidth: number, worldDepth
 export function facing(dx: number, dz: number): number {
   return Math.atan2(dx, dz);
 }
+
+/**
+ * 把扫描模型缩放到目标尺寸、贴地、并居中到指定位置（对未知原始尺度鲁棒）。
+ *
+ * 为什么靠「水平最大边」定尺度而不是高度：CC0 扫描模型的原始单位五花八门，
+ * 但一个物件的**水平占地**最能反映它该有多大（桌子、边柜都适用），
+ * 而高度常被扫描时的杂物撑大。
+ *
+ * 从 `scene.ts` 提出来共用：狗版场景也要把同一批 CC0 模型放进自己的坐标里，
+ * 两份实现迟早会漂移（第二份漏掉贴地就会浮空）。
+ */
+export function fitModel(
+  obj: THREE.Object3D,
+  fitTo: number,
+  rotY: number,
+  x: number,
+  y: number,
+  z: number,
+): void {
+  obj.rotation.set(0, rotY, 0);
+  obj.scale.setScalar(1);
+  obj.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  const maxHoriz = Math.max(size.x, size.z);
+  if (maxHoriz > 0 && Number.isFinite(maxHoriz)) {
+    obj.scale.setScalar(fitTo / maxHoriz);
+  }
+  obj.updateMatrixWorld(true);
+  const box2 = new THREE.Box3().setFromObject(obj);
+  const center = box2.getCenter(new THREE.Vector3());
+  obj.position.set(x - center.x, y - box2.min.y, z - center.z);
+  obj.name = `model-${obj.name || 'asset'}`;
+}

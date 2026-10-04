@@ -30,6 +30,7 @@ import { MaterialLibrary } from './materials.ts';
 import { resolveQuality } from './quality.ts';
 import type { QualityChoice, QualitySettings } from './quality.ts';
 import { skyTexture } from './textures.ts';
+import { fitModel } from './util.ts';
 
 /** 项圈相机画面的刷新率（帧/秒）。见 `updatePovFeed` 的取舍说明。 */
 const POV_FPS = 8;
@@ -1081,31 +1082,6 @@ function easeInOutCubic(k: number): number {
 
 function round2(v: number): number {
   return Math.round(v * 100) / 100;
-}
-
-/** 把扫描模型缩放到目标尺寸、贴地、并居中到指定位置（对未知原始尺度鲁棒）。 */
-function fitModel(
-  obj: THREE.Object3D,
-  fitTo: number,
-  rotY: number,
-  x: number,
-  y: number,
-  z: number,
-): void {
-  obj.rotation.set(0, rotY, 0);
-  obj.scale.setScalar(1);
-  obj.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(obj);
-  const size = box.getSize(new THREE.Vector3());
-  const maxHoriz = Math.max(size.x, size.z);
-  if (maxHoriz > 0 && Number.isFinite(maxHoriz)) {
-    obj.scale.setScalar(fitTo / maxHoriz);
-  }
-  obj.updateMatrixWorld(true);
-  const box2 = new THREE.Box3().setFromObject(obj);
-  const center = box2.getCenter(new THREE.Vector3());
-  obj.position.set(x - center.x, y - box2.min.y, z - center.z);
-  obj.name = `model-${obj.name || 'asset'}`;
 }
 
 /** 供调试与自检使用：确认资产清单与环境文件路径。 */
