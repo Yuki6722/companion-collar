@@ -66,7 +66,7 @@ export interface SceneSnapshot {
    * 为什么单独记：这两者是**形态方案**这一条信息的载体。只断言"模型加载成功"
    * 无法发现"项圈没挂上"或"无干涉区跟着身体而不是跟着头"这两类故障。
    */
-  collar?: { collar: boolean; whiskerZone: boolean; parts: number };
+  collar?: { collar: boolean; whiskerZone: boolean; parts: number; partNames?: string[] };
   /** 位移探针：证明"两个动作之间是走过去的"（见 `HomeScene.startMotionProbe`） */
   catMotionProbe?: {
     samples: number;
@@ -133,6 +133,15 @@ export interface SceneSnapshot {
       reasons: number;
     };
   };
+  /**
+   * 喵喵写实模型的自检事实（`HomeScene.catVariantState()`）。
+   *
+   * 为什么必须记：这一轮交付的核心宣称是「场景里的猫**真的在迈步**，不是只移动位置」。
+   * 只断言 `catAt` 变化无法区分「走了 2 米」和「瞬移了 2 米」——那正是实测到的故障形态
+   * （一次位移起步 50 ms 内跳 0.45 m）。记下 `walkWeight`（步态权重）与四爪局部坐标，
+   * 才能把「迈步」这件事变成可断言的文本。
+   */
+  cat?: Record<string, unknown>;
 }
 
 export interface DebugOptions {
@@ -180,6 +189,7 @@ export function installDebugHandle(
   window.setInterval(render, 1000);
 
   if (options.autoSequence) {
+    const startAutoSequence = (): void => {
     // 时间点刻意错开：等资产与首帧稳定 → 切激动（含 0.8 s 过渡）→ 回传 → 切回平静 → 回传。
     // 最后再触发一次突发演示并回传：断言「注入的突发确实出现在快照里」。
     window.setTimeout(() => post(), 6000);
@@ -237,6 +247,15 @@ export function installDebugHandle(
     }, 28_000);
     // 抽搐结束后再回传一次：用来对照「突发期间」与「突发之后」的标签
     window.setTimeout(() => post(), 32_000);
+    };
+    const deadline = Date.now() + 60_000;
+    const waitForAssets = (): void => {
+      const snap = snapshot();
+      const model = snap.cat?.model as { loaded?: boolean } | undefined;
+      if ((snap.modelsLoaded > 0 && model?.loaded === true) || Date.now() > deadline) startAutoSequence();
+      else window.setTimeout(waitForAssets, 250);
+    };
+    waitForAssets();
   }
 
   return { post, handle };

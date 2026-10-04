@@ -3,14 +3,14 @@
  *
  * 数据流：
  *   `Session.behaviorTimeline`（core 产出）
- *     → 本文件按 wall clock 求「此刻应在哪个锚点、什么姿势、是否处于突发」
+ *     → 本文件按渲染帧时间推进「此刻应在哪个锚点、什么姿势、是否处于突发」
  *     → `locomotion` 把路走完
  *     → `CatController.setExternalTransform()` 落到 rig 上
  *
  * 三条边界（都会出现在界面上）：
  *   1. 自主行为是**演示**，不是对猫的感受或健康状况的判断；
  *   2. 突发演示由用户手动触发或仿真注入，只演示**动作**，不命名任何状况；
- *   3. 时间线的推进由 wall clock 推导——后台降帧不会让猫「卡在半路」。
+ *   3. 时间线与位移按渲染帧推进，每帧上限 0.1 秒，避免加载或后台恢复时瞬移。
  */
 import { ACTIVITY_DEFS, CAT_ANCHOR_LABELS, INCIDENT_DEFS, activityAt, incidentAt } from '@camp/core';
 import type {
@@ -61,10 +61,6 @@ export interface BehaviorStatus {
   segmentRealDurationS: number;
 }
 
-function now(): number {
-  return typeof performance !== 'undefined' ? performance.now() : 0;
-}
-
 /**
  * 跳跃门限（米）：高度差超过它就算「跳」，允许直接改目标（不走完整轨迹）。
  *
@@ -82,7 +78,6 @@ export class CatBehaviorRuntime {
   private paused = false;
   /** 行为时间线内的当前时刻（秒） */
   private t = 0;
-  private lastWallMs: number;
   private gait = new GaitPhase();
   private plan: TravelPlan | null = null;
   /**
@@ -124,7 +119,6 @@ export class CatBehaviorRuntime {
     this.timeScale = timeline.timeScale > 0 ? timeline.timeScale : 1;
     this.paused = false;
     this.t = Math.max(0, Math.min(timeline.durationS, options.startAtS ?? 0));
-    this.lastWallMs = now();
     this.onStatus = options.onStatus ?? null;
 
     // 起始位置：优先沿用调用方给的变换（换时间线时用），否则直接落在时间线的锚点上。
@@ -155,8 +149,6 @@ export class CatBehaviorRuntime {
   setPaused(on: boolean): void {
     if (this.paused === on) return;
     this.paused = on;
-    // 暂停后重新计时，避免恢复时一次性补上暂停期间的全部时间
-    this.lastWallMs = now();
   }
 
   isPaused(): boolean {
@@ -199,11 +191,8 @@ export class CatBehaviorRuntime {
   }
 
   update(dt: number): void {
-    const wallMs = now();
-    // 用 wall clock 推导推进量，而不是累加 dt：dt 在后台标签里会被浏览器压低
-    const elapsed = Math.max(0, (wallMs - this.lastWallMs) / 1000);
-    this.lastWallMs = wallMs;
-    const step = this.paused ? 0 : Math.min(dt, 0.1) + Math.max(0, elapsed - Math.min(dt, 0.1));
+    // 共用帧时间；模型加载、后台标签恢复和暂停都不能积攒下一帧的位移。
+    const step = this.paused ? 0 : Math.min(Math.max(dt, 0), 0.1);
 
     if (step > 0) {
       // ⚠️ 突发段**不乘演示倍率**。

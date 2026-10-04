@@ -285,6 +285,9 @@ export function mountHomeScreen(host: HTMLElement): () => void {
           catSegmentElapsedS: behavior?.segmentElapsedS ?? 0,
           catSegmentTotalS: behavior?.segmentRealDurationS ?? 0,
           catMotion: scene?.catIncidentMotion() ?? undefined,
+          // 本轮：写实蒙皮模型的自检事实（加载状态 / 骨骼数 / 步态权重 / 四爪坐标）。
+          // 没有它，「真的在迈步」与「只移动位置」在无头环境里无法区分。
+          cat: scene?.catVariantState(),
           catMoving: behavior?.moving ?? false,
           // 位移探针与项圈相机：这两个是渲染层事实，只有快照能证明它们真的在跑
           catMotionProbe: scene?.motionProbe() ?? null,

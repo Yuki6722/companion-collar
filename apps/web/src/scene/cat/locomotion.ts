@@ -106,12 +106,17 @@ export function travelAt(plan: TravelPlan, elapsedS: number): CatTransform {
   const k = Math.min(1, Math.max(0, elapsedS / plan.durationS));
   const e = easeInOut(k);
   const arc = plan.arcHeight * Math.sin(Math.PI * k);
+  const dx = plan.to.x-plan.from.x, dz = plan.to.z-plan.from.z;
+  const heading = Math.hypot(dx,dz) > 0.001 ? Math.atan2(dx,dz) : plan.to.rotY;
+  // Turn towards the path before moving; turn towards the resource after arriving.
+  const turnIn = smoothstep(Math.min(1, k/0.12));
+  const turnOut = smoothstep(Math.max(0, (k-0.88)/0.12));
+  const travelHeading = plan.from.rotY + shortestAngleDelta(plan.from.rotY,heading)*turnIn;
   return {
-    x: plan.from.x + (plan.to.x - plan.from.x) * e,
-    y: plan.from.y + (plan.to.y - plan.from.y) * e + arc,
-    z: plan.from.z + (plan.to.z - plan.from.z) * e,
-    // 朝向与位移同时转：转身比移动略快，看起来像「先扭头再走」
-    rotY: plan.from.rotY + shortestAngleDelta(plan.from.rotY, plan.to.rotY) * Math.min(1, e * 1.4),
+    x: plan.from.x + dx*e,
+    y: plan.from.y + (plan.to.y-plan.from.y)*e + arc,
+    z: plan.from.z + dz*e,
+    rotY: travelHeading + shortestAngleDelta(travelHeading,plan.to.rotY)*turnOut,
   };
 }
 
@@ -147,3 +152,5 @@ export class GaitPhase {
     return this.phase;
   }
 }
+
+function smoothstep(k: number): number { return k*k*(3-2*k); }
