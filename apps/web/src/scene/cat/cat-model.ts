@@ -52,6 +52,14 @@ export interface CatRig {
    * 它默认隐藏（只在讲解/截图时打开），因为它是一个**约束标注**，不是外观。
    */
   whiskerZone: THREE.Group;
+  /**
+   * 项圈相机的机位锚点（世界变换由场景每帧读取）。
+   *
+   * 为什么要有它：项圈前端那颗摄像头**拍到的画面**是产品的一部分
+   * （App 的「实时」页就是它）。把机位做成 rig 里的一个空节点，
+   * 就自然跟着猫的身体与朝向走，不需要在场景里再算一遍三角函数。
+   */
+  povAnchor: THREE.Object3D;
 }
 
 const FUR = 0xf0a860;
@@ -289,8 +297,32 @@ export function buildCat(_mats: MaterialLibrary, furLayers: number): CatRig {
   thermistor.name = 'collar-thermistor';
   collar.add(thermistor);
 
+  // 项圈相机：带体**前端**那颗小镜头（朝 +Z，与猫的朝向一致）
+  const lensMat = new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.25, metalness: 0.5 });
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.008, 14), lensMat);
+  lens.position.set(0, -0.004, 0.083);
+  lens.rotation.x = Math.PI / 2;
+  lens.name = 'collar-camera';
+  collar.add(lens);
+
   // 项圈挂在 body 上（不挂 breathParts）：项圈不会随呼吸一起变形。
   body.add(collar);
+
+  /**
+   * 相机机位锚点：放在带体前端稍前处，朝 +Z（猫的朝向）。
+   *
+   * 高度取**猫自己的眼高**：`0.05` 是头/眼的 body 空间高度，加上站姿的
+   * `bodyLift ≈ 0.15`，镜头离它脚下的表面约 **0.20 m**——正是这只猫颈部的高度，
+   * 也就是项圈实际所在的位置。它跟着 body 走，因此猫趴下时镜头也跟着降低（不会悬在半空）。
+   * 自检的 `catPov.eyeHeightM` 就是把这个数读出来核对（见 `scene.povState()`）。
+   *
+   * ⚠️ 渲染这一路时会**把猫自己隐藏**（见 `scene.ts` 的 POV 渲染）：
+   * 真实项圈相机也拍不到自己的头，否则画面里会塞满后脑勺与胡须壳。
+   */
+  const povAnchor = new THREE.Object3D();
+  povAnchor.name = 'cat-pov-anchor';
+  povAnchor.position.set(0, 0.05, 0.33);
+  body.add(povAnchor);
 
   // ---------------------------------------------------------------- 触须无干涉区
   const whiskerZone = group('cat-whisker-zone');
@@ -338,5 +370,6 @@ export function buildCat(_mats: MaterialLibrary, furLayers: number): CatRig {
     furShells,
     collar,
     whiskerZone,
+    povAnchor,
   };
 }

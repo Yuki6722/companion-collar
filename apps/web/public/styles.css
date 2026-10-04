@@ -883,14 +883,17 @@ body {
  * 机模把那件事变成一眼可见的事实，而 3D 房间退回到它真正的角色——数据从哪来。
  */
 .app-dock {
+  --phone-w: 268px;
   position: absolute;
   right: 14px;
   top: 14px;
-  width: 268px;
+  width: var(--phone-w);
   display: flex;
   flex-direction: column;
   gap: 8px;
   z-index: 4;
+  /* 机身高度是算出来的：若不加这个上限，短窗口里手机会顶出屏幕 */
+  max-height: calc(100% - 28px);
 }
 
 .app-dock-head {
@@ -934,10 +937,21 @@ body {
   display: none;
 }
 
+/*
+ * 机身尺寸**由宽度算出来**，与内容无关。
+ *
+ * 为什么必须写死高度，而不是只给 `aspect-ratio`：
+ * flex 子项的 `min-height` 默认是 `auto`（内容最小高度），当模块内容很长时，
+ * 这个下限会**压过** `aspect-ratio` 推出来的高度——手机就被内容撑长了
+ * （用户反馈 ③：事件流/健康/档案一长，iPhone 就变大）。
+ * 现在高度是确定的：内容只能在机身内滚动（见 `.app-body`）。
+ */
 .phone {
   position: relative;
   width: 100%;
-  aspect-ratio: 9 / 19;
+  height: min(calc(var(--phone-w) * 19 / 9), 68vh);
+  min-height: 0;
+  overflow: hidden;
   padding: 9px;
   border-radius: 34px;
   background: linear-gradient(160deg, #2b2b30 0%, #14141a 55%, #26262c 100%);
@@ -959,6 +973,7 @@ body {
 .phone-screen {
   position: relative;
   height: 100%;
+  min-height: 0;
   border-radius: 26px;
   background: #f7f6f3;
   overflow: hidden;
@@ -1008,10 +1023,19 @@ body {
   color: var(--ink-faint);
 }
 
+/*
+ * 机身内**唯一**的滚动容器。
+ *
+ * `flex: 1 1 0`（basis 0 而不是 auto）是关键：basis 为 auto 时，内容会把这一项的
+ * 基准高度顶大，进而把机身撑长。basis 0 + `min-height: 0` 之后，它的高度只由
+ * 机身剩余空间决定，内容超出就在**这里**滚。
+ */
 .app-body {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 10px 12px 12px;
   font-size: 11.5px;
   line-height: 1.5;
@@ -1243,6 +1267,107 @@ body {
 .app-acute {
   border-color: rgba(180, 83, 9, 0.4);
   background: #fdf7ef;
+}
+
+/* ---------------------------------------------------------------- 实时页：项圈相机画面 */
+/*
+ * 画布是**离屏渲染的一帧**（176×132）铺满机身宽度：分辨率故意取小，
+ * 因为每次都要把像素从 GPU 读回 CPU（见 scene.ts 的 updatePovFeed）。
+ */
+.app-pov-wrap {
+  position: relative;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #16181c;
+}
+
+.app-pov {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.app-pov-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------- 事件流：次数 + 可滚动记录 */
+.app-count-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.app-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(47, 42, 36, 0.03);
+}
+
+.app-count-value {
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-count-label {
+  font-size: 9.5px;
+  color: var(--ink-soft);
+}
+
+.app-count-sub {
+  font-size: 9px;
+  color: var(--ink-faint);
+}
+
+/*
+ * 列表不再自己滚动：**机身（`.app-body`）是唯一的滚动容器**。
+ * 两层嵌套滚动条在手机大小的容器里读起来很糟，而且外层不滚会让人以为"滑不动"。
+ * `max-height` 保留作为兜底（万一外层 flex 计算出现意外，也不会溢出机身）。
+ */
+.app-scroll {
+  max-height: none;
+  overflow: visible;
+}
+
+/* ---------------------------------------------------------------- 档案页：可选品种与年龄 */
+.app-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.app-field-label {
+  min-width: 40px;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.app-select {
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 11.5px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -4,7 +4,7 @@
  * 重要：本文件中所有**工程经验值**（如项圈重量上限）都标注为 weak，
  * 它们不是文献结论，UI 必须据此显示对应等级。
  */
-import type { AgeBand, CollarBudget, PetProfile, SizeClass, Species } from './types.ts';
+import type { AgeBand, CollarBudget, EvidenceTag, PetProfile, SizeClass, Species } from './types.ts';
 
 export function clamp(value: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, value));
@@ -64,3 +64,45 @@ export function collarBudgetOf(profile: PetProfile): CollarBudget {
 export function cameraHeightOf(heightCm: number): number {
   return Number(clamp((heightCm / 100) * 0.85, 0.15, 0.7).toFixed(3));
 }
+
+// ---------------------------------------------------------------- 可选的品种与年龄
+
+/**
+ * 品种选项。
+ *
+ * ⚠️ 体型取值是**概略值**（标 `weak`）：品种标准的身高/体重范围来自公开的品种资料与常识，
+ * 本项目**未取得同行评审一手来源**。它的用途只有一个——让"换品种 → 基线跟着变"这件事
+ * 在仿真里成立（`baselines()` 用心率/呼吸的体型因子推导），**不是**对任何个体的度量宣称。
+ * 身高取"肩高"（猫约 20–30 cm），体重取成年典型值。
+ */
+export interface BreedOption {
+  id: string;
+  label: string;
+  heightCm: number;
+  weightKg: number;
+  evidence: EvidenceTag;
+}
+
+const BREED_EVIDENCE: EvidenceTag = {
+  tier: 'weak',
+  source: '公开品种资料与常识汇总（本仓库未取得同行评审一手来源）',
+  note: '品种体型概略值；只用于推导仿真基线与展示，不代表任何个体的实测值。',
+};
+
+export const CAT_BREEDS: readonly BreedOption[] = [
+  { id: 'domestic-shorthair', label: '家养短毛猫', heightCm: 24, weightKg: 4.2, evidence: BREED_EVIDENCE },
+  { id: 'domestic-longhair', label: '家养长毛猫', heightCm: 25, weightKg: 4.5, evidence: BREED_EVIDENCE },
+  { id: 'british-shorthair', label: '英国短毛猫', heightCm: 26, weightKg: 5.5, evidence: BREED_EVIDENCE },
+  { id: 'american-shorthair', label: '美国短毛猫', heightCm: 25, weightKg: 4.8, evidence: BREED_EVIDENCE },
+  { id: 'siamese', label: '暹罗猫', heightCm: 24, weightKg: 3.6, evidence: BREED_EVIDENCE },
+  { id: 'ragdoll', label: '布偶猫', heightCm: 27, weightKg: 6.0, evidence: BREED_EVIDENCE },
+  { id: 'maine-coon', label: '缅因猫', heightCm: 30, weightKg: 7.0, evidence: BREED_EVIDENCE },
+  { id: 'scottish-fold', label: '苏格兰折耳猫', heightCm: 25, weightKg: 4.6, evidence: BREED_EVIDENCE },
+  { id: 'sphynx', label: '斯芬克斯猫（无毛）', heightCm: 25, weightKg: 3.8, evidence: BREED_EVIDENCE },
+  { id: 'bengal', label: '孟加拉豹猫', heightCm: 26, weightKg: 5.0, evidence: BREED_EVIDENCE },
+  { id: 'persian', label: '波斯猫', heightCm: 24, weightKg: 4.4, evidence: BREED_EVIDENCE },
+  { id: 'munchkin', label: '曼基康猫（短腿）', heightCm: 20, weightKg: 3.4, evidence: BREED_EVIDENCE },
+];
+
+/** 年龄选项（月）。刻意覆盖四个年龄段，让「年龄 → 分档」这件事在界面上可验证。 */
+export const AGE_OPTIONS_MONTHS: readonly number[] = [6, 12, 36, 72, 108, 144, 180];

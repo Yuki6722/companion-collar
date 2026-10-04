@@ -1,20 +1,36 @@
 /**
  * App 模拟视图：右侧边栏里的 iPhone 机模。
  *
- * 为什么要把 App 放进 3D 场景页：本项目的产品形态是**主人手机上的 App**，
- * 而 3D 房间只是"数据从哪来"的说明。把 App 放在旁边、并且**实时**跟着场景时钟走，
- * 观众才能同时看到两件事：猫在做什么、以及主人手机上此刻显示什么。
+ * 底部四个模块：**实时 / 事件流 / 健康 / 档案**。
+ *
+ * | 模块 | 内容 | 数据来源 |
+ * |---|---|---|
+ * | 实时 | **项圈相机拍到的画面**（便于判断它在哪）+ 它现在在做什么/在哪 | 3D 场景的离屏渲染 + 场景状态 |
+ * | 事件流 | 每 **5 分钟**一条的行为记录（可滚动，机身高度不变）+ 喝水/玩耍/用砂盆等次数 | `session.behaviorTimeline` 的区间与 `session.events` |
+ * | 健康 | 心率 / 呼吸频率 / 体表温 + 异常标红与弹窗 + 相对前半段基线的漂移 | `session.samples` + `core/vitals/alerts` |
+ * | 档案 | **可选**品种与年龄，及其推导出的年龄段/体型/项圈重量预算 | `core/profile` 的品种表 |
+ *
+ * ★ **本轮修掉的一个真故障：整块重建 DOM。**
+ * 上一版每 500 ms 把 `.app-body` 整个 `replaceChildren` 一遍，于是：
+ *   1. `<select>` 被销毁 → **档案页的下拉菜单刚点开就被关掉**（用户反馈 ①）；
+ *   2. 列表节点的滚动位置每次重置 → 事件流/健康页"滑不动"（用户反馈 ③）；
+ *   3. 「实时」页的画布每 500 ms 换一块新的 → 场景反复重建渲染目标 → **画面闪动**（用户反馈 ④）。
+ * 现在改成 **建一次 + 就地刷新**：每个模块有自己的 `refresh()`，只改文本与类名，
+ * 不换节点、不动画布、不重置滚动。此外还有两道保险：焦点在模块内时**跳过刷新**
+ * （编辑中的表单绝不被抢），以及刷新时**保留滚动位置**。
  *
  * 三条纪律：
- *   1. **同一时刻**：所有读数都按场景演示时刻 `timeS` 去查仿真会话，不另起一套时钟；
+ *   1. **同一时刻**：所有读数与记录都按场景演示时刻 `timeS` 去查仿真会话，不另起一套时钟；
  *   2. **读数带有效性**：无效窗口划线展示并给出原因，不把坏值当读数；
- *   3. **词汇来自 core**：活动名、事件名、突发名、边界句都从 `@camp/core` 取，
+ *   3. **词汇来自 core**：活动名、事件名、突发名、边界句、品种表都从 `@camp/core` 取，
  *      本文件不新写一套面向用户的措辞。
  *
- * 性能：场景每帧都会推状态，这里按 ~2 Hz 节流更新 DOM（stage2 §6.6 的教训：
- * 节流必须落在消费方，而运行时该逐帧推）。
+ * ⚠️ 边界（必须与代码一起读）：项圈相机拍的是**环境影像**。它不等于猫眼中的世界——
+ *   帧率、视野、色觉、以及嗅觉通道都不等价（`AGENTS.md` §3）。界面按此措辞。
  */
 import {
+  AGE_OPTIONS_MONTHS,
+  CAT_BREEDS,
   CAT_ANCHOR_LABELS,
   CONDITION_LABELS,
   INCIDENT_DEFS,
@@ -30,7 +46,6 @@ import {
   highlightedChannels,
   rawReadingOf,
   readingOf,
-  simEventLabel,
   sizeClassOf,
 } from '@camp/core';
 import type {
@@ -38,30 +53,49 @@ import type {
   ReadingValidity,
   Sample,
   Session,
-  SimEventKind,
   VitalAlertSummary,
   VitalKey,
 } from '@camp/core';
 import { el } from './dom.ts';
 import type { BehaviorStatus } from '../scene/cat/cat-behavior.ts';
 
-type AppTab = 'live' | 'events' | 'drift' | 'profile';
+type AppTab = 'live' | 'events' | 'health' | 'profile';
 
 const TABS: ReadonlyArray<{ id: AppTab; label: string }> = [
   { id: 'live', label: '实时' },
   { id: 'events', label: '事件流' },
-  { id: 'drift', label: '漂移' },
+  { id: 'health', label: '健康' },
   { id: 'profile', label: '档案' },
 ];
 
-/** 事件流里最多展示多少条（手机屏幕小，滚动太长没有意义）。 */
-const MAX_EVENT_ROWS = 40;
+/** 事件流的分辨率：**每 5 分钟一条**（用户要求"不用太频繁"）。 */
+const EVENT_BUCKET_S = 300;
+/** 事件流最多回看多少条（手机屏幕小，再多也没人翻）。 */
+const MAX_EVENT_ROWS = 36;
+/** 项圈相机画布尺寸：小一点，读回来才便宜（见 scene 的 `updatePovFeed`）。 */
+const POV_W = 176;
+const POV_H = 132;
 
 export interface AppPhoneOptions {
   profile: PetProfile;
   session: Session;
   /** 初始是否收起（窄屏默认收起，见 `home.ts`） */
   collapsed?: boolean;
+  /** 「实时」页要一块画布显示项圈相机画面；切走时传 `null` 让场景停止渲染 */
+  onPovCanvas: (canvas: HTMLCanvasElement | null) => void;
+  /** 档案页改了品种 / 年龄 */
+  onProfileChange: (profile: PetProfile) => void;
+}
+
+/**
+ * 一个模块的视图：**建一次**，之后只调 `refresh` 就地更新。
+ *
+ * 这是本文件的核心结构：模块的 DOM 节点在 `build()` 时创建并缓存引用，
+ * `refresh()` 只写文本/类名/子项，因此不会销毁正在被操作的表单，也不会重置滚动。
+ */
+interface TabView {
+  root: HTMLElement;
+  refresh: (tS: number) => void;
 }
 
 export class AppPhone {
@@ -72,15 +106,26 @@ export class AppPhone {
   private readonly clockEl: HTMLElement;
   private readonly collapseButton: HTMLButtonElement;
   private readonly screenEl: HTMLElement;
+  private readonly callbacks: AppPhoneOptions;
 
   private session: Session;
-  private readonly profile: PetProfile;
+  private profile: PetProfile;
   private tab: AppTab = 'live';
   private collapsed: boolean;
   /** 场景最近一次推来的状态与它对应的采样下标 */
   private status: { status: BehaviorStatus; index: number } | null = null;
   /** 最近一次提示评估结果（渲染与自检都用它） */
   private alert: VitalAlertSummary | null = null;
+  /** 当前模块的视图（建一次 + 就地刷新） */
+  private view: TabView | null = null;
+  private viewTab: AppTab | null = null;
+  /**
+   * 需要重建视图。
+   *
+   * 什么时候置位：换会话、换档案。**不包含**"时间推进"——
+   * 时间推进只调 `refresh()`，这是本文件与上一版最大的区别。
+   */
+  private viewDirty = true;
   /**
    * 已经弹过的那条提醒的"指纹"。
    *
@@ -89,11 +134,16 @@ export class AppPhone {
    * 指纹带**分钟桶**，因此持续发作每分钟最多弹一次，而不是每帧一次。
    */
   private alertFingerprint: string | null = null;
-  /** 上一次真正重绘 DOM 的时间（毫秒，真实时间） */
+  /** 上一次真正刷新界面的时间（毫秒，真实时间） */
   private lastRenderMs = 0;
   private lastClockText = '';
+  /** 当前绑给场景的项圈相机画布（切页签时解绑） */
+  private povCanvas: HTMLCanvasElement | null = null;
+  /** 场景**此刻**是否握着这块画布（收起/切走会解绑，但画布元素要留着以便重新挂上） */
+  private povBound = false;
 
   constructor(opts: AppPhoneOptions) {
+    this.callbacks = opts;
     this.profile = opts.profile;
     this.session = opts.session;
     this.collapsed = opts.collapsed ?? false;
@@ -107,22 +157,25 @@ export class AppPhone {
       on: { click: () => this.setCollapsed(!this.collapsed) },
     });
 
-    this.tabsHost = el('nav', { class: 'app-tabs', attrs: { 'aria-label': 'App 页面切换' } });
+    this.tabsHost = el('nav', { class: 'app-tabs', attrs: { 'aria-label': 'App 模块切换' } });
     for (const t of TABS) {
-      const button = el('button', {
-        class: 'app-tab',
-        type: 'button',
-        text: t.label,
-        attrs: { 'aria-pressed': 'false' },
-        on: {
-          click: () => {
-            this.tab = t.id;
-            this.renderTabs();
-            this.renderBody(0);
+      this.tabsHost.append(
+        el('button', {
+          class: 'app-tab',
+          type: 'button',
+          text: t.label,
+          attrs: { 'aria-pressed': 'false' },
+          on: {
+            click: () => {
+              if (this.tab === t.id) return;
+              this.tab = t.id;
+              this.viewDirty = true;
+              this.renderTabs();
+              this.syncView(0);
+            },
           },
-        },
-      });
-      this.tabsHost.append(button);
+        }),
+      );
     }
 
     this.body = el('div', { class: 'app-body' });
@@ -143,29 +196,26 @@ export class AppPhone {
       el('div', { class: 'phone-homebar' }),
     ]);
 
-    const phone = el('div', { class: 'phone' }, [
-      el('div', { class: 'phone-notch' }),
-      this.screenEl,
-    ]);
-
     this.root = el('aside', { class: 'app-dock' }, [
       el('div', { class: 'app-dock-head' }, [
         el('span', { class: 'app-dock-title', text: 'App 预览（iPhone）' }),
         this.collapseButton,
       ]),
-      phone,
+      el('div', { class: 'phone' }, [el('div', { class: 'phone-notch' }), this.screenEl]),
     ]);
 
     this.setCollapsed(this.collapsed);
     this.renderTabs();
-    this.renderBody(0);
+    this.syncView(0);
   }
 
-  /** 换会话（注入突发后会重建会话，读数必须跟着换）。 */
-  setSession(session: Session, collapsed?: boolean): void {
+  /** 换会话（注入突发、或档案变更后会重建会话，读数与事件流都要跟着换）。 */
+  setSession(session: Session, profile?: PetProfile): void {
     this.session = session;
-    if (collapsed !== undefined) this.setCollapsed(collapsed);
-    this.renderBody(0);
+    if (profile) this.profile = profile;
+    // 数据换了：视图必须重建（列表行数、档案取值都可能变）
+    this.viewDirty = true;
+    this.syncView(this.status?.status.timeS ?? 0);
   }
 
   isCollapsed(): boolean {
@@ -179,52 +229,60 @@ export class AppPhone {
     this.collapseButton.setAttribute('aria-expanded', on ? 'false' : 'true');
     // 收起时把屏幕从可访问树里摘掉：否则读屏与 Tab 键仍会进入看不见的控件
     this.screenEl.setAttribute('aria-hidden', on ? 'true' : 'false');
+    // 收起时也不该继续渲染项圈相机（省电纪律：没人看的画面不渲染）。
+    // 注意：这里**只解绑**，画布元素留着——展开时再挂回去，不必重建界面。
+    if (on) this.unbindPov();
+    else {
+      this.syncView(0);
+      this.rebindPovCanvas();
+    }
   }
 
   currentTab(): AppTab {
     return this.tab;
   }
 
-  /** 切页签（也供自检动作使用：`live` / `events` / `drift` / `profile`）。 */
+  /** 切页签（也供自检动作使用：`live` / `events` / `health` / `profile`）。 */
   selectTab(tab: string): void {
     if (!TABS.some((t) => t.id === tab)) return;
+    if (this.tab === tab) return;
     this.tab = tab as AppTab;
+    this.viewDirty = true;
     this.renderTabs();
-    this.renderBody(0);
+    this.syncView(this.status?.status.timeS ?? 0);
   }
 
-  /** 自检用：手机屏上此刻显示的核心事实。 */
-  snapshot(): {
-    collapsed: boolean;
-    tab: AppTab;
-    hourOfDay: number;
-    readings: Record<string, { value: number | null; validity: ReadingValidity | null }>;
-    eventRows: number;
-    /** 提示层事实：是否该弹、弹过没有、哪几路标红 */
-    alert: { notify: boolean; red: string[]; popup: boolean; acute: boolean; reasons: number };
-  } {
-    const { status, index } = this.status ?? { status: null, index: -1 };
-    const readings: Record<string, { value: number | null; validity: ReadingValidity | null }> = {};
-    for (const key of ['hr', 'rr', 'temp'] as const) {
-      const sample = index >= 0 ? this.session.samples[index] : undefined;
-      readings[key] = sample
-        ? { value: readingOf(sample, key), validity: sample.readingQuality?.[key]?.validity ?? null }
-        : { value: null, validity: null };
-    }
-    return {
-      collapsed: this.collapsed,
-      tab: this.tab,
-      hourOfDay: status?.hourOfDay ?? 0,
-      readings,
-      eventRows: this.body.querySelectorAll('.app-event-row').length,
-      alert: {
-        notify: this.alert?.shouldNotify ?? false,
-        red: this.alert ? highlightedChannels(this.alert).map(String) : [],
-        popup: this.alertHost.querySelector('.app-alert') !== null,
-        acute: this.alert?.acuteWindow ?? false,
-        reasons: this.alert?.details.length ?? 0,
-      },
-    };
+  /** 对外的清理：连画布一起丢掉。 */
+  dispose(): void {
+    this.dropPov();
+  }
+
+  /**
+   * 把「实时」页的画布挂给场景 / 从场景摘下来。
+   *
+   * 为什么要显式分开"画布元素"与"是否已绑定"：
+   *   - `AppPhone` 在 `HomeScene` **之前**构造（右栏要先挂上），构造那一刻
+   *     `onPovCanvas` 里的 `scene` 还是 null（回调静默失败，但 `povBound` 已被置位），
+   *     所以场景就绪后必须用 `force` 再挂一次；
+   *   - 收起 / 切走时只解绑（省电），元素留着，展开 / 切回可以立刻挂回去。
+   */
+  rebindPovCanvas(force = false): void {
+    if (this.collapsed || this.tab !== 'live' || !this.povCanvas) return;
+    if (this.povBound && !force) return;
+    this.callbacks.onPovCanvas(this.povCanvas);
+    this.povBound = true;
+  }
+
+  private unbindPov(): void {
+    if (!this.povBound) return;
+    this.callbacks.onPovCanvas(null);
+    this.povBound = false;
+  }
+
+  /** 连画布元素一起丢掉（切到别的页签时，元素随 `replaceChildren` 一起离场）。 */
+  private dropPov(): void {
+    this.unbindPov();
+    this.povCanvas = null;
   }
 
   /**
@@ -239,13 +297,66 @@ export class AppPhone {
     this.evaluateAlert(index, status.timeS);
 
     if (now - this.lastRenderMs < 500) {
-      // 时钟走字比整屏重绘便宜，单独更新它，让"在动"这件事始终可见
+      // 时钟走字比整屏刷新便宜，单独更新它，让"在动"这件事始终可见
       this.updateClock(status);
       return;
     }
     this.lastRenderMs = now;
     this.updateClock(status);
-    this.renderBody(status.timeS);
+    this.syncView(status.timeS);
+  }
+
+  /**
+   * 同步当前模块的界面：需要时**建一次**，否则**就地刷新**。
+   *
+   * 两条保险（都是踩过的坑）：
+   *   1. 用户正在模块内操作（焦点在里面，例如刚点开的下拉）→ 本次跳过刷新；
+   *   2. 刷新由各模块的 `refresh` 负责保留滚动位置（见 `renderEvents`）。
+   */
+  private syncView(tS: number): void {
+    if (this.collapsed) return;
+    if (!this.view || this.viewTab !== this.tab || this.viewDirty) {
+      this.buildView();
+      return;
+    }
+    if (this.userIsEditing()) return;
+    this.view.refresh(tS);
+  }
+
+  /** 焦点是否落在模块内（正在操作表单 / 刚点开下拉）——此时绝不刷新，避免抢掉交互。 */
+  private userIsEditing(): boolean {
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+    return Boolean(active && active !== this.body && this.body.contains(active));
+  }
+
+  private buildView(): void {
+    // 离开「实时」页就把画布元素一起丢掉：场景因此停止离屏渲染
+    if (this.tab !== 'live') this.dropPov();
+    this.body.replaceChildren();
+    this.view = null;
+    this.viewTab = this.tab;
+    this.viewDirty = false;
+
+    let view: TabView;
+    switch (this.tab) {
+      case 'live':
+        view = this.buildLive();
+        break;
+      case 'events':
+        view = this.buildEvents();
+        break;
+      case 'health':
+        view = this.buildHealth();
+        break;
+      case 'profile':
+        view = this.buildProfile();
+        break;
+      default:
+        return;
+    }
+    this.body.append(view.root);
+    this.view = view;
+    view.refresh(this.status?.status.timeS ?? 0);
   }
 
   /**
@@ -275,12 +386,6 @@ export class AppPhone {
 
   /** 弹窗：标题是产品口径，正文只列可核查的事实，边界与转诊路径必须一起出现。 */
   private showAlertPopup(alert: VitalAlertSummary): void {
-    const accept = el('button', {
-      class: 'app-alert-accept',
-      type: 'button',
-      text: '知道了',
-      on: { click: () => this.alertHost.replaceChildren() },
-    });
     const details = el('ul', { class: 'app-alert-details' });
     for (const d of alert.details) details.append(el('li', { text: d }));
 
@@ -294,7 +399,12 @@ export class AppPhone {
         details,
         el('p', { class: 'app-alert-boundary', text: alert.boundary }),
         el('p', { class: 'app-alert-referral', text: alert.referral }),
-        accept,
+        el('button', {
+          class: 'app-alert-accept',
+          type: 'button',
+          text: '知道了',
+          on: { click: () => this.alertHost.replaceChildren() },
+        }),
       ]),
     );
   }
@@ -320,188 +430,301 @@ export class AppPhone {
     return Math.max(0, Math.min(samples.length - 1, idx));
   }
 
+  private currentSample(): Sample | undefined {
+    const index = this.status?.index ?? -1;
+    return index >= 0 ? (this.session.samples[index] as Sample) : undefined;
+  }
+
   private renderTabs(): void {
-    const buttons = this.tabsHost.querySelectorAll('.app-tab');
-    buttons.forEach((node, i) => {
-      const id = TABS[i]?.id;
-      const active = id === this.tab;
+    this.tabsHost.querySelectorAll('.app-tab').forEach((node, i) => {
+      const active = TABS[i]?.id === this.tab;
       node.classList.toggle('app-tab-active', active);
       node.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
   }
 
-  private renderBody(_tS: number): void {
-    this.body.replaceChildren();
-    switch (this.tab) {
-      case 'live':
-        this.renderLive();
-        break;
-      case 'events':
-        this.renderEvents();
-        break;
-      case 'drift':
-        this.renderDrift();
-        break;
-      case 'profile':
-        this.renderProfile();
-        break;
-      default:
-        break;
-    }
-  }
+  // ---------------------------------------------------------------- 实时（项圈相机）
 
-  // ---------------------------------------------------------------- 实时
+  private buildLive(): TabView {
+    // ★ 画布**只建一次**：上一版每 500 ms 换一块新画布，场景就要重建渲染目标，
+    //   画面因此闪动（用户反馈 ④）。
+    const canvas = el('canvas', {
+      class: 'app-pov',
+      attrs: { width: String(POV_W), height: String(POV_H), 'aria-label': '项圈相机拍到的画面' },
+    }) as HTMLCanvasElement;
+    const nowValue = el('span', { class: 'app-now-value', text: '等待场景…' });
+    const nowWhere = el('span', { class: 'app-now-where', text: '' });
+    const clockNote = el('p', { class: 'app-note', text: '' });
 
-  private renderLive(): void {
-    const { status, index } = this.status ?? { status: null, index: -1 };
-    const samples = this.session.samples;
-    const sample = index >= 0 ? (samples[index] as Sample) : undefined;
-
-    this.body.append(
+    const root = el('div', { class: 'app-tab-root' }, [
+      el('div', { class: 'app-pov-wrap' }, [
+        canvas,
+        el('span', { class: 'app-pov-badge', text: '项圈相机' }),
+      ]),
       el('div', { class: 'app-card app-now' }, [
         el('span', { class: 'app-card-label', text: '它现在' }),
-        el('span', {
-          class: 'app-now-value',
-          text: status ? `${status.activityLabel} · ${status.postureLabel}` : '等待场景…',
-        }),
-        el('span', {
-          class: 'app-now-where',
-          text: status
-            ? `${CAT_ANCHOR_LABELS[status.anchorId] ?? status.anchorLabel}${status.incident ? ` · 突发演示：${INCIDENT_DEFS[status.incident]?.label ?? status.incident}` : ''}`
-            : '',
-        }),
+        nowValue,
+        nowWhere,
       ]),
-    );
-
-    // 处于急性生理窗口时，把"现在处于什么过程"直接说出来——
-    // 这比让主人从三个数字里猜要诚实的多。
-    if (sample?.physiologyState && sample.physiologyState !== 'idle') {
-      this.body.append(
-        el('div', { class: 'app-card app-acute' }, [
-          el('span', { class: 'app-card-label', text: '生理过程' }),
-          el('span', { class: 'app-card-value', text: describePhysiologyState(sample.physiologyState) }),
-        ]),
-      );
-    }
-
-    for (const key of ['hr', 'rr', 'temp'] as const) {
-      this.body.append(this.vitalRow(key, sample));
-    }
-
-    // 逐通道给出"为什么被标出来"，这样红色不是没有解释的装饰。
-    const flagged = this.alert?.channels.filter((c) => c.highlight || c.level === 'watch') ?? [];
-    if (flagged.length > 0) {
-      const list = el('ul', { class: 'app-alert-details' });
-      for (const c of flagged) list.append(el('li', { text: c.reason }));
-      this.body.append(el('div', { class: 'app-card' }, [el('span', { class: 'app-card-label', text: '读数说明' }), list]));
-    }
-
-    if (status) {
-      this.body.append(
-        el('p', {
-          class: 'app-note',
-          text: `读数按演示时刻 ${this.lastClockText} 从仿真会话取值；演示倍率 20×（1 秒当 20 秒）。`,
-        }),
-      );
-    }
-    this.body.append(el('p', { class: 'app-note app-note-boundary', text: VITALS_BOUNDARY_NOTE }));
-  }
-
-  private vitalRow(key: VitalKey, sample: Sample | undefined): HTMLElement {
-    const q = sample?.readingQuality?.[key];
-    const valid = sample ? readingOf(sample, key) : null;
-    const raw = sample ? rawReadingOf(sample, key) : null;
-    const shown = valid ?? raw;
-    const invalid = valid === null;
-    const condition = sample?.measurementCondition ?? 'resting';
-    const channelAlert = this.alert?.channels.find((c) => c.key === key);
-    const red = channelAlert?.level === 'alert' || channelAlert?.highlight === true;
-
-    // 标记文案：无效窗口说清是哪种失效；有效窗口只说条件（诊室单独标出来，
-    // 因为"诊室读数不能当基线"这件事必须一眼可见）。
-    const flagText = !q
-      ? '无数据'
-      : invalid
-        ? (VALIDITY_LABELS[q.validity].split('：')[0] ?? '不可用')
-        : condition === 'clinic'
-          ? '诊室'
-          : channelAlert?.level === 'watch'
-            ? '留意'
-            : '可用';
-
-    return el('div', { class: red ? 'app-vital app-vital-alert' : 'app-vital' }, [
-      el('span', { class: 'app-vital-name', text: VITAL_LABELS[key] }),
-      el('span', {
-        class: red
-          ? 'app-vital-value app-vital-value-alert'
-          : invalid
-            ? 'app-vital-value app-vital-invalid'
-            : 'app-vital-value',
-        text: shown === null ? '—' : shown.toFixed(key === 'temp' ? 1 : 0),
-      }),
-      el('span', { class: 'app-vital-unit', text: VITAL_UNITS[key] }),
-      el('span', {
-        class: q ? `app-vital-flag app-flag-${q.validity}` : 'app-vital-flag',
-        text: flagText,
-        title: q
-          ? `${VALIDITY_LABELS[q.validity]}；测量条件：${CONDITION_LABELS[condition]}`
-          : '本窗口没有该通道的读数',
-      }),
-    ]);
-  }
-
-  // ---------------------------------------------------------------- 事件流
-
-  private renderEvents(): void {
-    const { status } = this.status ?? { status: null };
-    const events = this.session.events;
-    const tNow = status?.timeS ?? 0;
-
-    // 先给一句"你不在时发生了什么"的汇总——这是产品的主叙事。
-    const counts = new Map<SimEventKind, number>();
-    for (const ev of events) counts.set(ev.kind, (counts.get(ev.kind) ?? 0) + 1);
-    const summary = [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([k, v]) => `${simEventLabel(k)} ${v}`)
-      .join(' · ');
-
-    this.body.append(
-      el('div', { class: 'app-card' }, [
-        el('span', { class: 'app-card-label', text: '离线时段事件汇总' }),
-        el('span', { class: 'app-card-value', text: summary || '（本段无事件）' }),
-      ]),
-    );
-
-    const rows = events
-      .filter((ev) => ev.t <= tNow)
-      .slice(-MAX_EVENT_ROWS)
-      .reverse();
-    const list = el('div', { class: 'app-list' });
-    for (const ev of rows) {
-      list.append(
-        el('div', { class: 'app-event-row' }, [
-          el('span', { class: 'app-event-time', text: clockOf(ev.t) }),
-          el('span', { class: 'app-event-name', text: simEventLabel(ev.kind) }),
-          el('span', {
-            class: 'app-event-mag',
-            text: ev.kind === 'elimination-outside-box' || ev.kind === 'hiding' ? '' : `强度 ${ev.magnitude.toFixed(1)}`,
-          }),
-        ]),
-      );
-    }
-    this.body.append(list);
-    this.body.append(
       el('p', {
         class: 'app-note',
-        text: '事件只描述"发生了一次什么"，不判断原因。抓挠、甩头、发声都属于这类事件。',
+        text: '这是**项圈相机拍到的环境影像**，用来判断它在哪、周围有什么。它不等于猫眼中的世界——帧率、视野、色觉与嗅觉通道都不等价。',
       }),
-    );
+      clockNote,
+    ]);
+
+    // 绑给场景：从这一刻起才有离屏渲染（没人看就不渲染）
+    this.povCanvas = canvas;
+    this.povBound = false;
+    this.rebindPovCanvas();
+
+    return {
+      root,
+      refresh: () => {
+        const status = this.status?.status ?? null;
+        nowValue.textContent = status ? `${status.activityLabel} · ${status.postureLabel}` : '等待场景…';
+        nowWhere.textContent = status
+          ? `位置：${CAT_ANCHOR_LABELS[status.anchorId] ?? status.anchorLabel}${status.incident ? ` · 突发演示：${INCIDENT_DEFS[status.incident]?.label ?? status.incident}` : ''}`
+          : '';
+        const text = status ? `演示时钟 ${this.lastClockText}（约 20×，走路时放慢以便看清）。` : '';
+        if (clockNote.textContent !== text) clockNote.textContent = text;
+      },
+    };
   }
 
-  // ---------------------------------------------------------------- 漂移
+  // ---------------------------------------------------------------- 事件流（每 5 分钟一条）
 
-  private renderDrift(): void {
+  private buildEvents(): TabView {
+    const countGrid = el('div', { class: 'app-count-grid' });
+    const list = el('div', { class: 'app-list app-scroll' });
+    /** 已渲染的 5 分钟格数：只有它变了才重建行，否则每 0.5 秒就把 36 行重排一遍 */
+    let renderedBuckets = -1;
+
+    const root = el('div', { class: 'app-tab-root' }, [
+      el('div', { class: 'app-card' }, [
+        el('span', { class: 'app-card-label', text: '到今天此刻的次数' }),
+        countGrid,
+      ]),
+      el('p', {
+        class: 'app-note',
+        text: `每 ${EVENT_BUCKET_S / 60} 分钟一条记录（不是逐秒流水）。列表可上下滚动，机身高度不变。`,
+      }),
+      list,
+    ]);
+
+    return {
+      root,
+      refresh: (tS) => {
+        this.refreshCounts(countGrid, tS);
+        const buckets = this.fiveMinuteBuckets(tS);
+        const shown = Math.min(buckets.length, MAX_EVENT_ROWS);
+        if (shown === renderedBuckets) return;
+        renderedBuckets = shown;
+        // ★ 只换**列表内部**的子项，并保留滚动位置：换掉列表节点本身会把滚动归零，
+        //   用户就会觉得"滑不动"（用户反馈 ③）。
+        const top = list.scrollTop;
+        const rows: HTMLElement[] = [];
+        if (buckets.length === 0) {
+          rows.push(el('div', { class: 'app-kv' }, [el('span', { class: 'app-kv-value', text: '还没有记录' })]));
+        }
+        for (const b of buckets.slice(-MAX_EVENT_ROWS).reverse()) {
+          rows.push(
+            el('div', { class: 'app-event-row' }, [
+              el('span', { class: 'app-event-time', text: `${clockOf(b.t)}–${clockOf(b.t + EVENT_BUCKET_S)}` }),
+              el('span', { class: 'app-event-name', text: b.label }),
+              el('span', { class: 'app-event-mag', text: b.detail }),
+            ]),
+          );
+        }
+        list.replaceChildren(...rows);
+        if (top > 0) list.scrollTop = top;
+      },
+    };
+  }
+
+  /** 喝水 / 进食 / 玩耍 / 用砂盆 / 抓挠 / 躲藏 的**次数与时长**统计（就地更新）。 */
+  private refreshCounts(grid: HTMLElement, tNow: number): void {
+    const tl = this.session.behaviorTimeline;
+    const counts = new Map<string, { times: number; seconds: number }>();
+    for (const seg of tl?.segments ?? []) {
+      if (seg.t + seg.durS > tNow) continue;
+      const entry = counts.get(seg.activity) ?? { times: 0, seconds: 0 };
+      entry.times += 1;
+      entry.seconds += seg.durS;
+      counts.set(seg.activity, entry);
+    }
+    const wanted: ReadonlyArray<[string, string]> = [
+      ['drinking', '喝水'],
+      ['feeding', '进食'],
+      ['playing', '玩耍'],
+      ['eliminating', '用猫砂盆'],
+      ['scratching', '抓挠'],
+      ['hiding', '躲藏'],
+    ];
+    // 首次渲染建格子，之后只改数字（避免每 0.5 秒重建 6 个节点）
+    if (grid.childElementCount !== wanted.length) {
+      grid.replaceChildren();
+      for (const [, label] of wanted) {
+        grid.append(
+          el('div', { class: 'app-count' }, [
+            el('span', { class: 'app-count-value', text: '0' }),
+            el('span', { class: 'app-count-label', text: label }),
+            el('span', { class: 'app-count-sub', text: '0 分' }),
+          ]),
+        );
+      }
+    }
+    wanted.forEach(([id], i) => {
+      const cell = grid.children[i];
+      if (!cell) return;
+      const c = counts.get(id);
+      const value = cell.querySelector('.app-count-value');
+      const sub = cell.querySelector('.app-count-sub');
+      const valueText = c ? String(c.times) : '0';
+      const subText = c ? `${Math.round(c.seconds / 60)} 分` : '0 分';
+      if (value && value.textContent !== valueText) value.textContent = valueText;
+      if (sub && sub.textContent !== subText) sub.textContent = subText;
+    });
+  }
+
+  /**
+   * 把行为时间线切成 5 分钟一格，每格给一句"这 5 分钟主要在做什么"。
+   *
+   * 为什么按"主导行为 + 事件计数"而不是逐条事件：用户明确要求"不用太频繁，每 5 分钟一次"。
+   * 逐条事件列表在演示里每几秒就滚一大片，读不出重点。
+   */
+  private fiveMinuteBuckets(tNow: number): Array<{ t: number; label: string; detail: string }> {
+    const tl = this.session.behaviorTimeline;
+    const out: Array<{ t: number; label: string; detail: string }> = [];
+    if (!tl) return out;
+    const last = Math.min(tNow, tl.durationS);
+    for (let t = 0; t + EVENT_BUCKET_S <= last; t += EVENT_BUCKET_S) {
+      const share = new Map<string, number>();
+      let eventCount = 0;
+      for (const seg of tl.segments) {
+        if (seg.t + seg.durS <= t || seg.t >= t + EVENT_BUCKET_S) continue;
+        const overlap = Math.min(seg.t + seg.durS, t + EVENT_BUCKET_S) - Math.max(seg.t, t);
+        if (overlap <= 0) continue;
+        share.set(seg.activity, (share.get(seg.activity) ?? 0) + overlap);
+      }
+      for (const ev of this.session.events) {
+        if (ev.t >= t && ev.t < t + EVENT_BUCKET_S) eventCount++;
+      }
+      const top = [...share.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (!top) continue;
+      out.push({
+        t,
+        label: activityLabelOf(top[0]),
+        detail: `${Math.round(top[1] / 60)} 分 · 事件 ${eventCount}`,
+      });
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- 健康（三通道读数）
+
+  private buildHealth(): TabView {
+    const acuteCard = el('div', { class: 'app-card app-acute', attrs: { hidden: 'hidden' } }, [
+      el('span', { class: 'app-card-label', text: '生理过程' }),
+      el('span', { class: 'app-card-value', text: '' }),
+    ]);
+    const acuteText = acuteCard.querySelector('.app-card-value') as HTMLElement;
+
+    const vitalCard = el('div', { class: 'app-card' }, [
+      el('span', { class: 'app-card-label', text: '项圈读数' }),
+    ]);
+    /** 每路通道缓存节点，刷新时只写 text/class，不重建行 */
+    const rows = new Map<VitalKey, { row: HTMLElement; value: HTMLElement; flag: HTMLElement }>();
+    for (const key of ['hr', 'rr', 'temp'] as const) {
+      const value = el('span', { class: 'app-vital-value', text: '—' });
+      const flag = el('span', { class: 'app-vital-flag', text: '无数据' });
+      const row = el('div', { class: 'app-vital' }, [
+        el('span', { class: 'app-vital-name', text: VITAL_LABELS[key] }),
+        value,
+        el('span', { class: 'app-vital-unit', text: VITAL_UNITS[key] }),
+        flag,
+      ]);
+      vitalCard.append(row);
+      rows.set(key, { row, value, flag });
+    }
+
+    const reasonCard = el('div', { class: 'app-card', attrs: { hidden: 'hidden' } }, [
+      el('span', { class: 'app-card-label', text: '读数说明' }),
+      el('ul', { class: 'app-alert-details' }),
+    ]);
+    const reasonList = reasonCard.querySelector('.app-alert-details') as HTMLElement;
+
+    const driftWrap = el('div', { class: 'app-card' }, [
+      el('span', { class: 'app-card-label', text: '相对前半段基线的变化' }),
+      el('div', { class: 'app-list' }),
+    ]);
+    const driftList = driftWrap.querySelector('.app-list') as HTMLElement;
+
+    const root = el('div', { class: 'app-tab-root' }, [
+      acuteCard,
+      vitalCard,
+      reasonCard,
+      driftWrap,
+      el('p', { class: 'app-note app-note-boundary', text: VITALS_BOUNDARY_NOTE }),
+    ]);
+
+    return {
+      root,
+      refresh: () => {
+        const sample = this.currentSample();
+        const state = sample?.physiologyState;
+        const acute = Boolean(state && state !== 'idle');
+        acuteCard.toggleAttribute('hidden', !acute);
+        if (acute) acuteText.textContent = describePhysiologyState(state as string);
+
+        for (const [key, nodes] of rows) {
+          const q = sample?.readingQuality?.[key];
+          const valid = sample ? readingOf(sample, key) : null;
+          const raw = sample ? rawReadingOf(sample, key) : null;
+          const shown = valid ?? raw;
+          const invalid = valid === null;
+          const condition = sample?.measurementCondition ?? 'resting';
+          const channelAlert = this.alert?.channels.find((c) => c.key === key);
+          const red = channelAlert?.level === 'alert' || channelAlert?.highlight === true;
+
+          const valueText = shown === null ? '—' : shown.toFixed(key === 'temp' ? 1 : 0);
+          if (nodes.value.textContent !== valueText) nodes.value.textContent = valueText;
+          nodes.value.className = red
+            ? 'app-vital-value app-vital-value-alert'
+            : invalid
+              ? 'app-vital-value app-vital-invalid'
+              : 'app-vital-value';
+          nodes.row.className = red ? 'app-vital app-vital-alert' : 'app-vital';
+
+          const flagText = !q
+            ? '无数据'
+            : invalid
+              ? (VALIDITY_LABELS[q.validity].split('：')[0] ?? '不可用')
+              : condition === 'clinic'
+                ? '诊室'
+                : channelAlert?.level === 'watch'
+                  ? '留意'
+                  : '可用';
+          if (nodes.flag.textContent !== flagText) nodes.flag.textContent = flagText;
+          nodes.flag.className = q ? `app-vital-flag app-flag-${q.validity}` : 'app-vital-flag';
+          const title = q
+            ? `${VALIDITY_LABELS[q.validity]}；测量条件：${CONDITION_LABELS[condition]}`
+            : '本窗口没有该通道的读数';
+          if (nodes.flag.title !== title) nodes.flag.title = title;
+        }
+
+        // 逐通道给出"为什么被标出来"——红色不是没有解释的装饰
+        const flagged = this.alert?.channels.filter((c) => c.highlight || c.level === 'watch') ?? [];
+        reasonCard.toggleAttribute('hidden', flagged.length === 0);
+        reasonList.replaceChildren(...flagged.map((c) => el('li', { text: c.reason })));
+
+        this.refreshDrift(driftList);
+      },
+    };
+  }
+
+  /** 漂移：与「健康」同一批通道，只是时间尺度更长（前半段 vs 后半段）。 */
+  private refreshDrift(list: HTMLElement): void {
     const samples = this.session.samples;
     const half = Math.floor(samples.length / 2);
     const pick = (key: 'hrBpm' | 'rrBpm' | 'activity' | 'vocalization', from: number, to: number): number[] => {
@@ -512,7 +735,6 @@ export class AppPhone {
       }
       return out;
     };
-
     const drift = detectDrifts(
       [
         { key: 'hr', label: '心率', unit: '次/分', baseline: pick('hrBpm', 0, half), recent: pick('hrBpm', half, samples.length) },
@@ -522,15 +744,13 @@ export class AppPhone {
       ],
       { permutations: 200 },
     );
-
+    const nodes: HTMLElement[] = [];
     if (drift.length === 0) {
-      this.body.append(el('p', { class: 'app-note', text: '数据不足，暂不给出漂移判断。' }));
-      return;
+      nodes.push(el('p', { class: 'app-note', text: '数据不足，暂不给出漂移判断。' }));
     }
-
     for (const d of drift) {
       const tone = d.severity === 'notable' ? 'notable' : d.severity === 'watch' ? 'watch' : 'none';
-      this.body.append(
+      nodes.push(
         el('div', { class: `app-drift app-drift-${tone}` }, [
           el('div', { class: 'app-drift-head' }, [
             el('span', { class: 'app-drift-name', text: d.label }),
@@ -549,44 +769,200 @@ export class AppPhone {
         ]),
       );
     }
-    this.body.append(
+    nodes.push(
       el('p', {
         class: 'app-note',
         text: '漂移只描述"相对这只猫自己前半段基线"的变化，不判断原因，也不区分正常波动与异常。',
       }),
     );
+    list.replaceChildren(...nodes);
   }
 
-  // ---------------------------------------------------------------- 档案
+  // ---------------------------------------------------------------- 档案（可选品种与年龄）
 
-  private renderProfile(): void {
+  private buildProfile(): TabView {
     const p = this.profile;
-    const budget = collarBudgetOf(p);
-    const rows: Array<[string, string]> = [
-      ['物种 / 品种', `${p.species === 'cat' ? '猫' : '犬'} · ${p.breedId}`],
-      ['年龄段', ageBandOf(p.ageMonths)],
-      ['体型档', sizeClassOf(p.species, p.weightKg)],
-      ['体重 / 肩高', `${p.weightKg} kg / ${p.heightCm} cm`],
-      ['项圈重量预算', `${budget.maxWeightG} g（体重 2%，工程经验值）`],
-    ];
-    const list = el('div', { class: 'app-list' });
-    for (const [k, v] of rows) {
-      list.append(
-        el('div', { class: 'app-kv' }, [
-          el('span', { class: 'app-kv-key', text: k }),
-          el('span', { class: 'app-kv-value', text: v }),
-        ]),
-      );
+    const breed = CAT_BREEDS.find((b) => b.id === p.breedId) ?? CAT_BREEDS[0];
+
+    // ★ 这两个 `<select>` 只建一次。上一版每 500 ms 重建整页 DOM，
+    //   于是下拉菜单刚展开就被销毁（用户反馈 ①：点开就马上关闭）。
+    const breedSelect = el('select', { class: 'app-select', attrs: { 'aria-label': '品种' } }) as HTMLSelectElement;
+    for (const b of CAT_BREEDS) {
+      const option = document.createElement('option');
+      option.value = b.id;
+      option.textContent = b.label;
+      if (b.id === breed?.id) option.selected = true;
+      breedSelect.append(option);
     }
-    this.body.append(list);
-    this.body.append(
+    const ageSelect = el('select', { class: 'app-select', attrs: { 'aria-label': '年龄' } }) as HTMLSelectElement;
+    for (const months of AGE_OPTIONS_MONTHS) {
+      const option = document.createElement('option');
+      option.value = String(months);
+      option.textContent = ageLabel(months);
+      if (months === p.ageMonths) option.selected = true;
+      ageSelect.append(option);
+    }
+
+    const apply = (over: Partial<PetProfile>): void => {
+      const next: PetProfile = { ...this.profile, ...over };
+      this.profile = next;
+      this.callbacks.onProfileChange(next);
+    };
+    breedSelect.addEventListener('change', () => {
+      const b = CAT_BREEDS.find((x) => x.id === breedSelect.value) ?? CAT_BREEDS[0];
+      if (b) apply({ breedId: b.id, heightCm: b.heightCm, weightKg: b.weightKg });
+    });
+    ageSelect.addEventListener('change', () => apply({ ageMonths: Number(ageSelect.value) }));
+
+    const derived = el('div', { class: 'app-list' });
+    const breedNote = el('p', { class: 'app-note', text: '' });
+
+    const root = el('div', { class: 'app-tab-root' }, [
+      el('div', { class: 'app-card' }, [
+        el('span', { class: 'app-card-label', text: '这只猫（可选）' }),
+        el('div', { class: 'app-field' }, [el('span', { class: 'app-field-label', text: '品种' }), breedSelect]),
+        el('div', { class: 'app-field' }, [el('span', { class: 'app-field-label', text: '年龄' }), ageSelect]),
+        breedNote,
+      ]),
+      el('div', { class: 'app-card' }, [
+        el('span', { class: 'app-card-label', text: '推导结果' }),
+        derived,
+      ]),
       el('p', {
         class: 'app-note',
-        text: '档案驱动的是"这只猫自己的基线"，不是种群平均值——跨猫比较会被年龄与体型主导。',
+        text: '改品种或年龄会**按新档案重建整段仿真会话**（同一种子），因此读数基线会跟着变——档案驱动的是"这只猫自己的基线"，不是种群平均值。',
       }),
-    );
-    this.body.append(el('p', { class: 'app-note app-note-boundary', text: VITALS_SIM_NOTE }));
+      el('p', { class: 'app-note app-note-boundary', text: VITALS_SIM_NOTE }),
+    ]);
+
+    return {
+      root,
+      refresh: () => {
+        const cur = this.profile;
+        const b = CAT_BREEDS.find((x) => x.id === cur.breedId) ?? CAT_BREEDS[0];
+        const budget = collarBudgetOf(cur);
+        // 下拉的选中值只在**用户没在操作**时对齐（`syncView` 已保证刷新期间焦点不在这里）
+        if (b && breedSelect.value !== b.id) breedSelect.value = b.id;
+        const ageValue = String(cur.ageMonths);
+        if (ageSelect.value !== ageValue) ageSelect.value = ageValue;
+        const note = b ? `体型取值：肩高 ${b.heightCm} cm、体重 ${b.weightKg} kg（${b.evidence.note ?? '概略值'}）` : '';
+        if (breedNote.textContent !== note) breedNote.textContent = note;
+
+        const rows: Array<[string, string]> = [
+          ['年龄段', ageBandLabel(ageBandOf(cur.ageMonths))],
+          ['体型档', sizeClassLabel(sizeClassOf(cur.species, cur.weightKg))],
+          ['体重 / 肩高', `${cur.weightKg} kg / ${cur.heightCm} cm`],
+          ['项圈重量预算', `${budget.maxWeightG} g（体重 2%，工程经验值）`],
+          ['颈围带长', `${budget.strapMinMm}–${budget.strapMaxMm} mm`],
+        ];
+        const signature = rows.map(([k, v]) => `${k}=${v}`).join('|');
+        if (derived.dataset.signature !== signature) {
+          derived.dataset.signature = signature;
+          derived.replaceChildren(
+            ...rows.map(([k, v]) =>
+              el('div', { class: 'app-kv' }, [
+                el('span', { class: 'app-kv-key', text: k }),
+                el('span', { class: 'app-kv-value', text: v }),
+              ]),
+            ),
+          );
+        }
+      },
+    };
   }
+
+  /** 自检用：手机屏上此刻显示的核心事实。 */
+  snapshot(): {
+    collapsed: boolean;
+    tab: AppTab;
+    hourOfDay: number;
+    readings: Record<string, { value: number | null; validity: ReadingValidity | null }>;
+    eventRows: number;
+    counts: Record<string, number>;
+    profile: { breedId: string; ageMonths: number };
+    alert: { notify: boolean; red: string[]; popup: boolean; acute: boolean; reasons: number };
+    povBound: boolean;
+    /** 「档案」页的选项数量与当前选中值（用于验证下拉真的可选、且选项齐全） */
+    profileOptions: { breeds: number; ages: number; selectedBreed: string; selectedAge: string };
+    /**
+     * 机身尺寸与滚动事实。
+     *
+     * 为什么放进自检：用户反馈"内容一多 iPhone 就被撑长"。这件事**只有量尺寸才能证明**，
+     * 肉眼看截图看不出来。断言方式：不同模块之间 `phoneHeight` 不变，
+     * 而内容长的模块 `bodyScrollHeight > bodyClientHeight`（在机身内滚动）。
+     */
+    layout: {
+      phoneHeight: number;
+      bodyClientHeight: number;
+      bodyScrollHeight: number;
+      canScroll: boolean;
+    };
+  } {
+    const status = this.status?.status ?? null;
+    const index = this.status?.index ?? -1;
+    const readings: Record<string, { value: number | null; validity: ReadingValidity | null }> = {};
+    for (const key of ['hr', 'rr', 'temp'] as const) {
+      const sample = index >= 0 ? this.session.samples[index] : undefined;
+      readings[key] = sample
+        ? { value: readingOf(sample, key), validity: sample.readingQuality?.[key]?.validity ?? null }
+        : { value: null, validity: null };
+    }
+    const counts: Record<string, number> = {};
+    for (const seg of this.session.behaviorTimeline?.segments ?? []) {
+      counts[seg.activity] = (counts[seg.activity] ?? 0) + 1;
+    }
+    const breedSelect = this.body.querySelector('select[aria-label="品种"]') as HTMLSelectElement | null;
+    const ageSelect = this.body.querySelector('select[aria-label="年龄"]') as HTMLSelectElement | null;
+    const phoneEl = this.root.querySelector('.phone') as HTMLElement | null;
+    return {
+      collapsed: this.collapsed,
+      tab: this.tab,
+      hourOfDay: status?.hourOfDay ?? 0,
+      readings,
+      eventRows: this.body.querySelectorAll('.app-event-row').length,
+      counts,
+      profile: { breedId: this.profile.breedId, ageMonths: this.profile.ageMonths },
+      alert: {
+        notify: this.alert?.shouldNotify ?? false,
+        red: this.alert ? highlightedChannels(this.alert).map(String) : [],
+        popup: this.alertHost.querySelector('.app-alert') !== null,
+        acute: this.alert?.acuteWindow ?? false,
+        reasons: this.alert?.details.length ?? 0,
+      },
+      povBound: this.povBound,
+      profileOptions: {
+        breeds: breedSelect ? breedSelect.options.length : 0,
+        ages: ageSelect ? ageSelect.options.length : 0,
+        selectedBreed: breedSelect?.value ?? '',
+        selectedAge: ageSelect?.value ?? '',
+      },
+      layout: {
+        phoneHeight: phoneEl?.clientHeight ?? 0,
+        bodyClientHeight: this.body.clientHeight,
+        bodyScrollHeight: this.body.scrollHeight,
+        canScroll: this.body.scrollHeight > this.body.clientHeight + 1,
+      },
+    };
+  }
+}
+
+/** 事件流里给行为取的中文名（词汇的单一事实来源是 core 的活动表）。 */
+function activityLabelOf(id: string): string {
+  const table: Record<string, string> = {
+    resting: '休息',
+    alert: '静坐观察',
+    grooming: '理毛',
+    locomoting: '走动',
+    playing: '玩耍',
+    feeding: '进食',
+    drinking: '喝水',
+    eliminating: '用猫砂盆',
+    scratching: '抓挠',
+    hiding: '躲藏',
+    perching: '高处停留',
+    vomit: '干呕',
+  };
+  return table[id] ?? id;
 }
 
 /** 会话内秒 → 手机上的钟点（会话起点 09:00，与 `DAY_START_HOUR` 一致）。 */
@@ -595,6 +971,31 @@ function clockOf(tS: number): string {
   const h = Math.floor(hour);
   const m = Math.floor((hour - h) * 60);
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function ageLabel(months: number): string {
+  if (months < 12) return `${months} 个月`;
+  const years = months / 12;
+  return `${Number.isInteger(years) ? years : years.toFixed(1)} 岁`;
+}
+
+function ageBandLabel(band: string): string {
+  const table: Record<string, string> = {
+    junior: '幼猫（<1 岁）',
+    adult: '成猫（1–8 岁）',
+    senior: '初老（8–13 岁）',
+    geriatric: '高龄（>13 岁）',
+  };
+  return table[band] ?? band;
+}
+
+function sizeClassLabel(size: string): string {
+  const table: Record<string, string> = {
+    'cat-small': '偏小（<3.2 kg）',
+    'cat-standard': '标准（3.2–5.5 kg）',
+    'cat-large': '偏大（>5.5 kg）',
+  };
+  return table[size] ?? size;
 }
 
 /**

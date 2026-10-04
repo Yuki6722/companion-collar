@@ -31,6 +31,15 @@ import { resolveQuality } from './quality.ts';
 import type { QualityChoice, QualitySettings } from './quality.ts';
 import { skyTexture } from './textures.ts';
 
+/** 项圈相机画面的刷新率（帧/秒）。见 `updatePovFeed` 的取舍说明。 */
+const POV_FPS = 8;
+/** 项圈相机的视野（度）。比人眼常规镜头宽一些，接近常见运动相机的观感。 */
+const POV_FOV_DEG = 78;
+/** 机位下俯角（弧度，约 8°）：项圈在颈前，自然会拍到地面，但主体视野要朝前。 */
+const POV_PITCH_RAD = 0.14;
+/** 机位平滑系数（每帧向目标插值的比例）：抑制姿势微动带来的抖动。 */
+const POV_SMOOTH = 0.4;
+
 export interface SceneStats {
   triangles: number;
   drawCalls: number;
@@ -139,6 +148,28 @@ export class HomeScene {
   /** 项圈默认可见：它是产品形态本身，不该藏在参数后面（`?collar=off` 可关） */
   private collarVisible = true;
   private whiskerZoneVisible = false;
+  /**
+   * 项圈相机（POV）离屏渲染。
+   *
+   * 只在**有人看**的时候才渲染（App 的「实时」页绑定了 canvas 才创建渲染目标）：
+   * 每帧多一遍渲染 + 一次 readPixels 是实打实的开销，没人看时不该付这份钱。
+   */
+  private povCanvas: HTMLCanvasElement | null = null;
+  private povCtx: CanvasRenderingContext2D | null = null;
+  private povTarget: THREE.WebGLRenderTarget | null = null;
+  private povCamera: THREE.PerspectiveCamera | null = null;
+  private povBuffer: Uint8Array | null = null;
+  private povImage: ImageData | null = null;
+  private povLastMs = 0;
+  private povFrames = 0;
+  /** 机位平滑状态（见 `updatePovFeed`） */
+  private povEyeSmooth: THREE.Vector3 | null = null;
+  private povQuatSmooth: THREE.Quaternion | null = null;
+  /** 主相机跟随项圈机位（`?view=collar-cam`） */
+  private povFollowMain = false;
+  /** 位移探针：见 `startMotionProbe` */
+  private probe: { until: number; samples: Array<{ t: number; x: number; y: number; z: number }> } | null =
+    null;
 
   constructor(opts: SceneOptions) {
     this.canvasHost = opts.canvasHost;
@@ -512,6 +543,87 @@ export class HomeScene {
     };
   }
 
+  // ---------------------------------------------------------------- 项圈相机（POV）
+
+  /**
+   * 绑定/解绑 App「实时」页里的画面画布。
+   *
+   * 传 `null` 即停止渲染——这是省电纪律：没人看的画面不渲染。
+   */
+  setPovCanvas(canvas: HTMLCanvasElement | null): void {
+    this.povCanvas = canvas;
+    if (!canvas) {
+      this.povCtx = null;
+      return;
+    }
+    this.povCtx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    // 尺寸没变就**复用**渲染目标：上一版每次绑定都新建一个（每 500 ms 一次），
+    // 分配与首帧未填充叠在一起，画面就会闪——这是"闪动"的主要原因之一。
+    if (this.povTarget && (this.povTarget.width !== w || this.povTarget.height !== h)) {
+      this.povTarget.setSize(w, h);
+      this.povCamera = null;
+      this.povBuffer = null;
+      this.povImage = null;
+    }
+    if (!this.povTarget) {
+      this.povTarget = new THREE.WebGLRenderTarget(w, h, {
+        depthBuffer: true,
+        // 线性过滤 + 不生成 mipmap：读回来的像素要的就是"这一帧"，不需要额外处理
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        generateMipmaps: false,
+      });
+    }
+    if (!this.povCamera) this.povCamera = new THREE.PerspectiveCamera(POV_FOV_DEG, w / h, 0.03, 60);
+    if (!this.povBuffer) this.povBuffer = new Uint8Array(w * h * 4);
+    this.povImage = null;
+  }
+
+  /** 自检用：项圈相机这一路的运行事实。 */
+  povState(): {
+    bound: boolean;
+    frames: number;
+    width: number;
+    height: number;
+    /** 镜头离**猫所站表面**的高度（米）——用来核对"视角高度与猫一致" */
+    eyeHeightM: number;
+    /** 当前机位是否跟随项圈镜头（`?view=collar-cam`） */
+    follow: boolean;
+  } {
+    const rig = this.collarRig;
+    let eyeHeightM = 0;
+    if (rig) {
+      rig.povAnchor.updateWorldMatrix(true, false);
+      const eye = new THREE.Vector3().setFromMatrixPosition(rig.povAnchor.matrixWorld);
+      eyeHeightM = Number((eye.y - rig.root.position.y).toFixed(3));
+    }
+    return {
+      bound: this.povCanvas !== null,
+      frames: this.povFrames,
+      width: this.povCanvas?.width ?? 0,
+      height: this.povCanvas?.height ?? 0,
+      eyeHeightM,
+      follow: this.povFollowMain,
+    };
+  }
+
+  /**
+   * 主相机切到项圈机位（`?view=collar-cam`）。
+   *
+   * 与「猫特写」不同：这不是"看着猫"，而是**把机位放到项圈的镜头上**，
+   * 用来核对项圈相机到底拍到了什么。它拍不到自己（渲染时会隐藏猫），
+   * 也不等于猫的视觉——帧率、视野、以及嗅觉通道都不等价（见 `AGENTS.md` §3）。
+   */
+  setPovCameraFollow(on: boolean): void {
+    this.povFollowMain = on;
+  }
+
+  isPovCameraFollowing(): boolean {
+    return this.povFollowMain;
+  }
+
   /**
    * 切换到机位预设。
    *
@@ -519,6 +631,23 @@ export class HomeScene {
    * 缓动依赖渲染帧推进，而无头/低帧率环境下帧数不可控，会让截图位置每次都不一样。
    */
   preset(id: string, immediate = false): void {
+    if (id === 'collar-cam') {
+      // 主相机站到项圈镜头上（每帧跟随，见 tick()）
+      this.setPovCameraFollow(true);
+      const p = this.collarRig?.povAnchor;
+      if (p) {
+        p.updateWorldMatrix(true, false);
+        const eye = new THREE.Vector3().setFromMatrixPosition(p.matrixWorld);
+        const ahead = new THREE.Vector3(0, 0, 1).applyQuaternion(p.getWorldQuaternion(new THREE.Quaternion()));
+        this.moveTo(
+          [eye.x, eye.y, eye.z],
+          [eye.x + ahead.x * 1.4, eye.y + ahead.y * 1.4 - 0.34, eye.z + ahead.z * 1.4],
+          immediate ? 0 : 0.35,
+        );
+      }
+      return;
+    }
+    this.setPovCameraFollow(false);
     if (id === 'cat-follow') {
       const p = this.cat?.rig.root.position;
       if (!p) return;
@@ -730,8 +859,155 @@ export class HomeScene {
     this.labelLayer.setVisible(this.labelsVisible);
   }
 
-  private resize(): void {
-    const w = this.canvasHost.clientWidth || 1;
+  /**
+   * 渲染一帧项圈相机画面，并写进 App「实时」页的画布。
+   *
+   * 三条工程取舍：
+   *   1. **节流到约 6 fps**：每帧多一遍渲染 + 一次 `readRenderTargetPixels`（会同步等 GPU）
+   *      代价不小，而"看看它在哪"这件事不需要 60 fps。
+   *   2. **渲染时隐藏猫自己**：真实项圈相机拍不到自己的后脑勺，不隐藏的话画面里全是毛。
+   *   3. **只在有人看时渲染**：App 绑定 canvas 才创建渲染目标，切走就停止（见 `setPovCanvas`）。
+   */
+  private updatePovFeed(): void {
+    const canvas = this.povCanvas;
+    const ctx = this.povCtx;
+    const target = this.povTarget;
+    const cam = this.povCamera;
+    const rig = this.collarRig;
+    const buffer = this.povBuffer;
+    if (!canvas || !ctx || !target || !cam || !rig || !buffer) return;
+
+    const wall = performance.now();
+    const intervalMs = 1000 / POV_FPS;
+    if (wall - this.povLastMs < intervalMs) return;
+    // 用固定步长推进"上一次"而不是直接赋值 now：这样在帧率低于 POV_FPS 时
+    // 不会积攒出一个巨大的间隔，画面节奏更稳。
+    this.povLastMs = wall - Math.min(intervalMs, wall - this.povLastMs) + intervalMs;
+
+    rig.povAnchor.updateWorldMatrix(true, false);
+    const eye = new THREE.Vector3().setFromMatrixPosition(rig.povAnchor.matrixWorld);
+    const quat = rig.povAnchor.getWorldQuaternion(new THREE.Quaternion());
+    // 一阶平滑：姿势动画（重心转移、呼吸）会让机位有厘米级抖动，
+    // 在 8 fps 的采样下抖动会被放大成"一跳一跳"。平滑系数取得较大，几乎没有延迟。
+    if (this.povEyeSmooth) {
+      const k = POV_SMOOTH;
+      this.povEyeSmooth.lerp(eye, k);
+      this.povQuatSmooth?.slerp(quat, k);
+      cam.position.copy(this.povEyeSmooth);
+      cam.quaternion.copy(this.povQuatSmooth ?? quat);
+    } else {
+      this.povEyeSmooth = eye.clone();
+      this.povQuatSmooth = quat.clone();
+      cam.position.copy(eye);
+      cam.quaternion.copy(quat);
+    }
+    // 项圈在颈前偏下，自然会拍到一些地面；这里只给一个小幅下俯角，
+    // 主要视野仍朝前——"便于寻找它的位置"要求看得见房间，而不是只看得见地板。
+    cam.rotateX(-POV_PITCH_RAD);
+
+    const wasVisible = rig.root.visible;
+    rig.root.visible = false;
+    const prevTarget = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(target);
+    this.renderer.render(this.scene, cam);
+    this.renderer.setRenderTarget(prevTarget);
+    rig.root.visible = wasVisible;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    this.renderer.readRenderTargetPixels(target, 0, 0, w, h, buffer);
+    // WebGL 的行序自下而上，ImageData 自上而下 → 翻一次
+    if (!this.povImage || this.povImage.width !== w || this.povImage.height !== h) {
+      this.povImage = ctx.createImageData(w, h);
+    }
+    const dst = this.povImage.data;
+    const rowBytes = w * 4;
+    for (let y = 0; y < h; y++) {
+      const src = (h - 1 - y) * rowBytes;
+      dst.set(buffer.subarray(src, src + rowBytes), y * rowBytes);
+    }
+    ctx.putImageData(this.povImage, 0, 0);
+    this.povFrames++;
+  }
+
+  // ---------------------------------------------------------------- 位移探针（"有没有瞬移"）
+
+  /**
+   * 记录接下来 `durationS` 秒里猫的**逐帧位置**，用来量化"它是不是走过去的"。
+   *
+   * 为什么需要这个仪器：位移是渲染层的事实，无法用单测覆盖（要 three + 控制器）。
+   * 而"瞬移"这个故障恰恰是**只有位置序列能证明**的：一次 0.06 秒走完 3 m，
+   * 任何单帧快照看起来都正常。因此这里记录位置序列，再由自检算出
+   * **最大瞬时速度**与**位移是否连续**——真实走速约 0.45 m/s，跳跃弧顶也不会超过几 m/s，
+   * 而瞬移会在两帧之间产生每秒几十米的尖峰。
+   */
+  startMotionProbe(durationS: number): void {
+    this.probe = { until: performance.now() + Math.max(0.2, durationS) * 1000, samples: [] };
+  }
+
+  /** 自检用：位移探针的统计结果（没跑过返回 null）。 */
+  motionProbe(): {
+    samples: number;
+    durationS: number;
+    maxSpeedMps: number;
+    maxStepM: number;
+    movingShare: number;
+    distinctPositions: number;
+  } | null {
+    const p = this.probe;
+    if (!p || p.samples.length < 2) return null;
+    let maxSpeed = 0;
+    let maxStep = 0;
+    let moving = 0;
+    const seen = new Set<string>();
+    for (let i = 0; i < p.samples.length; i++) {
+      const s = p.samples[i] as { t: number; x: number; y: number; z: number };
+      seen.add(`${s.x.toFixed(2)},${s.y.toFixed(2)},${s.z.toFixed(2)}`);
+      const prev = p.samples[i - 1];
+      if (!prev) continue;
+      const dt = Math.max(1e-3, (s.t - prev.t) / 1000);
+      const step = Math.hypot(s.x - prev.x, s.z - prev.z, s.y - prev.y);
+      const speed = step / dt;
+      if (step > maxStep) maxStep = step;
+      if (speed > maxSpeed) maxSpeed = speed;
+      if (step > 0.01) moving++;
+    }
+    const span = ((p.samples[p.samples.length - 1] as { t: number }).t - (p.samples[0] as { t: number }).t) / 1000;
+    return {
+      samples: p.samples.length,
+      durationS: Number(span.toFixed(2)),
+      maxSpeedMps: Number(maxSpeed.toFixed(2)),
+      maxStepM: Number(maxStep.toFixed(3)),
+      movingShare: Number((moving / Math.max(1, p.samples.length - 1)).toFixed(3)),
+      distinctPositions: seen.size,
+    };
+  }
+
+  private sampleProbe(): void {
+    const p = this.probe;
+    if (!p || performance.now() > p.until) return;
+    const pos = this.cat?.rig.root.position;
+    if (pos) p.samples.push({ t: performance.now(), x: pos.x, y: pos.y, z: pos.z });
+  }
+
+  /** 主相机站在项圈镜头上（`?view=collar-cam`）：每帧跟随，并隐藏猫自己。 */
+  private followPovCamera(dt: number): void {    const rig = this.collarRig;
+    if (!rig) return;
+    rig.povAnchor.updateWorldMatrix(true, false);
+    const eye = new THREE.Vector3().setFromMatrixPosition(rig.povAnchor.matrixWorld);
+    const ahead = new THREE.Vector3(0, 0, 1).applyQuaternion(
+      rig.povAnchor.getWorldQuaternion(new THREE.Quaternion()),
+    );
+    const k = Math.min(1, dt * 8);
+    this.camera.position.lerp(eye, k);
+    this.controls.target.lerp(
+      new THREE.Vector3(eye.x + ahead.x * 1.4, eye.y + ahead.y * 1.4 - 0.34, eye.z + ahead.z * 1.4),
+      k,
+    );
+    this.controls.update();
+  }
+
+  private resize(): void {    const w = this.canvasHost.clientWidth || 1;
     const h = this.canvasHost.clientHeight || 1;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -755,6 +1031,7 @@ export class HomeScene {
     // 行为层关闭时退回第一阶段的手动路径。
     if (this.behavior) this.behavior.update(dt);
     else this.cat?.update(dt);
+    this.sampleProbe();
     this.controls.update();
 
     if (this.settings.shadows) {
@@ -766,7 +1043,16 @@ export class HomeScene {
       this.sun.target.updateMatrixWorld();
     }
 
+    // 项圈机位：主相机每帧跟到镜头上，并在整个渲染期隐藏猫自己
+    if (this.povFollowMain) {
+      this.followPovCamera(dt);
+      if (this.collarRig) this.collarRig.root.visible = false;
+    } else if (this.collarRig && !this.collarRig.root.visible) {
+      this.collarRig.root.visible = true;
+    }
+
     this.renderer.render(this.scene, this.camera);
+    this.updatePovFeed();
     this.labelLayer.update(this.camera, this.canvasHost.clientWidth, this.canvasHost.clientHeight);
     // 状态标签的**位置**每帧更新（猫在动），**文案**只在行为状态变化时更新
     // （见 `CatStatusLabel.set` 的纪律 2），因此这里不产生文本重排。

@@ -11,9 +11,8 @@
  * 突发演示因此不再由场景自己重建时间线，而是由本文件重建**带注入突发的会话**后交给场景——
  * 否则会出现"手机上的读数"与"猫正在做的事"对不上的两条时间线。
  */
-import { cameraHeightOf } from '@camp/core';
-import { INCIDENT_KINDS } from '@camp/core';
-import type { CatIncidentKind } from '@camp/core';
+import { CAT_BREEDS, INCIDENT_KINDS } from '@camp/core';
+import type { CatIncidentKind, PetProfile } from '@camp/core';
 import { generateSession } from '@camp/simulator';
 import type { ScenarioId } from '@camp/simulator';
 import type { Session } from '@camp/core';
@@ -24,7 +23,6 @@ import { installDebugHandle } from '../scene/selftest.ts';
 import type { CatStateId } from '../scene/cat/cat-states.ts';
 import { AppPhone } from '../ui/app-phone.ts';
 import { Hud } from '../ui/hud.ts';
-import type { PresetSpec } from '../ui/hud.ts';
 
 /** 会话长度与种子：场景、事件流、读数共用一份，改这里就全改。 */
 const SESSION_MINUTES = 24 * 60;
@@ -68,10 +66,16 @@ export function mountHomeScreen(host: HTMLElement): () => void {
       ? (openingIncident as CatIncidentKind)
       : null;
 
+  /** 当前档案。App 档案页改品种/年龄会改它，并据此**重建会话**。 */
+  let profile: PetProfile = DEMO_PROFILE;
+
   /** 生成会话。`injectIncidents` 是唯一注入方式——真值与读数都从这条时间线派生。 */
-  function buildSession(injectIncidents: Array<{ atS: number; kind: CatIncidentKind }> = []): Session {
+  function buildSession(
+    injectIncidents: Array<{ atS: number; kind: CatIncidentKind }> = [],
+    forProfile: PetProfile = profile,
+  ): Session {
     return generateSession({
-      profile: DEMO_PROFILE,
+      profile: forProfile,
       seed: SESSION_SEED,
       durationMin: SESSION_MINUTES,
       scenario,
@@ -109,7 +113,7 @@ export function mountHomeScreen(host: HTMLElement): () => void {
         if (session.behaviorTimeline) {
           scene?.applyTimeline(session.behaviorTimeline, Math.max(0, atS - 1));
         }
-        phone?.setSession(session, false);
+        phone?.setSession(session);
         hud.setIncidentStatus(kind);
       },
       onPreset: (preset) => {
@@ -147,21 +151,37 @@ export function mountHomeScreen(host: HTMLElement): () => void {
     target: [0, 0, 0],
     hint: '把相机移到猫身边（实时跟随它当前所在的位置）',
   });
-  const collarY = cameraHeightOf(DEMO_PROFILE.heightCm);
-  const collarPreset: PresetSpec = {
-    id: 'collar',
-    label: `项圈相机高度 ${collarY.toFixed(2)} m`,
-    position: [0.35, collarY, -1.35],
-    target: [0.7, 0.12, -2.6],
-    hint: `离地高度由档案肩高（${DEMO_PROFILE.heightCm} cm）推导：肩高 × 0.85。这是机位高度，不是对猫实际视野的复刻。`,
-    custom: true,
-  };
-  hud.addPreset(collarPreset);
+  // 项圈相机机位：主相机站到项圈镜头上（每帧跟随），看到的就是 App「实时」页那一格。
+  //
+  // ⚠️ 这里**不再有**「项圈相机高度 x.xx m」那个预设（用户反馈 ②）。
+  // 它给的是一个**固定世界机位**：一旦猫走开，那个"项圈高度视角"就与猫无关了，
+  // 而真正要看的"项圈拍到了什么"由下面这个跟随镜头的机位回答。
+  hud.addPreset({
+    id: 'collar-cam',
+    label: '项圈相机',
+    position: [0, 0, 0],
+    target: [0, 0, 0],
+    hint: '把主相机放到项圈前端的镜头上（每帧跟随它）。画面里看不到猫自己——真实项圈相机也拍不到自己的后脑勺。这是环境影像，不等于猫眼中的世界。',
+  });
 
   host.append(hud.root);
 
   // App 预览：右侧栏的 iPhone 机模。它是**产品形态本身**，所以放在场景旁边实时跟着跑。
-  phone = new AppPhone({ profile: DEMO_PROFILE, session, collapsed: appCollapsed });
+  phone = new AppPhone({
+    profile,
+    session,
+    collapsed: appCollapsed,
+    // 「实时」页挂上画布后才开始离屏渲染；切走或收起时传 null 让它停下
+    onPovCanvas: (canvas) => scene?.setPovCanvas(canvas),
+    // 档案页改品种/年龄：按新档案重建会话，并把场景的时间线换到同一份上
+    onProfileChange: (next) => {
+      const atS = Math.max(0, scene?.simTimeS() ?? 0);
+      profile = next;
+      session = buildSession([], next);
+      if (session.behaviorTimeline) scene?.applyTimeline(session.behaviorTimeline, atS);
+      phone?.setSession(session, next);
+    },
+  });
   hud.root.append(phone.root);
 
   try {
@@ -194,6 +214,10 @@ export function mountHomeScreen(host: HTMLElement): () => void {
     scene.setLabelsVisible(showLabels);
     scene.setCollarVisible(showCollar);
     scene.setWhiskerZoneVisible(showWhiskerZone);
+    // ★ 场景**现在**才存在，而 App 是在它之前构造的——构造时 `onPovCanvas` 里的
+    //   `scene?.setPovCanvas(...)` 只能拿到 null。App 现在是"建一次 + 就地刷新"，
+    //   不会自己再挂一次画布，因此这里必须显式补挂（`force`），否则「实时」页永远没有画面。
+    phone?.rebindPovCanvas(true);
     scene.start();
     // 默认进入自主行为；?mode=manual 则保持第一阶段的手动演示档位
     const startManual = params0.get('mode') === 'manual' || params0.has('behavior-off');
@@ -261,6 +285,11 @@ export function mountHomeScreen(host: HTMLElement): () => void {
           catSegmentElapsedS: behavior?.segmentElapsedS ?? 0,
           catSegmentTotalS: behavior?.segmentRealDurationS ?? 0,
           catMotion: scene?.catIncidentMotion() ?? undefined,
+          catMoving: behavior?.moving ?? false,
+          // 位移探针与项圈相机：这两个是渲染层事实，只有快照能证明它们真的在跑
+          catMotionProbe: scene?.motionProbe() ?? null,
+          catPov: scene?.povState() ?? undefined,
+          presets: hud.presetIdList(),
           // 第三阶段：项圈硬件与触须无干涉区的显示状态（形态方案的可断言事实）
           collar: scene?.collarState() ?? undefined,
           // 第四阶段（本页布局）：App 预览的显示状态与它此刻显示的内容。
@@ -293,16 +322,31 @@ export function mountHomeScreen(host: HTMLElement): () => void {
           if (session.behaviorTimeline) {
             scene?.applyTimeline(session.behaviorTimeline, Math.max(0, atS - 1));
           }
-          phone?.setSession(session, false);
+          phone?.setSession(session);
           hud.setIncidentStatus(kind as CatIncidentKind);
         },
         preset: (id) => scene?.preset(id),
+        // 自检动作：位移探针（记录接下来 N 毫秒的逐帧位置，用于判定有没有瞬移）
+        probe: (ms) => scene?.startMotionProbe(Number(ms) / 1000),
+        // 自检动作：档案页换品种（用于验证「换档案 → 基线跟着变」这条路）
+        // 与档案页下拉同一个动作：连带把体型取值一起换掉，否则"换品种"只改了名字。
+        breed: (id) => {
+          const hit = CAT_BREEDS.find((b) => b.id === id);
+          const next: PetProfile = hit
+            ? { ...profile, breedId: hit.id, heightCm: hit.heightCm, weightKg: hit.weightKg }
+            : { ...profile, breedId: id };
+          const atS = Math.max(0, scene?.simTimeS() ?? 0);
+          profile = next;
+          session = buildSession([], next);
+          if (session.behaviorTimeline) scene?.applyTimeline(session.behaviorTimeline, atS);
+          phone?.setSession(session, next);
+        },
         // 自检动作：`on` 只开硬件，`zone` 连触须无干涉区一起开，`off` 关闭
         collar: (arg) => {
           scene?.setCollarVisible(arg !== 'off');
           scene?.setWhiskerZoneVisible(arg === 'zone');
         },
-        // 自检动作：App 预览的收起/展开与页签切换（`live`/`events`/`drift`/`profile`）
+        // 自检动作：App 预览的收起/展开与页签切换（`live`/`events`/`health`/`profile`）
         app: (arg) => {
           if (arg === 'off') phone?.setCollapsed(true);
           else if (arg === 'on') phone?.setCollapsed(false);
@@ -317,6 +361,9 @@ export function mountHomeScreen(host: HTMLElement): () => void {
   }
 
   return () => {
+    // 先解绑 App 的项圈相机画布，再销毁场景：否则场景还握着一块已经不在 DOM 里的画布
+    phone?.dispose();
+    phone = null;
     scene?.dispose();
     scene = null;
     hud.root.remove();

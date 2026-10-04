@@ -222,7 +222,7 @@ if (appSnaps.length > 0) {
     '所有快照都处于收起状态',
   );
   const tabs = new Set(appSnaps.map((r) => r.app.tab));
-  check('App 页签可以切换', tabs.size >= 3, `只见到 ${[...tabs].join('、')}`);
+  check('App 四个模块可切换（实时/事件流/健康/档案）', tabs.size >= 4, `只见到 ${[...tabs].join('、')}`);
   check(
     'App 的读数是数值而不是占位',
     appSnaps.some((r) => typeof r.app.readings.hr?.value === 'number'),
@@ -237,10 +237,59 @@ if (appSnaps.length > 0) {
     `rr validity=${during?.app.readings.rr?.validity}`,
   );
   check(
-    '事件流页签渲染出了事件行',
+    '事件流模块渲染出了 5 分钟记录',
     appSnaps.some((r) => r.app.tab === 'events' && r.app.eventRows > 0),
     `events 快照的 eventRows=${appSnaps.find((r) => r.app.tab === 'events')?.app.eventRows}`,
   );
+  // 事件流要**统计次数**：喝水/玩耍/用砂盆等。演示开头这些计数可能都是 0，
+  // 因此只断言"字段存在且是数字"，不断言"一定大于 0"（避免把演示进度当成功能正确性）。
+  const withCounts = appSnaps.find((r) => r.app.counts && typeof r.app.counts.drinking === 'number');
+  check(
+    '事件流模块给出了行为次数统计',
+    Boolean(withCounts),
+    '没有任何快照带 app.counts',
+  );
+  check(
+    '档案模块可以改品种（换档案后 session 跟着换）',
+    appSnaps.some((r) => r.app.profile?.breedId === 'maine-coon'),
+    `见到过的品种：${[...new Set(appSnaps.map((r) => r.app.profile?.breedId))].join('、')}`,
+  );
+
+  // ★ 反馈 ①：「档案页的下拉点开就关」的根因是每 0.5 秒重建一次 DOM。
+  // 断言下拉**真的存在且选项齐全**（12 个品种 / 7 个年龄档），并在档案页能读到选中值。
+  const profileSnaps = appSnaps.filter((r) => r.app.tab === 'profile');
+  check(
+    '档案模块的品种下拉有完整选项（不是被反复销毁的空壳）',
+    profileSnaps.some((r) => (r.app.profileOptions?.breeds ?? 0) >= 10),
+    `breeds=${profileSnaps.map((r) => r.app.profileOptions?.breeds).join('、')}`,
+  );
+  check(
+    '档案模块的年龄下拉有完整选项',
+    profileSnaps.some((r) => (r.app.profileOptions?.ages ?? 0) >= 5),
+    `ages=${profileSnaps.map((r) => r.app.profileOptions?.ages).join('、')}`,
+  );
+
+  // ★ 反馈 ③：机身高度不随内容变化，长内容在机身内滚动。
+  // 这条**只有量尺寸才能证明**：肉眼看截图分不出"手机变长了"还是"内容滚动了"。
+  const layouts = appSnaps.map((r) => r.app.layout).filter(Boolean);
+  if (layouts.length >= 2) {
+    const heights = layouts.map((l) => l.phoneHeight).filter((h) => h > 0);
+    const min = Math.min(...heights);
+    const max = Math.max(...heights);
+    check(
+      'iPhone 尺寸在各模块之间保持不变（不被内容撑长）',
+      heights.length >= 2 && max - min <= 2,
+      `机身高度 ${min}–${max}px（差 ${max - min}px）`,
+    );
+    const long = appSnaps.find((r) => r.app.tab === 'events' && r.app.layout?.canScroll);
+    check(
+      '内容长的模块在机身内滚动（而不是把机身撑长）',
+      Boolean(long),
+      `events 的 layout=${JSON.stringify(appSnaps.find((r) => r.app.tab === 'events')?.app.layout)}`,
+    );
+  } else {
+    console.log('  · 日志里没有机身尺寸字段，跳过尺寸断言（旧版页面）');
+  }
 
   // ★ 第四阶段：读数变化提示。三条断言分别对应「判出来了」「画红了」「弹出来了」——
   // 缺任何一条，用户看到的都是"点了抽搐但 App 没反应"。
@@ -269,6 +318,59 @@ if (appSnaps.length > 0) {
   console.log('  · 日志里没有 App 预览字段，跳过 App 断言（可能是旧版页面）');
 }
 
+// ---------------------------------------------------------------- 位移轨迹（「不可以瞬移」）
+
+// ★ 本轮核心断言之一：猫在两个动作之间必须**走过去**，不许突然出现在新位置。
+// 判定靠位移探针（`HomeScene.startMotionProbe`）：记录逐帧位置后算最大瞬时速度。
+// 真实走速约 0.45 m/s，跳跃弧顶也就几 m/s；而"瞬移"会在两帧之间产生每秒几十米的尖峰。
+const probed = records.find((r) => r.catMotionProbe);
+if (probed) {
+  const p = probed.catMotionProbe;
+  check(
+    '位移探针抓到了足够的帧',
+    p.samples > 10,
+    `samples=${p?.samples}`,
+  );
+  check(
+    '没有瞬移：最大瞬时速度在合理范围内',
+    typeof p.maxSpeedMps === 'number' && p.maxSpeedMps < 6,
+    `maxSpeed=${p?.maxSpeedMps} m/s（走速约 0.45，跳跃弧顶几 m/s；瞬移会是每秒几十米）`,
+  );
+  check(
+    '确实有轨迹：位置不是只有起点与终点两个取值',
+    p.distinctPositions >= 3,
+    `distinctPositions=${p?.distinctPositions}`,
+  );
+} else {
+  console.log('  · 日志里没有位移探针字段，跳过轨迹断言（旧版页面）');
+}
+
+// ---------------------------------------------------------------- 项圈相机（实时页）
+
+const povSnaps = records.filter((r) => r.catPov);
+if (povSnaps.length > 0) {
+  check(
+    '「实时」模块绑定了项圈相机画面',
+    povSnaps.some((r) => r.catPov.bound === true || r.catPov.frames > 0),
+    `pov=${JSON.stringify(povSnaps[0]?.catPov)}`,
+  );
+  check(
+    '项圈相机真的渲染出了帧（不是只挂了一块空画布）',
+    povSnaps.some((r) => (r.catPov.frames ?? 0) > 0),
+    `frames=${Math.max(...povSnaps.map((r) => r.catPov.frames ?? 0))}`,
+  );
+  // ★ 反馈 ④：视角高度要与猫一致。镜头在项圈上，因此离它脚下的表面应在
+  // 颈高量级（站立约 0.20 m）。数值为 0 说明锚点没挂上或世界矩阵没更新。
+  const eyes = povSnaps.map((r) => r.catPov.eyeHeightM).filter((v) => typeof v === 'number' && v > 0);
+  check(
+    '项圈相机高度与猫一致（镜头在颈高量级，不是悬空或贴地）',
+    eyes.length > 0 && Math.min(...eyes) > 0.1 && Math.max(...eyes) < 0.45,
+    `eyeHeightM 范围 ${eyes.length ? `${Math.min(...eyes)}–${Math.max(...eyes)}` : '无'}`,
+  );
+} else {
+  console.log('  · 日志里没有项圈相机字段，跳过该断言（旧版页面）');
+}
+
 // ---------------------------------------------------------------- 项圈形态可视化
 
 // 第三阶段新增：项圈硬件（带体 / 电子仓 / ECG 电极 ×2 / 体表热敏电阻）与触须无干涉区。
@@ -280,14 +382,25 @@ if (appSnaps.length > 0) {
 const withCollar = records.find((r) => r.collar?.collar === true);
 if (withCollar) {
   check(
-    '项圈默认挂在猫脖子上，且部件齐全（带体 + 电子仓 + 双电极 + 热敏电阻）',
-    withCollar.collar.parts === 5,
+    '项圈默认挂在猫脖子上，且部件齐全（带体 + 电子仓 + 双电极 + 热敏电阻 + **摄像头**）',
+    withCollar.collar.parts === 6,
     `parts=${withCollar.collar.parts}`,
   );
   check('触须无干涉区可独立显示', withCollar.collar.whiskerZone === true);
 } else {
   failures.push('首屏快照里没有项圈（它应该默认可见）');
   console.error('  ✗ 首屏快照里没有项圈（它应该默认可见）');
+}
+
+// ★ 反馈 ②：左栏不再有「项圈相机高度 x.xx m」预设。
+// 它的取值来自 `povState().eyeHeightM`（跟随猫），固定世界机位那个已被删除。
+const presets = records.flatMap((r) => (r.presets ?? []).map((p) => p.id));
+if (presets.length > 0) {
+  check(
+    '左栏不再有固定高度的「项圈相机高度」机位',
+    !presets.includes('collar'),
+    `见到的机位：${[...new Set(presets)].join('、')}`,
+  );
 }
 
 if (failures.length > 0) {
