@@ -9,12 +9,20 @@
  */
 import fs from 'node:fs';
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'apps', 'web', 'dist');
 const PORT = Number(process.env.PORT ?? 5273);
+/**
+ * 监听地址。
+ *
+ * 默认绑 `0.0.0.0`：本项目的一条分发前提是「扫码即看」，只绑 127.0.0.1 时
+ * 手机同网段也打不开。需要仅本机时设 `HOST=127.0.0.1`。
+ */
+const HOST = process.env.HOST ?? '0.0.0.0';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -101,8 +109,27 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(`静态预览已启动：http://localhost:${PORT}`);
   console.log(`服务目录：${DIST}`);
+  // 列出局域网地址：手机扫码/输入即可访问（分发前提是「扫码即看」）
+  for (const addr of lanAddresses()) {
+    console.log(`  手机可访问：http://${addr}:${PORT}`);
+  }
   console.log('修改源码后请重新运行 pnpm --filter @camp/web build');
 });
+
+/** 取本机局域网 IPv4 地址，用于手机访问。取不到就返回空数组。 */
+function lanAddresses() {
+  const out = [];
+  try {
+    for (const list of Object.values(os.networkInterfaces())) {
+      for (const info of list ?? []) {
+        if (info.family === 'IPv4' && !info.internal) out.push(info.address);
+      }
+    }
+  } catch {
+    /* 取不到就算了，不影响本机预览 */
+  }
+  return out;
+}

@@ -6,11 +6,13 @@
  *
  * 目的：把「只宣称可证伪的事」这条纪律变成构建期可执行的检查，而不是靠人自觉。
  *
+ * 禁词表与豁免规则来自**单一事实来源** `packages/core/src/claims.ts`，
+ * 与单元测试共用，避免两处漂移（新增禁词会自动被测试覆盖）。
+ *
  * 规则：扫描源码与构建产物中的文本，命中禁词即失败。
- *   例外 1：若同一行含明确的否定标记，则视为边界说明或免责声明，放行。
- *   例外 2：文件前 15 行含 `claims-check:ignore-file` 者整份跳过。
- *           用于「本身就是 policy 的文件」——例如本文件、AGENTS.md、
- *           以及 docs/design/02-evidence-policy.md，它们必须能写出禁词本身。
+ *   例外 1：同一行含明确的否定标记 → 视为边界说明或免责声明，放行。
+ *   例外 2：文件前 15 行含 `claims-check:ignore-file` → 整份跳过。
+ *           用于「本身就是 policy 的文件」：本文件、AGENTS.md、证据政策文档。
  *
  * 用法：node scripts/check-claims.mjs [--quiet]
  * 退出码：0 = 通过；1 = 命中禁词
@@ -18,46 +20,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  ALLOWED_CLAIMS,
+  CLAIMS_SKIP_DIRS,
+  FORBIDDEN_TERMS,
+  IGNORE_FILE_MARKER,
+  NEGATION_MARKERS,
+} from '../packages/core/src/claims.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const QUIET = process.argv.includes('--quiet');
-const IGNORE_FILE_MARKER = 'claims-check:ignore-file';
-
-/** 禁止出现的宣称。这些说法要么不可证伪，要么已被证据否定。 */
-const FORBIDDEN = [
-  { term: '检测触觉感受', why: '触觉器官在面部与爪垫，颈部项圈物理上测不到' },
-  { term: '还原宠物视角', why: '帧率低于 CFF、视野不同、无嗅觉通道，三者都不等价' },
-  { term: '还原宠物所见', why: '同上' },
-  { term: '宠物所见', why: '摄像头记录的是环境，与环境影像记录仪不是一回事' },
-  { term: '宠物视角相机', why: '准确说法是环境影像记录仪' },
-  { term: '翻译宠物语言', why: '专家已指出标准化翻译可能造成危险误判' },
-  { term: '猫语翻译', why: '同上' },
-  { term: '读懂宠物', why: '不可证伪的承诺' },
-  { term: '宠物情绪识别', why: '动物情绪体验不可直接测量' },
-  { term: '沉浸式代入', why: '本项目不做头显 VR' },
-  { term: '诊断', why: '非医疗器械；除非在否定语境中作为免责声明' },
-  { term: '治疗', why: '同上' },
-];
-
-/** 否定标记：同一行出现即视为边界说明，放行。 */
-const NEGATION = [
-  '不构成', '不是', '不做', '不能', '不应', '不得', '禁止', '无法',
-  '不宣称', '不提供', '非诊断', '❌', '≠', '边界',
-];
-
-/** 只有允许的宣称可以出现在面向用户的文案里（供人工核对，不参与断言）。 */
-const ALLOWED_CLAIMS = [
-  '可视化猫的视野与身体尺度',
-  '按证据等级展示听阈范围',
-  '核查居家资源是否符合权威指南',
-  '提示可能值得关注的生理变化（非诊断）',
-  '环境影像记录',
-];
 
 const SCAN_DIRS = ['packages', 'apps', 'docs', 'scripts'];
 const SCAN_ROOT_FILES = ['README.md', 'AGENTS.md', 'CHANGELOG.md'];
 const SCAN_EXT = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.html', '.css', '.md', '.json']);
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '.tools', '.vite', 'research']);
+const SKIP_DIRS = new Set(CLAIMS_SKIP_DIRS);
 
 function* walk(dir) {
   let entries;
@@ -100,8 +77,8 @@ for (const file of files) {
   scanned++;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (NEGATION.some((n) => line.includes(n))) continue;
-    for (const { term, why } of FORBIDDEN) {
+    if (NEGATION_MARKERS.some((n) => line.includes(n))) continue;
+    for (const { term, why } of FORBIDDEN_TERMS) {
       if (line.includes(term)) {
         violations.push({
           file: path.relative(ROOT, file),
@@ -118,9 +95,9 @@ for (const file of files) {
 if (violations.length === 0) {
   if (!QUIET) {
     console.log(
-      `✓ 措辞门禁通过（扫描 ${scanned} 个文件，豁免 ${skipped} 个，${FORBIDDEN.length} 条禁词）`,
+      `✓ 措辞门禁通过（扫描 ${scanned} 个文件，豁免 ${skipped} 个，${FORBIDDEN_TERMS.length} 条禁词）`,
     );
-    console.log(`  允许的宣称共 ${ALLOWED_CLAIMS.length} 条，完整政策见 docs/design/02-evidence-policy.md`);
+    console.log(`  允许的宣称共 ${ALLOWED_CLAIMS.length} 条，来源 packages/core/src/claims.ts`);
   }
   process.exit(0);
 }

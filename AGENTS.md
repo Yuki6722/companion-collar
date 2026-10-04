@@ -8,17 +8,26 @@
 
 ## 1. 这个仓库是什么
 
-**companion-collar / 项圈 · 伴侣视角**：3 天 Vibe Coding Camp 的团队交付。给猫狗主人一个网页应用，可**自定义宠物档案（品种 / 体型 / 年龄）**，看见「同一间屋子在宠物感知下是什么样」，并得到一份**可核查的居家资源缺口清单**。
+**companion-collar / 基线哨兵 · 离家事件流**：3 天 Vibe Coding Camp 的团队交付。
+
+> **一句话定位**：**你上班时，它经历了什么；以及，它是否正在慢慢变化。**
+
+面向**在外工作的年轻养宠人**：白天不在家，不知道宠物的健康状况。产品由两部分组成：
+
+- **离家事件流** —— 按主人不在家的时段，汇总「发生了什么事件」（抓挠、摩擦、碰撞、甩头、姿势改变、发声、环境噪声），只描述**事件与比值**
+- **基线哨兵** —— 相对**这只宠物自己的基线**检测指标漂移（活动、静息活动、心率、HRV、呼吸、发声、抓挠、躲藏占比、噪声事件），只描述**变化**
 
 配套一个**项圈形态方案 + 数据仿真器**（本次不造真硬件，数据全部仿真且带已知真值）。
+
+**为什么是这个方向**：「了解宠物感受」其实是四个问题——①它现在感觉如何（**不可回答**，Mendl et al. 2010：动物情绪体验不可直接测量）②我不在时发生了什么（可回答）③它在慢慢变化吗（可回答，**且这是主人的盲区**，PLOS ONE 2026 n=647 + AAFP 指南）④我家环境够不够（可回答）。**本项目只回答 ② 和 ③**；市面产品都在答 ①，这正是它们答不好的原因。
 
 **团队三人**（由各自的研究报告确定分工）：
 
 | 代号 | 工作流 | 交付面 |
 |---|---|---|
-| **A** | 硬件与仿真线 | `pnpm sim:generate` 产出场景数据；项圈规格与形态方案 |
-| **B** | 前端与体验线 | 可扫码访问的线上 URL |
-| **C** | 感知模型与验证线 | 带证据标签的参数表；前后测验证报告 |
+| **A** | 硬件与仿真线 | `pnpm sim:generate` 产出带注入漂移的场景数据；项圈规格与形态方案 |
+| **B** | 前端与体验线 | 可扫码访问的线上 URL（事件流 / 漂移报告 / 宠物档案三屏） |
+| **C** | 基线引擎与验证线 | 带证据标签的漂移输出；前后测验证报告 |
 
 ---
 
@@ -84,7 +93,7 @@ iOS Safari 全版本不支持 WebXR，而主力用户是手机端。真做头显
 ## 5. 包边界与公共 API
 
 ```
-@camp/core        ← 类型、感知参数模型、证据登记、五大支柱规则、分析层
+@camp/core        ← 领域类型、稳健基线、漂移检测、档案推导、措辞政策
 @camp/simulator   ← 依赖 core；仿真数据生成、DeviceAdapter 实现、CLI
 @camp/web         ← 依赖以上两者；不反向被依赖
 ```
@@ -126,13 +135,58 @@ class Foo {
 import map 定义在 [`apps/web/index.html`](apps/web/index.html)，把 `@camp/*` 裸标识符映射到编译产物。**新增 workspace 包时必须同步更新该映射**，否则浏览器无法解析。
 
 **第三方库（目前只有 three）走同一套机制**：`three` 与 `three/addons/` 也映射到同源路径 `./vendor/three/…`，由 `scripts/build-web.mjs` 在构建时把运行时**递归解析并复制**进 `dist/vendor/three/`。
-
 - 为什么递归：`GLTFLoader` 依赖 `utils/BufferGeometryUtils.js`、`utils/SkeletonUtils.js`，手写清单会随 three 升级漏文件，且要到运行时才炸。
 - 为什么复制而不是指向 `node_modules`：部署产物只有 `dist`，运行时必须零外链。
 - three 是 `apps/web` 的 **devDependency**（只作构建期源码），`@types/three` 同理；**不要在 `core` 里引入 three**。
 
 ### 5.5.3 TypeScript 必须是 5.x
 `typescript@7` 是原生编译器预览版，需要平台二进制包 `@typescript/typescript-win32-x64`，在本环境装不上。**钉在 `^5.9`**。
+
+### 5.5.4 `core` 不得在运行时导入其它 workspace 包
+Node 的类型剥离（strip-only）**明确拒绝 node_modules 下的文件**——而 workspace 包在跑测试时是经 node_modules 符号链接解析的，于是抛：
+
+```
+ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING
+```
+
+**推论（务必遵守）**
+- `@camp/core` 源码里**不能出现运行时的跨包 import**（连 `export ... from '@camp/core'` 这种转发都不行）
+- 依赖方向只能是 `simulator → core`、`web → core + simulator`
+- 因此 `core` 自带所需的最小实现。目前两处刻意保留的"重复"，**都不是疏忽**：
+  - `core/src/drift.ts` 的 `makeShuffleRng` —— 置换检验只需要打乱能力
+  - `simulator/src/prng.ts` 的 `Rng` —— 数据生成需要完整抽样器（正态、区间、概率）
+- **测试文件也不例外**：`packages/core/test/helpers.ts` 自带确定性抽样器，正是为了不 import `@camp/simulator`
+
+### 5.5.5 措辞表的单一事实来源
+禁词表只在 **`packages/core/src/claims.ts`** 定义一处。`scripts/check-claims.mjs`（构建期门禁）与 `core/test/drift.test.ts`（断言输出不含禁词）都从那里读取。
+
+**新增禁词只改 `claims.ts` 一处**，门禁与测试同时生效。该文件带 `claims-check:ignore-file` —— 它必须能写出禁词本身。
+
+### 5.5.6 `simulator` 对 core 的**运行时**导入也必须用相对路径（2026-10 补记）
+§5.5.4 只写了「`core` 不得反向导入」，**反过来的方向有同一个坑**，而且更隐蔽：
+
+```ts
+// ❌ 运行时导入会炸
+import { activityAt } from '@camp/core';
+// ✅ 相对路径
+import { activityAt } from '../../core/src/index.ts';
+```
+
+**症状**：`node packages/simulator/test/simulator.test.ts` 抛
+`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`，指向
+`packages/simulator/node_modules/@camp/core/src/index.ts`。
+
+**原因**：`@camp/core` 是 pnpm 在 `node_modules` 下建的**目录联接**，
+而 Node 24 的类型剥离（strip-only）**拒绝处理 `node_modules` 下的任何文件**。
+
+**为什么以前没暴露**：`simulator` 过去对 core 只有**类型**导入，类型会被整段剥掉，
+从不产生运行时模块请求。**一旦新增一个运行时函数导入（例如行为层的 `activityAt`），
+整条链路立刻失败。** web 侧不受影响，因为浏览器走 `index.html` 的 import map。
+
+**纪律**：`simulator` 源码中，凡是**运行时**用到 core 的一律走相对路径；
+仅类型导入可以保留 `@camp/core`（可读性更好，且会被剥掉）。
+`tsc` 经 node_modules 联接解析 `@camp/core`，`tsconfig.build.json` 按相对路径产出，
+浏览器经 import map 解析——三条路径互不冲突。
 
 ---
 
@@ -154,7 +208,7 @@ pnpm sim:generate -- --seed 42 --scenario noise-event --minutes 240
 > 不指定会报 `ERR_PNPM_UNEXPECTED_STORE`。示例：
 > `node <bundled>/pnpm.mjs --store-dir .tools/pnpm-store --filter @camp/web add -D three@0.186.1`.
 
-### ⚠️ DSH 沙箱内的三个已知限制
+### ⚠️ DSH 沙箱内的已知限制
 
 沙箱禁止「带管道 stdio 的子进程」，因此以下命令在 **agent 会话内**会失败（人类终端与 CI 不受影响）：
 
@@ -162,8 +216,7 @@ pnpm sim:generate -- --seed 42 --scenario noise-event --minutes 240
 |---|---|---|
 | `pnpm -r <script>` | `Error: spawn EPERM` | 直接调用工具，见下 |
 | `node --test <目录>` | `Error: spawn EPERM`（runner 为每个文件派生进程） | **直接执行测试文件** |
-| 启动浏览器（Chrome 无头，用于场景截图/自检） | `mojo platform_channel.cc: Check failed`——进程间通信用命名管道，被拦截 | 场景自检改由**人在普通终端跑一次**，agent 只读日志断言（`scripts/smoke-scene.mjs`） |
-| git 推送（默认 schannel 后端） | `schannel: AcquireCredentialsHandle failed: SEC_E_NO_CREDENTIALS` | 加 `-c http.sslBackend=openssl`；认证用一次性 `http.extraHeader`（`gh` 型凭据助手依赖 `sh.exe`，沙箱里起不来） |
+| 启动浏览器（Chrome/Edge 无头） | `mojo platform_channel.cc: Check failed` —— 进程间通信用命名管道，被拦截 | 场景自检改由**人在普通终端跑一次**，agent 只读日志断言（`scripts/smoke-scene.mjs`） |
 
 ```bash
 # 沙箱内的等价验证方式
@@ -184,16 +237,20 @@ node scripts/smoke-scene.mjs                       # 读浏览器回传的自检
 
 ```
 AGENTS.md                  ← 本文件
-packages/core/             [C] 感知参数 · 证据登记 · 五大支柱 · 居家资源清单规则 · 分析层
-packages/simulator/        [A] 仿真数据生成器 · DeviceAdapter
+packages/core/             [C] 领域类型 · 稳健基线 · 漂移检测 · 居家资源清单规则 · 措辞政策
+  src/behavior/               行为词汇 · 证据参数登记表 · 节律 · 时间线引擎
+  src/vitals/                 项圈三通道：读数有效性 · 分层基线 · 同条件漂移 · 睡眠呼吸频率
+  src/physiology/             状态程序：抽搐/呕吐时的心率·呼吸·体动注入规则与项圈可观测特征
+packages/simulator/        [A] 仿真数据生成器 · DeviceAdapter · 行为时间线 · 生理读数仿真 · 曲线导出
 apps/web/                  [B] 静态站（tsc + 浏览器 import map，无打包器）
   public/assets/              CC0 3D 资产（模型 / 平铺贴图 / HDRI）+ CREDITS.md
   src/scene/                  3D 场景：layout（权威坐标）· build-* · cat/ · materials · textures
-  src/screens/                家居场景 / 工程自检
-docs/research/             三份研究报告（团队共同依据，含归属说明）
-docs/design/               产品定义 · 证据政策 · 验证方案 · 三日计划 · 03 家居场景
+    cat/                        猫模型（含**项圈硬件与触须无干涉区**）· 控制器 · 行为运行时 · 位移推进
+  src/screens/                家居场景（含右栏 **App 预览机模**）/ **生理读数** / **居家资源** / 工程自检
+docs/research/             七份研究报告（团队共同依据，含归属说明）
+docs/design/               产品定义 · 证据政策 · 验证方案 · 三日计划 · 03/04 家居场景各阶段 · 05 项圈生理读数 · 06 状态程序 · 07 布局与 App 预览
 docs/design/shots/         场景截图（人工核对的画面证据）
-docs/hardware/             项圈规格 · 传感器位置 · 真机路线
+docs/hardware/             项圈规格 · 传感器位置 · 失效源定义 · 真机验证路线
 scripts/                   构建 · three vendoring · 资产抓取 · 措辞门禁 · 场景自检 · 部署
 data/                      运行时数据（不入库）
 ```
@@ -215,20 +272,63 @@ data/                      运行时数据（不入库）
 
 ## 9. 当前进度
 
-- ✅ 仓库骨架、TypeScript strict 基线、措辞门禁
-- ✅ `@camp/core`：领域类型、档案推导（年龄/体型/项圈预算/机位高度）
-- ✅ `@camp/simulator`：确定性 PRNG、四场景、带注入滞后的真值数据、`DeviceAdapter`
-- ✅ 三份研究报告归档
+**方向（v2）**：从「感知参数可视化」调整为 **「基线哨兵 + 离家事件流」**。完整计划见 [`docs/design/00-plan-3day-camp.md`](docs/design/00-plan-3day-camp.md)。
+
+已完成：
+- ✅ 仓库骨架、TypeScript strict + `erasableSyntaxOnly` 门禁、无打包器构建
+- ✅ 措辞门禁，禁词表已收拢为**单一事实来源**（`core/src/claims.ts`）
+- ✅ `@camp/core`：领域类型、档案推导、**稳健基线（中位数/MAD）**、**漂移检测（稳健效应量 + 置换检验 + 持续性判据）**
+- ✅ `@camp/simulator`：确定性 PRNG、四场景、逐通道注入滞后的真值数据、`DeviceAdapter`
+- ✅ 三份研究报告归档；`AGENTS.md`、三日计划、证据政策
 - ✅ **家居空间建模（第一阶段）**：`apps/web` 的 3D 样板间（写实风格、CC0 扫描模型 + HDRI 环境光）、
   橘猫的两套**手动演示状态**、`@camp/core` 的居家资源清单规则（`summarizeHomeResources`）。
   设计与验收见 [`docs/design/03-home-scene-stage1.md`](docs/design/03-home-scene-stage1.md)
-- ⏳ `resolvePerceptionProfile` + 证据登记表（Day 1，负责 C）
-- ⏳ 五大支柱规则化（Day 1，负责 C）
-- ⏳ 前端完整 UI：档案配置、视角对比、资源清单（Day 2，负责 B）
-- ⏳ 项圈规格与形态方案（Day 1–3，负责 A）
-- ⏳ 前后测验证（Day 3，负责 C）
+- ✅ **行为建模（第二阶段）**：`@camp/core/src/behavior/` 的行为引擎（词汇、证据参数登记表、
+  节律、时间线）、`simulator` 的行为时间线与突发真值、`apps/web` 的**自主行动猫**与
+  **手动突发演示**。调研见 [`docs/research/05`](docs/research/05-cat-home-behavior-repertoire.md)
+  与 [`06`](docs/research/06-cat-acute-observables.md)，
+  设计与验收见 [`docs/design/04-home-scene-stage2.md`](docs/design/04-home-scene-stage2.md)
+- ✅ 门禁全绿（**第二阶段验收时的记录**）：typecheck 3/3、测试 83/83、措辞门禁通过、构建 136 个文件
+- ✅ **项圈生理读数（第三阶段）**：`@camp/core/src/vitals/`（读数有效性、分层基线、同条件漂移、
+  睡眠呼吸频率）、`simulator` 的三通道**读数/真值分离**仿真（运动伪迹、项圈移位、固件拒收、情境偏移）、
+  `apps/web` 的 `#/vitals` 屏与 3D 项圈硬件（含触须无干涉区）。
+  设计与验收见 [`docs/design/05-collar-vitals.md`](docs/design/05-collar-vitals.md)，
+  规格见 [`docs/hardware/01-collar-spec.md`](docs/hardware/01-collar-spec.md)
+- ✅ 措辞门禁通过；`core` 的 vitals 层单测 20 项、`simulator` 的 vitals 层单测 9 项全绿
+- ✅ **生理状态程序（抽搐 / 呕吐时心率与呼吸怎么变）**：`@camp/core/src/physiology/`
+  （多时相状态机、项圈可观测特征、曲线生成）、`simulator` 把状态机接进已有的读数链路
+  （替掉平铺的固定百分比表）、`pnpm sim:curves` 导出带真值的曲线 JSON、
+  `#/vitals` 屏新增状态程序一节。设计与证据表见
+  [`docs/design/06-physiology-state-program.md`](docs/design/06-physiology-state-program.md)。
+  单测：core 15 项 + simulator 10 项全绿
+- ✅ **场景页布局与 App 预览（iPhone 机模）**：右栏改为**可收起的 iPhone 机模**（实时 / 事件流 /
+  漂移 / 档案四个页签，实时页按演示时钟取会话读数并标出无效窗口）；居家资源清单移出主界面，
+  成为独立页面 `#/resources`；左栏精简为「操作 + 折叠的图层与画质」。
+  ★ 同时**关掉了 stage2 §10 的接缝 1**：场景不再自己生成时间线，改用会话里的 `behaviorTimeline`；
+  突发演示改为由 `screens/home.ts` 重建**带注入突发的会话**后交给场景，
+  于是画面、事件流、手机读数共用同一条时间轴。设计与验收见
+  [`docs/design/07-app-mockup-layout.md`](docs/design/07-app-mockup-layout.md)
+- ✅ **读数变化提示与项圈形态（第四轮反馈）**：左栏突发按钮收敛为**抽搐 / 呕吐**两个；
+  读数随手动突发产生相应变化（心率/呼吸走生理状态机；**体表温新增发作期响应**，慢通道且有上限、
+  由发作本身驱动而非由核心温推算）；`@camp/core/src/vitals/alerts.ts` 统一判据，
+  App 端**数字变红 + 弹窗「宠物状态异常」**（正文逐条列出可核查的证据 + 边界句 + 转诊路径）；
+  项圈默认可见。误报率实测 **0.5–0.7%/天窗口**，并由单测钉在 < 1%。
+  设计与验收见 [`docs/design/08-alerts-and-collar.md`](docs/design/08-alerts-and-collar.md)
 
-阶段 tag：`v0.1.0`（Day1 骨架可跑）→ `v0.2.0`（Day2 体验闭环）→ `v1.0.0`（Day3 交付）
+待办：
+- ⏳ `simulator`：注入**渐进漂移**（线性斜坡）+ `truth.injectedDrift` + 回归断言（Day 1，A）
+- ⏳ `core`：`eventRateByKind` / `summarizeAwayWindows` / 离家窗口异常检测（Day 2，C）
+- ⏳ `apps/web` 三屏：事件流 / 漂移报告 / 宠物档案（含离家时段）（Day 2，B）
+  —— 这三个页签**已在 App 预览机模里出了第一版**，但独立大屏版本仍未做
+- ⏳ 5–10 人前后测：漂移识别率（Day 3，C）
+- ⏳ **GitHub Pages 启用**（建议提前跑通，避免 Day 3 卡壳）
+- ⏳ 家居场景第三阶段候选：用户自助编辑 `HOME_RESOURCES`；「现状 / 达标」双布局对比
+- ⏳ 生理读数后续：真机 `DeviceAdapter` 实现；体表温 vs 直肠温的裁决实验（见 hardware §4.2）
+- ⏳ 生理状态程序后续：给 `labored-breathing` / `withdrawal` / `freezing` 建立生理时相
+  （目前走兜底平表）；`INCIDENT_DEFS.seizure.demoDurationS` 是否从 15 s 提到 30 s
+  以容纳完整恢复段（见 design 06 §6.3）
+
+阶段 tag：`v0.0.1`（骨架）→ `v0.1.0`（Day1）→ `v0.2.0`（Day2）→ `v1.0.0`（Day3）
 
 ---
 

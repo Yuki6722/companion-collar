@@ -11,7 +11,6 @@
 | 参数化的**感知差异可视化**（视野、体高、色觉、闪烁融合） | ❌ 不是「还原宠物所见」的真实影像 |
 | **按证据等级**展示的物种参数（含来源冲突提示） | ❌ 不是感官数值的权威背书 |
 | 依附 **AAFP/ISFM 五大支柱**的资源缺口核查 | ❌ 不是「你的猫幸福吗」的情绪判断 |
-| 写实风格的**居家空间可视化**（3D 样板间，与资源清单共用同一份坐标数据） | ❌ 不是对猫情绪的判断；两种猫的姿态是**手动演示档位**，不是系统推断 |
 | 项圈**形态方案 + 仿真数据流** | ❌ 不是可购买的真机硬件 |
 | 提示**可能值得关注**的生理变化 | ❌ 不是诊断、不是治疗建议 |
 
@@ -35,24 +34,115 @@ pnpm sim:generate               # 生成一份仿真会话数据
 ```
 
 打开后默认进入**家居场景**（3D 样板间 + 居家资源清单），右上角可切到**工程自检**。
-URL 参数：`?state=agitated` 以「激动不适」开场、`?view=cat-follow` 直接给猫特写、
-`?debug=1` 显示自检徽章（`?debug=1&auto=1` 会自驱动切换状态并把快照回传给本地服务）。
+
+> ⚠️ **`pnpm dev` 在本机需要能监听端口**。若你是在 DSH 沙箱会话里跑，
+> 监听会被拦成 `EACCES`，请在**普通终端**里执行，或按提示给该命令一次沙箱豁免。
+
+## 可以直接打开看的演示入口
+
+构建产物是静态站，用 `node scripts/dev-server.mjs` 起本地静态服务即可（端口 5273）。
+它会同时打印本机地址与**局域网地址**——手机同网段输入局域网地址就能看（无需后端）。
+
+| 想看什么 | 打开的地址 |
+|---|---|
+| **默认：一只在自己活动的猫 + 右栏 App 预览** | `http://localhost:5273/` |
+| 收起右栏的 App 预览（只看房间） | `http://localhost:5273/?app=off` |
+| **居家资源清单（独立页面）** | `http://localhost:5273/#/resources` |
+| **生理读数屏（心率 / 呼吸 / 体表温：读数 vs 真值）** | `http://localhost:5273/#/vitals` |
+| 同上的**诊室情境**对照（读数上移、真值不变） | `http://localhost:5273/?scenario=vet-visit#/vitals` 或 `http://localhost:5273/#/vitals?scenario=vet-visit` |
+| **3D 项圈硬件**（带体 / 电子仓 / 双 ECG 电极 / 体表热敏电阻） | 默认显示；`http://localhost:5273/?collar=off` 可隐藏 |
+| 项圈 + **面部触须无干涉区** | `http://localhost:5273/?collar=zone&view=cat-follow` |
+| 猫特写（相机实时跟随它当前位置） | `http://localhost:5273/?view=cat-follow` |
+| 全景（不显示资源标签） | `http://localhost:5273/?view=overview&labels=off` |
+| 开场就触发一次**呼吸急促**演示 | `http://localhost:5273/?incident=labored-breathing` |
+| 开场就触发一次**抽搐**演示 | `http://localhost:5273/?incident=seizure` |
+| 回到第一阶段的**手动演示档位** | `http://localhost:5273/?mode=manual` |
+| 关掉自主行为（只看房间） | `http://localhost:5273/?behavior-off` |
+| 自检徽章 + 自动回传快照 | `http://localhost:5273/?debug=1&auto=1` |
+
+其余可用参数：`?state=calm|agitated`（手动档位开场）、`?view=<overview|living|kitchen|bedroom|catZone|cat-follow>`、`?labels=off`（关资源标签）、`?status=off`（关猫头顶的状态标签）、`?collar=off|zone`（隐藏项圈 / 标出触须无干涉区）、`?app=off`（收起 App 预览）。
+
+**右栏是产品形态本身**：一个可收起的 iPhone 机模，里面是 App 的四个页签——**实时**（生理读数跟着演示时钟走）、
+**事件流**（离线时段发生了什么）、**漂移**（相对自己前半段基线的变化）、**档案**（品种 / 体型 / 年龄 / 项圈预算）。
+它与 3D 画面**共用同一条时间线**：画面里猫在做什么，手机上就是那一刻的数据。
+
+**猫脖子上戴着带传感器的项圈**（默认可见，`?collar=off` 可隐藏）：带体 + 电子仓 + 双 ECG 电极 + 体表热敏电阻。
+
+**点左栏的「抽搐」或「呕吐」会发生什么**（这是这一版最值得看的一处）：
+
+| 位置 | 变化 |
+|---|---|
+| 3D 画面 | 猫按动作配方演一段（抽搐 15 秒，含高频抖动与四肢抽动） |
+| App 实时页 | 心率/呼吸在发作期**因体动不可采信而划线标红**；体表温是慢通道，后段**变红并升高约 0.5–0.8 °C**；呕吐时恢复段心率读数**比参考值高约 35%** |
+| App 弹窗 | 出现「宠物状态异常」提醒，正文逐条列出**哪条证据成立**（哪个通道、当前值、参考值、偏离多少），并附边界说明与转诊路径 |
+
+判据全部在 `@camp/core`（`evaluateVitalAlerts`）：与**同期同条件**的参考值比，且只在**低体动、环境安静**的窗口比较；
+无注入的 24 小时会话里误报率 **< 1%**（实测 0.5–0.7%）。左栏其余三种突发仍可用 `?incident=` 触发。
+
+**猫在做什么**有两个地方能看到：
+
+- **头顶状态标签**（默认开启）——直接标出当前行为与姿势，例如「理毛 · 坐」；
+  触发突发演示时会换成醒目配色并显示动作名。动画本身难以表达「抽搐」这类动作，
+  这个标签的作用就是把**行为模型外显**：观众不用猜它在抓挠还是在抖。
+- **左侧「猫的行为」面板**——同样的信息加上演示时钟与所在位置，可切手动档位、触发突发演示。
+
+突发演示只演示**动作**，不命名任何状况、不构成诊断，面板上常驻边界说明与转诊路径。
+
+## 喵喵：写实蒙皮模型（2026-10-04）
+
+家居场景默认使用新的**带蒙皮骨架的写实猫**（孟加拉家猫），仍叫「喵喵」。原有程序化分块橘猫已替换；
+黑猫入口暂时移除（渲染代码里留了 `coat` 参数，但没有接线）。
+
+- **动作检查页**：`http://localhost:5273/cat-studio.html`（左侧「喵喵的行为」面板也有入口）。
+  可逐个检查站立 / 行走 / 坐下 / 趴卧 / 舔爪理毛 / 低头进食，并旋转视角看毛纹与爪部；
+  场景与检查页**共用同一模型与同一套动作驱动**，不播原始动画。
+- **场景走路检查入口**：`?view=cat-follow&app=off&walk-check=1&labels=off`
+  ——直接跳到第一个「行走」位移段，跟随机位陪它走完。走路是**按位移距离推进的**，
+  不是播放动画片段：支撑腿随身体前进而后移，因此既不会脚滑，也不会「位置在动、骨骼不迈步」。
+- **项圈**随颈骨运动（带体 / 电子仓 / 状态灯 / 双 ECG 电极 / 体表热敏电阻），
+  `?collar=zone` 额外标出触须无干涉区。
+- 原作署名与许可见 [模型来源与授权](apps/web/public/assets/models/CREDITS-CATS.md)（CC BY 4.0，
+  保留原作标题与作者）。设计、故障根因与验证数据见
+  [09 号设计文档](docs/design/09-cat-realistic-model.md)。
+
+验证：
+
+```bash
+node apps/web/test/cat.test.ts        # 读实际 GLB：蒙皮形变、骨长、世界变换、步态连续性、20× 下的真实迈步
+node scripts/build-web.mjs            # 构建（猫的 GLB 走 public/，无需额外步骤）
+node scripts/check-claims.mjs
+```
+
+`cat.test.ts` 里那条「wall-clock 追赶不能把猫瞬移」的回归在**修复前会失败**——它钉住的是这样一类故障：
+模型加载、首帧着色器编译或标签页切回造成几秒空档时，位移动画会把这几秒一次性走完，
+看起来就是「先瞬移再走」（实测一次位移起步 50 ms 内跳 0.45 m，约为 `walkSpeedMps` 的 20 倍）。
 
 ## 仓库结构
 
 ```
-packages/core/        感知参数模型 · 证据登记 · 五大支柱规则 · 居家资源清单 · 分析层   [C]
-packages/simulator/   带已知真值的仿真数据生成器 · DeviceAdapter 接口                  [A]
-apps/web/             无打包器静态站（tsc 编译 + 浏览器 import map → Pages）           [B]
-                      家居场景（3D 样板间） · 工程自检
-docs/research/        三份研究报告（团队共同依据）
-docs/design/          产品定义 · 证据政策 · 验证方案 · 家居场景设计（03）
-docs/hardware/        项圈规格 · 传感器位置 · 真机路线
+packages/core/        领域类型 · 稳健基线 · 漂移检测 · 居家资源清单规则 · 措辞政策  [C]
+  src/behavior/         猫的行为词汇 · 证据参数登记表 · 事件名 · 节律 · 时间线引擎
+  src/vitals/           项圈三通道：读数有效性 · 分层基线 · 同条件漂移 · 睡眠呼吸频率
+packages/simulator/   带已知真值的仿真数据生成器 · DeviceAdapter · 行为时间线 · 生理读数仿真  [A]
+apps/web/             无打包器静态站（tsc + 浏览器 import map → Pages）          [B]
+                        家居场景（3D 房间 + 自主行动的猫 + 项圈硬件 + 右栏 **App 预览机模**）
+                        / 生理读数 / 居家资源 / 工程自检
+docs/research/        七份研究报告（团队共同依据）
+docs/design/          产品定义 · 证据政策 · 验证方案 · 03/04 家居场景 · 05 生理读数 · 06 状态程序 · 07 布局与 App 预览
+docs/design/shots/    场景截图（人工核对的画面证据）
+docs/hardware/        项圈规格 · 传感器位置 · 失效源定义 · 真机验证路线
 scripts/              构建 · three vendoring · 资产抓取 · 禁词门禁 · 场景自检 · 部署
 ```
 
 > 家居空间建模（第一阶段）的设计、资产许可与验证方式见
-> [`docs/design/03-home-scene-stage1.md`](docs/design/03-home-scene-stage1.md)。
+> [`docs/design/03-home-scene-stage1.md`](docs/design/03-home-scene-stage1.md)；
+> 猫的行为建模（第二阶段，含自主行动与突发演示）见
+> [`docs/design/04-home-scene-stage2.md`](docs/design/04-home-scene-stage2.md)，
+> 证据底稿见 [`docs/research/05`](docs/research/05-cat-home-behavior-repertoire.md) 与
+> [`docs/research/06`](docs/research/06-cat-acute-observables.md)；
+> 项圈生理读数（第三阶段：读数有效性 / 读数与真值分离 / 睡眠呼吸频率）见
+> [`docs/design/05-collar-vitals.md`](docs/design/05-collar-vitals.md)，
+> 项圈规格与真机验证路线见 [`docs/hardware/01-collar-spec.md`](docs/hardware/01-collar-spec.md)。
 
 ## 三人分工
 

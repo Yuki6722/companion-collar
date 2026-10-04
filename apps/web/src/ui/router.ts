@@ -40,7 +40,10 @@ export class Router {
   }
 
   currentId(): string {
-    const raw = window.location.hash.replace(/^#\/?/, '').trim();
+    // 允许在 hash 里带查询串（`#/vitals?scenario=vet-visit`）：只取问号前的路由 id。
+    // 为什么要容忍：用户会直接复制带参数的地址，而"复制来的地址打不开对应屏"
+    // 是最容易被当成"功能坏了"的一类问题。
+    const raw = window.location.hash.replace(/^#\/?/, '').split('?')[0]?.trim() ?? '';
     if (raw && this.routes.some((r) => r.id === raw)) return raw;
     return this.fallback;
   }

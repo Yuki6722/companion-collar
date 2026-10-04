@@ -9,8 +9,10 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --test \"test/*.test.ts\"",
-    "generate": "node src/cli.ts"
+    "test": "node --test test/*.test.ts",
+    "generate": "node src/cli.ts",
+    "eval-vitals": "node src/eval-vitals.ts",
+    "curves": "node src/export-physiology.ts"
   },
   "dependencies": {
     "@camp/core": "workspace:*"

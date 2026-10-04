@@ -20,13 +20,89 @@ export interface SceneSnapshot {
   tilesLoaded: number;
   envLoaded: boolean;
   catState: string;
+  /** `auto` = 自主行为；`manual` = 手动演示档位 */
+  catMode?: string;
   /** 猫当前的混合参数（用于断言「切换确实改变了状态」） */
   catPose: Record<string, number | boolean>;
+  /** 行为层事实：当前活动 / 姿势 / 锚点 / 演示时钟 / 突发 */
+  catActivity?: string;
+  catPosture?: string;
+  catAnchor?: string;
+  catHour?: number;
+  catIncident?: string | null;
+  /**
+   * 猫头顶状态标签的当前文案。
+   *
+   * 为什么把它放进快照：状态标签是**渲染层**的产出，而它的内容来自行为词汇表。
+   * 只断言 `catActivity` 无法发现「标签没挂上」或「标签没跟着突发切换」这两类故障，
+   * 而这两类恰好是肉眼可见、却最难在无头环境里自动发现的问题。
+   */
+  catLabel?: string;
+  /**
+   * 当前行为段已进行的**真实**秒数。
+   *
+   * 为什么单独记：标签的「活动名」在 `resting` 段里平均 56 秒不变（最长超过 2 分钟），
+   * 只断言文案变化会误判成「标签卡住」。这个计数器每秒都在涨，
+   * 才是「时间线真的在走」的可靠证据。
+   */
+  catSegmentElapsedS?: number;
+  /** 当前行为段的真实总时长（秒），与上一项配合看进展 */
+  catSegmentTotalS?: number;
+  /**
+   * 当前生效的突发动作幅度。
+   *
+   * 为什么单独记这个：`catIncident` 只能证明**标签在报**，证明不了**身体在动**。
+   * 这两者的分离正是「点了抽搐没反应」的故障形态，因此必须分别记录。
+   */
+  catMotion?: Record<string, number>;
   issues: string[];
   /** 槽位状态：区分「资产没到」与「资产到了没换上」 */
   slots?: Record<string, string | number>;
   /** 猫的世界坐标（保留两位小数）：用于断言状态切换真的把它挪到了另一个锚点 */
   catAt?: [number, number, number];
+  /**
+   * 项圈硬件与触须无干涉区。
+   *
+   * 为什么单独记：这两者是**形态方案**这一条信息的载体。只断言"模型加载成功"
+   * 无法发现"项圈没挂上"或"无干涉区跟着身体而不是跟着头"这两类故障。
+   */
+  collar?: { collar: boolean; whiskerZone: boolean; parts: number; partNames?: string[] };
+  /**
+   * App 预览（右栏 iPhone 机模）。
+   *
+   * 为什么把它放进快照：这一屏的主叙事是「猫在做什么 ↔ 主人手机上显示什么」。
+   * 不记这些字段，就无法自动发现「手机没挂上」「读数不跟着时钟走」
+   * 「无效读数被当成有效值显示」这三类故障。
+   */
+  app?: {
+    collapsed: boolean;
+    tab: string;
+    hourOfDay: number;
+    readings: Record<string, { value: number | null; validity: string | null }>;
+    eventRows: number;
+    /**
+     * 读数变化提示的状态。
+     *
+     * 这三件事必须能自动验证，否则"数字变红 / 弹窗"这类故障只能靠肉眼发现：
+     * `notify` 该不该打扰、`popup` 弹窗有没有真的出现在 DOM 里、`red` 哪几路被标红。
+     */
+    alert?: {
+      notify: boolean;
+      red: string[];
+      popup: boolean;
+      acute: boolean;
+      reasons: number;
+    };
+  };
+  /**
+   * 喵喵写实模型的自检事实（`HomeScene.catVariantState()`）。
+   *
+   * 为什么必须记：这一轮交付的核心宣称是「场景里的猫**真的在迈步**，不是只移动位置」。
+   * 只断言 `catAt` 变化无法区分「走了 2 米」和「瞬移了 2 米」——那正是实测到的故障形态
+   * （一次位移起步 50 ms 内跳 0.45 m）。记下 `walkWeight`（步态权重）与四爪局部坐标，
+   * 才能把「迈步」这件事变成可断言的文本。
+   */
+  cat?: Record<string, unknown>;
 }
 
 export interface DebugOptions {
@@ -74,16 +150,67 @@ export function installDebugHandle(
   window.setInterval(render, 1000);
 
   if (options.autoSequence) {
-    // 时间点刻意错开：等资产与首帧稳定 → 切激动（含 0.8 s 过渡）→ 回传 → 切回平静 → 回传
-    window.setTimeout(() => post(), 6000);
-    window.setTimeout(() => {
-      call(handle, 'setCatState', 'agitated');
-    }, 8000);
-    window.setTimeout(() => post(), 10_500);
-    window.setTimeout(() => {
-      call(handle, 'setCatState', 'calm');
-    }, 12_000);
-    window.setTimeout(() => post(), 14_500);
+    // ⚠️ 为什么整套时间点要等**资产就绪**才起跑：这一序列原本按固定墙钟起跑，
+    // 而猫是可异步加载的（写实蒙皮 GLB 5.4 MB + 贴图解码）。在慢一点的机器上，
+    // 6 秒的快照会在模型到位之前拍下，于是「演示时钟在推进」「段内进展计数在推进」
+    // 变成假阴性——而且看上去像功能坏了。改成「画面真的开始了再按秒数检查它」。
+    const startAutoSequence = (): void => {
+      // 时间点刻意错开：等资产与首帧稳定 → 切激动（含 0.8 s 过渡）→ 回传 → 切回平静 → 回传。
+      // 最后再触发一次突发演示并回传：断言「注入的突发确实出现在快照里」。
+      window.setTimeout(() => post(), 6000);
+      window.setTimeout(() => {
+        call(handle, 'setCatState', 'agitated');
+      }, 8000);
+      window.setTimeout(() => post(), 10_500);
+      window.setTimeout(() => {
+        call(handle, 'setCatState', 'calm');
+      }, 12_000);
+      window.setTimeout(() => post(), 14_500);
+      // App 预览的收起 / 展开：这是右栏唯一的东西，必须能自动验证它确实在切换
+      window.setTimeout(() => {
+        call(handle, 'app', 'off');
+      }, 15_000);
+      window.setTimeout(() => {
+        call(handle, 'app', 'on');
+      }, 15_600);
+      window.setTimeout(() => {
+        call(handle, 'setAutoCat', '');
+        call(handle, 'incident', 'seizure');
+      }, 16_000);
+      // 抽搐自 16 s 起持续 15 s（演示时间），在它进行中回传一次
+      window.setTimeout(() => post(), 18_000);
+      // 打开项圈与触须无干涉区并回传：让 `?debug=1&auto=1` 一次跑完就覆盖形态可视化。
+      window.setTimeout(() => {
+        call(handle, 'collar', 'zone');
+      }, 19_000);
+      window.setTimeout(() => post(), 21_000);
+      // 逐个切 App 的页签并回传：事件流 / 漂移 / 档案都要留下可断言的快照
+      window.setTimeout(() => {
+        call(handle, 'app', 'events');
+      }, 22_000);
+      window.setTimeout(() => post(), 22_500);
+      window.setTimeout(() => {
+        call(handle, 'app', 'drift');
+      }, 24_000);
+      window.setTimeout(() => post(), 24_500);
+      window.setTimeout(() => {
+        call(handle, 'app', 'profile');
+      }, 26_000);
+      window.setTimeout(() => post(), 26_500);
+      window.setTimeout(() => {
+        call(handle, 'app', 'live');
+      }, 28_000);
+      // 抽搐结束后再回传一次：用来对照「突发期间」与「突发之后」的标签
+      window.setTimeout(() => post(), 32_000);
+    };
+    const deadline = Date.now() + 60_000;
+    const waitForAssets = (): void => {
+      const snap = snapshot();
+      const catModel = snap.cat?.model as { loaded?: boolean } | undefined;
+      if ((snap.modelsLoaded > 0 && catModel?.loaded !== false) || Date.now() > deadline) startAutoSequence();
+      else window.setTimeout(waitForAssets, 250);
+    };
+    waitForAssets();
   }
 
   return { post, handle };
@@ -105,6 +232,28 @@ export function summarize(snap: SceneSnapshot): string {
     `draws=${snap.drawCalls}`,
     `fps=${snap.fps}`,
     `cat=${snap.catState}`,
+    `catMode=${snap.catMode ?? 'manual'}`,
+    `catAct=${snap.catActivity ?? 'none'}`,
+    `catPosture=${snap.catPosture ?? 'none'}`,
+    `catAnchor=${snap.catAnchor ?? 'none'}`,
+    `catHour=${Number(snap.catHour ?? 0).toFixed(2)}`,
+    `catIncident=${snap.catIncident ?? 'none'}`,
+    `catLabel=${snap.catLabel || 'none'}`,
+    `catSegElapsed=${Number(snap.catSegmentElapsedS ?? 0).toFixed(0)}`,
+    `catSegTotal=${Number(snap.catSegmentTotalS ?? 0).toFixed(0)}`,
+    `catTremor=${Number(snap.catMotion?.tremorAmp ?? 0).toFixed(3)}`,
+    `collar=${snap.collar?.collar ? 1 : 0}`,
+    `whiskerZone=${snap.collar?.whiskerZone ? 1 : 0}`,
+    `collarParts=${snap.collar?.parts ?? 0}`,
+    `appCollapsed=${snap.app?.collapsed ? 1 : 0}`,
+    `appTab=${snap.app?.tab ?? 'none'}`,
+    `appHr=${snap.app?.readings.hr?.value ?? 'none'}`,
+    `appRrValid=${snap.app?.readings.rr?.validity ?? 'none'}`,
+    `appEvents=${snap.app?.eventRows ?? 0}`,
+    `appAlert=${snap.app?.alert?.notify ? 1 : 0}`,
+    `appPopup=${snap.app?.alert?.popup ? 1 : 0}`,
+    `appRed=${(snap.app?.alert?.red ?? []).join('+') || 'none'}`,
+    `appAcute=${snap.app?.alert?.acute ? 1 : 0}`,
     `tailFreq=${Number(snap.catPose.tailFreq ?? 0).toFixed(2)}`,
     `earFlatten=${Number(snap.catPose.earFlatten ?? 0).toFixed(2)}`,
     `pupil=${Number(snap.catPose.pupilScale ?? 0).toFixed(2)}`,

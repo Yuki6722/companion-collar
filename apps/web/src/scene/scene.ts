@@ -14,7 +14,14 @@ import { buildRoom } from './build-room.ts';
 import { ENV_MANIFEST, MODEL_MANIFEST, loadAssets } from './assets.ts';
 import type { AssetReport } from './assets.ts';
 import { buildCat } from './cat/cat-model.ts';
+import type { CatRig } from './cat/cat-model.ts';
 import { CatController } from './cat/cat-controller.ts';
+import { CatBehaviorRuntime } from './cat/cat-behavior.ts';
+import type { BehaviorStatus } from './cat/cat-behavior.ts';
+import { CatStatusLabel } from './cat/cat-status-label.ts';
+import { CAT_ANCHOR_SPECS } from './cat/anchor-map.ts';
+import { OPERATIVE_CONSTANTS, buildBehaviorTimeline } from '@camp/core';
+import type { CatBehaviorTimeline, CatIncidentKind } from '@camp/core';
 import type { CatStateId } from './cat/cat-states.ts';
 import { HotspotLayer } from './hotspots.ts';
 import type { Hotspot } from './hotspots.ts';
@@ -44,7 +51,21 @@ export interface SceneOptions extends SceneCallbacks {
   labelHost: HTMLElement;
   quality: QualityChoice;
   reducedMotion: boolean;
+  /** 自主行为的状态更新（当前活动、姿势、所在锚点、突发、演示时钟） */
+  onBehaviorStatus?: (status: BehaviorStatus) => void;
+  /** 已有的行为时间线（由 `@camp/simulator` 产出）。缺省时本地按同一套规则生成一条 */
+  behaviorTimeline?: CatBehaviorTimeline;
 }
+
+/** 自主行为时间线的默认长度：一整天。演示倍率取自 core 的操作化常量。 */
+const DEFAULT_BEHAVIOR_DURATION_S = 24 * 3600;
+/**
+ * 演示倍率**只有一个事实来源**：core 的 `OPERATIVE_CONSTANTS.behaviorTimeScale`。
+ * 为什么不在这里写死：倍率决定「一个行为片段在屏幕上停留多久」，
+ * 改动它会同时影响观感与「一天能否在一场演示里走完」。写死在两处必然漂移。
+ */
+const DEFAULT_TIME_SCALE =
+  OPERATIVE_CONSTANTS.find((c) => c.id === 'behaviorTimeScale')?.value ?? 20;
 
 const CAMERA_FOV = 52;
 const CAMERA_START: [number, number, number] = [6.1, 3.05, 6.25];
@@ -63,12 +84,40 @@ interface CameraMove {
 }
 
 export class HomeScene {
+  /** 喵喵：写实蒙皮模型的控制器。 */
   readonly cat: CatController | null;
+  /** 自主行为运行时；行为层关闭时为 null */
+  private behavior: CatBehaviorRuntime | null = null;
+  private behaviorOnStatus: ((s: BehaviorStatus) => void) | null = null;
+  /**
+   * 状态回应的**唯一接线**。
+   *
+   * 为什么提成一个字段：此前「初始运行时」与「点突发后新建的运行时」各写了一份
+   * 回调，结果后者漏掉头顶标签的更新——表现为「点突发后身体在动、标签停在点击前」。
+   * 提成字段后结构上不可能再漏：任何新建的运行时都用同一个回调。
+   */
+  private readonly onBehaviorStatus = (s: BehaviorStatus): void => {
+    this.catStatus?.set({
+      activity: s.activity,
+      posture: s.posture,
+      incident: s.incident,
+      segmentElapsedS: s.segmentElapsedS,
+      segmentRealDurationS: s.segmentRealDurationS,
+    });
+    this.behaviorOnStatus?.(s);
+  };
+  /** 当前行为时间线（注入突发时会被替换） */
+  private behaviorTimeline: CatBehaviorTimeline | null = null;
+  /** 猫头顶的状态标签（把行为模型外显）；行为层关闭时为 null */
+  private catStatus: CatStatusLabel | null = null;
+  private statusVisible = true;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
   private readonly labelLayer: HotspotLayer;
+  /** 猫头顶状态标签的 DOM 宿主（与资源标签层并列、互不干扰） */
+  private readonly catLabelHost: HTMLElement;
   private readonly sun: THREE.DirectionalLight;
   private readonly canvasHost: HTMLElement;
   private readonly clock = new THREE.Clock();
@@ -86,6 +135,16 @@ export class HomeScene {
   private onVisibilityBound: () => void;
   private onContextLostBound: (e: Event) => void;
   private labelsVisible = true;
+  /** 项圈硬件与触须无干涉区的显示状态（第三阶段的形态可视化） */
+  private collarRig: CatRig | null = null;
+  /** 项圈默认可见：它是产品形态本身，不该藏在参数后面（`?collar=off` 可关） */
+  private collarVisible = true;
+  private whiskerZoneVisible = false;
+  private catReducedMotion = false;
+  private catModelReady = false;
+  private miaoRig: CatRig | null = null;
+  private followCat = false;
+  private readonly followedPosition = new THREE.Vector3();
 
   constructor(opts: SceneOptions) {
     this.canvasHost = opts.canvasHost;
@@ -180,9 +239,64 @@ export class HomeScene {
     const catGear = buildCatGear(root, mats);
     this.resourceRings = catGear.resourceRings;
 
+    this.catReducedMotion = opts.reducedMotion;
     const catRig = buildCat(mats, this.settings.furShells);
     root.add(catRig.root);
+    this.miaoRig = catRig;
+    this.collarRig = catRig;
+    // 项圈跟随新模型的颈部骨骼；仍由原有图层开关控制。
+    catRig.collar.visible = this.collarVisible;
+    catRig.whiskerZone.visible = this.whiskerZoneVisible;
     this.cat = new CatController(catRig, { reducedMotion: opts.reducedMotion });
+    this.behaviorOnStatus = opts.onBehaviorStatus ?? null;
+
+    void catRig.ready?.then(() => {
+      this.catModelReady = true;
+      // Reset the runtime wall clock after async model loading.
+      const wasPaused = this.behavior?.isPaused() ?? false;
+      if (!wasPaused) { this.behavior?.setPaused(true); this.behavior?.setPaused(false); }
+    }).catch(() => {
+      if (!this.disposed) this.callbacks.onFatal?.('喵喵模型加载失败，请刷新页面重试。');
+    });
+
+    // 猫头顶的状态标签：**独立于资源标签层**，因此单独给一个宿主。
+    // 资源标签那层有「相互遮挡就隐藏」的贪心去重，猫的状态标签绝不能因为
+    // 撞上某个资源标签就被隐藏——它承载的是「它现在在做什么」这件主线信息。
+    this.catLabelHost = document.createElement('div');
+    this.catLabelHost.className = 'cat-status-layer';
+    opts.labelHost.appendChild(this.catLabelHost);
+
+    // 自主行为：默认开启。时间线由调用方给（仿真器产出）或本地按同一套规则生成。
+    // `?behavior-off`（裸标志，注意不是 `behavior=off`）可关掉，回到第一阶段的手动演示档位。
+    const behaviorEnabled = !new URLSearchParams(window.location.search).has('behavior-off');
+    if (behaviorEnabled && this.cat) {
+      const timeline =
+        opts.behaviorTimeline ??
+        buildBehaviorTimeline({
+          seed: 42,
+          durationS: DEFAULT_BEHAVIOR_DURATION_S,
+          timeScale: DEFAULT_TIME_SCALE,
+          anchors: CAT_ANCHOR_SPECS,
+        });
+      this.behaviorTimeline = timeline;
+      this.catStatus = new CatStatusLabel(this.catLabelHost);
+      this.statusVisible = !new URLSearchParams(window.location.search).has('status-off');
+      this.catStatus.setVisible(this.statusVisible);
+      const walkCheck = new URLSearchParams(window.location.search).has('walk-check');
+      // `?walk-check=1` 要检查的是**走路**，所以先找 `posture: 'walking'` 的位移段。
+      // 只按 `activity === 'locomoting'` 找会命中「攀跳」段（有高差 → 位移带弧线），
+      // 检查入口于是演示的是跳，不是走。找不到才退回任意位移段。
+      const walkable = (seg: (typeof timeline.segments)[number]): boolean =>
+        seg.activity === 'locomoting' && seg.resolved !== false && seg.t > 0;
+      const firstWalk = walkCheck
+        ? timeline.segments.find(seg => walkable(seg) && seg.posture === 'walking')
+          ?? timeline.segments.find(walkable)
+        : undefined;
+      this.behavior = new CatBehaviorRuntime(timeline, this.cat, {
+        startAtS: firstWalk ? Math.max(0, firstWalk.t-0.1) : 0,
+        onStatus: this.onBehaviorStatus,
+      });
+    }
 
     this.labelLayer = new HotspotLayer(opts.labelHost);
     this.registerHotspots();
@@ -252,12 +366,107 @@ export class HomeScene {
 
   /** 猫的逻辑坐标（保留两位，由 wall clock 推导），自检与调试用。 */
   catPosition(): [number, number, number] | undefined {
-    const t = this.cat?.getCurrentTransform();
+    const t = this.behavior ? this.behavior.getTransform() : this.cat?.getCurrentTransform();
     if (!t) return undefined;
     return [round2(t.x), round2(t.y), round2(t.z)];
   }
 
+  // ---------------------------------------------------------------- 自主行为
+
+  /** 回到手动演示档位（暂停自主行为）。 */
+  setManualCat(): void {
+    this.behavior?.setPaused(true);
+    this.cat?.useManualMode();
+  }
+
+  /** 恢复自主行为。 */
+  setAutoCat(): void {
+    this.behavior?.setPaused(false);
+  }
+
+  isAutoCat(): boolean {
+    return this.behavior !== null && !this.behavior.isPaused();
+  }
+
+  behaviorStatus(): BehaviorStatus | null {
+    return this.behavior?.status() ?? null;
+  }
+
+  /** 演示倍率：1 秒当多少秒。 */
+  setBehaviorTimeScale(_scale: number): void {
+    // 倍率属于时间线构造参数（`timeline.timeScale`），运行中改变会破坏
+    // 「时间线与真值一致」这条性质，因此这里只记录、不热改。
+    // 需要不同倍率时用 `?scale=` 重新加载。
+  }
+
+  /**
+   * 触发一次突发演示。
+   *
+   * 语义：**重建一条时间线**，在「当前演示时刻」注入这次突发。
+   * 为什么不直接在运行时插队：注入会改变时段的长度分配，
+   * 而 `activityAt()` 的连续性不变量（区间首尾相接、覆盖满时长）必须保持。
+   * 重建时间线能让「注入 → 还原」这条回归链路在浏览器里也成立。
+   *
+   * ⚠️ 接线纪律（这里踩过坑）：新建的运行时**必须复用 `this.onBehaviorStatus`**，
+   * 不能另外写一份回调。最初这里写的是 `(s) => this.behaviorOnStatus?.(s)`，
+   * 只喂了 HUD、漏掉了头顶标签——于是「点突发后身体在动、标签却停在点击前的状态」。
+   * 状态回应的接线只允许存在一处。
+   */
+  triggerIncident(kind: CatIncidentKind): void {
+    if (!this.cat) return;
+    const timeline =
+      this.behaviorTimeline ??
+      buildBehaviorTimeline({
+        seed: 42,
+        durationS: DEFAULT_BEHAVIOR_DURATION_S,
+        timeScale: DEFAULT_TIME_SCALE,
+        anchors: CAT_ANCHOR_SPECS,
+      });
+    const atS = this.behavior ? this.behavior.getTimeS() : 0;
+    const next = buildBehaviorTimeline({
+      seed: timeline.seed,
+      durationS: timeline.durationS,
+      timeScale: timeline.timeScale,
+      anchors: CAT_ANCHOR_SPECS,
+      injectIncidents: [{ atS: Math.max(1, atS), kind }],
+    });
+    this.behavior = new CatBehaviorRuntime(next, this.cat, {
+      startAtS: Math.max(0, atS - 1),
+      onStatus: this.onBehaviorStatus,
+    });
+  }
+
+  /** 自检用：当前突发种类（无则 null）。 */
+  currentIncident(): string | null {
+    return this.behavior?.status().incident ?? null;
+  }
+
+  /** 当前演示时刻（会话内秒）。手机预览按它去查生理读数，保证与画面同一时刻。 */
+  simTimeS(): number {
+    return this.behavior?.getTimeS() ?? 0;
+  }
+
+  /**
+   * 换一条时间线（由调用方提供），并从 `startAtS` 继续跑。
+   *
+   * 为什么需要它：突发演示曾经在场景内部**自己**重建时间线，于是出现两条时间线——
+   * 画面跑的那条，与仿真数据（生理读数、事件流）那条。手机预览要显示"此刻的读数"时，
+   * 这个问题会立刻暴露成"手机上的数和猫在做的事对不上"。
+   * 现在改为：由持有会话的一侧（`screens/home.ts`）重建**带注入突发的会话**，
+   * 再把它的时间线交给场景。全场景只有一条时间线。
+   */
+  applyTimeline(timeline: CatBehaviorTimeline, startAtS = 0): void {
+    if (!this.cat) return;
+    this.behaviorTimeline = timeline;
+    this.behavior = new CatBehaviorRuntime(timeline, this.cat, {
+      startAtS: Math.max(0, startAtS),
+      // ⚠️ 复用同一个回调字段：这是「状态回应只允许存在一处」的纪律（见 triggerIncident 的注释）。
+      onStatus: this.onBehaviorStatus,
+    });
+  }
+
   setReducedMotion(on: boolean): void {
+    this.catReducedMotion = on;
     this.cat?.setReducedMotion(on);
   }
 
@@ -272,16 +481,95 @@ export class HomeScene {
   }
 
   /**
+   * 猫头顶状态标签的显隐。
+   *
+   * 与资源标签开关**分开**：资源标签是「房间信息」，状态标签是「它现在在做什么」，
+   * 演示时经常需要「关掉满屋标签、只看猫」。
+   */
+  setStatusVisible(on: boolean): void {
+    this.statusVisible = on;
+    this.catStatus?.setVisible(on);
+  }
+
+  isStatusVisible(): boolean {
+    return this.statusVisible;
+  }
+
+  /** 自检用：猫头顶状态标签的当前文案。 */
+  catLabelText(): string {
+    return this.catStatus?.text() ?? '';
+  }
+
+  /** 自检用：当前生效的突发动作幅度。用来区分「标签在报」与「身体真的在动」。 */
+  catIncidentMotion(): Record<string, number> | null {
+    return this.cat?.incidentMotionSnapshot() ?? null;
+  }
+
+  /**
+   * 显示/隐藏项圈硬件（带体 + 电子仓 + ECG 电极 + 体表热敏电阻）。
+   *
+   * 为什么把硬件做进 3D 场景：三个通道的**位置**就是它们的能力边界。
+   * 「电极在颈侧、热敏电阻在颈腹侧」这件事，看一眼比读一段文字更有效。
+   */
+  setCollarVisible(on: boolean): void {
+    this.collarVisible = on;
+    if (this.collarRig) this.collarRig.collar.visible = on;
+  }
+
+  isCollarVisible(): boolean {
+    return this.collarVisible;
+  }
+
+  /** 显示/隐藏触须无干涉区（面部触须是独立感觉器官，硬件不得进入该体积）。 */
+  setWhiskerZoneVisible(on: boolean): void {
+    this.whiskerZoneVisible = on;
+    if (this.collarRig) this.collarRig.whiskerZone.visible = on;
+  }
+
+  isWhiskerZoneVisible(): boolean {
+    return this.whiskerZoneVisible;
+  }
+
+  /** 自检用：项圈与无干涉区的显示状态。 */
+  collarState(): { collar: boolean; whiskerZone: boolean; parts: number; partNames: string[] } {
+    const rig = this.collarRig;
+    return {
+      collar: rig?.collar.visible ?? false,
+      whiskerZone: rig?.whiskerZone.visible ?? false,
+      parts: rig?.collar.children.length ?? 0,
+      // 记部件**名字**而不只是数量：写实模型的项圈多了一个状态指示灯（5 → 6），
+      // 只断言数量的自检无法区分「硬件改了」与「硬件没了」。
+      partNames: rig?.collar.children.map((c) => c.name).filter(Boolean) ?? [],
+    };
+  }
+
+  /**
    * 切换到机位预设。
    *
    * `immediate` 用于「必须以某个确定机位呈现」的场合（URL 指定视角、文档截图）：
    * 缓动依赖渲染帧推进，而无头/低帧率环境下帧数不可控，会让截图位置每次都不一样。
    */
   preset(id: string, immediate = false): void {
+    this.followCat = id === 'cat-follow';
     if (id === 'cat-follow') {
-      const state = this.cat?.getState();
       const p = this.cat?.rig.root.position;
-      if (p && state) {
+      if (!p) return;
+      this.followedPosition.copy(p);
+      if (this.behavior) {
+        // 自主行为下猫会到处走，第一阶段那两套「相对猫的固定偏移」不再成立
+        // （偏移是按站位朝向手写的，转个身就会钻进家具里）。
+        // 这里改为按**猫当前朝向**把机位放到它的斜后方，任何位置与朝向都成立。
+        const rotY = this.behavior.getTransform().rotY;
+        const distance = 1.15;
+        const back = Math.PI + 0.55; // 斜后方
+        const angle = rotY + back;
+        const camX = p.x + Math.sin(angle) * distance;
+        const camZ = p.z + Math.cos(angle) * distance;
+        this.moveTo([camX, p.y + 0.72, camZ], [p.x, p.y + 0.16, p.z], immediate ? 0 : 0.9);
+        return;
+      }
+      const state = this.cat?.getState();
+      if (state) {
         const cam = CAT_ANCHORS[state].cam;
         this.moveTo([p.x + cam.x, p.y + cam.y, p.z + cam.z], [p.x, p.y + 0.16, p.z], immediate ? 0 : 0.9);
         return;
@@ -346,7 +634,13 @@ export class HomeScene {
     return n;
   }
 
+  /** 工程自检：加载状态、骨骼与当前动作。 */
+  catVariantState(): Record<string, unknown> {
+    return { variant: 'miao', model: this.cat?.rig.debugInfo?.() ?? null };
+  }
+
   dispose(): void {
+    this.miaoRig?.dispose?.();
     this.disposed = true;
     this.running = false;
     this.renderer.setAnimationLoop(null);
@@ -355,6 +649,8 @@ export class HomeScene {
     this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLostBound);
     this.controls.dispose();
     this.labelLayer.dispose();
+    this.catStatus?.dispose();
+    this.catLabelHost.remove();
     this.scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) {
@@ -494,7 +790,32 @@ export class HomeScene {
       if (this.move.t >= 1) this.move = null;
     }
 
-    this.cat?.update(dt);
+    // 自主行为优先：它自己会把位置与姿势落到 rig 上，并调用控制器推进微动作。
+    // 行为层关闭时退回第一阶段的手动路径。
+    if (this.catModelReady) {
+      if (this.behavior) this.behavior.update(dt);
+      else this.cat?.update(dt);
+    }
+    if (this.cat) {
+      this.cat.rig.animate?.(dt, {
+        gaitPhase: this.cat.gaitPhase(),
+        posture: this.cat.currentPosture(),
+        activity: this.behavior?.status().activity,
+        incident: this.cat.incidentMotionSnapshot(),
+        reducedMotion: this.catReducedMotion || this.behavior?.isPaused(),
+      });
+    }
+    if (this.followCat && this.cat) {
+      const position = this.cat.rig.root.position;
+      const delta = position.clone().sub(this.followedPosition);
+      this.camera.position.add(delta);
+      this.controls.target.add(delta);
+      if (this.move) {
+        this.move.fromPos.add(delta); this.move.toPos.add(delta);
+        this.move.fromTarget.add(delta); this.move.toTarget.add(delta);
+      }
+      this.followedPosition.copy(position);
+    }
     this.controls.update();
 
     if (this.settings.shadows) {
@@ -508,6 +829,16 @@ export class HomeScene {
 
     this.renderer.render(this.scene, this.camera);
     this.labelLayer.update(this.camera, this.canvasHost.clientWidth, this.canvasHost.clientHeight);
+    // 状态标签的**位置**每帧更新（猫在动），**文案**只在行为状态变化时更新
+    // （见 `CatStatusLabel.set` 的纪律 2），因此这里不产生文本重排。
+    if (this.catStatus) {
+      this.catStatus.update(
+        this.camera,
+        this.cat?.rig.root.position ?? new THREE.Vector3(),
+        this.canvasHost.clientWidth,
+        this.canvasHost.clientHeight,
+      );
+    }
 
     this.statTimer += dt;
     if (this.statTimer > 0.5 || !this.statsEmitted) {

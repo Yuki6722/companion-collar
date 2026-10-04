@@ -16,7 +16,9 @@
     "dev": "pnpm --filter @camp/web dev",
     "build": "pnpm --filter @camp/web build",
     "preview": "pnpm --filter @camp/web preview",
-    "sim:generate": "pnpm --filter @camp/simulator generate"
+    "sim:generate": "pnpm --filter @camp/simulator generate",
+    "sim:eval-vitals": "pnpm --filter @camp/simulator eval-vitals",
+    "sim:curves": "pnpm --filter @camp/simulator curves"
   },
   "devDependencies": {
     "@types/node": "^24.19.0",
