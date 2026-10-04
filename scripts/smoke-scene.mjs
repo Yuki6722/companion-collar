@@ -272,19 +272,33 @@ if (appSnaps.length > 0) {
 // ---------------------------------------------------------------- 项圈形态可视化
 
 // 第三阶段新增：项圈硬件（带体 / 电子仓 / ECG 电极 ×2 / 体表热敏电阻）与触须无干涉区。
-// 断言它们的**存在与数量**，而不是外观——"项圈没挂上"或"无干涉区挂错了父节点"
+// 断言它们的**存在**，而不是外观——"项圈没挂上"或"无干涉区挂错了父节点"
 // 都无法靠"模型加载成功"发现。
 //
 // 第四阶段起项圈**默认可见**（它就是产品形态：猫脖子上那个带传感器的项圈），
 // 因此这里直接断言首屏快照里就有它，不再依赖 `?collar=on`。
+//
+// 按**名字**断言而不是按数量：写实模型的项圈多了一个状态指示灯（5 → 6 个部件），
+// 而"数量变了"既可能是硬件新增，也可能是某个部件丢了——数量断言分不清这两件事。
+const REQUIRED_COLLAR_PARTS = [
+  'collar-band',
+  'collar-pod',
+  'collar-ecg-left',
+  'collar-ecg-right',
+  'collar-thermistor',
+];
 const withCollar = records.find((r) => r.collar?.collar === true);
 if (withCollar) {
+  const names = withCollar.collar.partNames ?? [];
   check(
     '项圈默认挂在猫脖子上，且部件齐全（带体 + 电子仓 + 双电极 + 热敏电阻）',
-    withCollar.collar.parts === 5,
-    `parts=${withCollar.collar.parts}`,
+    REQUIRED_COLLAR_PARTS.every((n) => names.includes(n)),
+    `parts=${withCollar.collar.parts} names=${names.join(',') || '（该版本未回传部件名）'}`,
   );
-  check('触须无干涉区可独立显示', withCollar.collar.whiskerZone === true);
+  // 无干涉区默认关闭（`?collar=zone` 才打开），序列里在 19 s 打开一次——
+  // 所以这里要找**打开过**的快照，而不是第一条带项圈的快照。
+  const withZone = records.find((r) => r.collar?.whiskerZone === true);
+  check('触须无干涉区可独立显示', Boolean(withZone), withZone ? '' : '整个序列里没有 whiskerZone=true 的快照');
 } else {
   failures.push('首屏快照里没有项圈（它应该默认可见）');
   console.error('  ✗ 首屏快照里没有项圈（它应该默认可见）');

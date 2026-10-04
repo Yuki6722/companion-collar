@@ -261,6 +261,9 @@ export function mountHomeScreen(host: HTMLElement): () => void {
           catSegmentElapsedS: behavior?.segmentElapsedS ?? 0,
           catSegmentTotalS: behavior?.segmentRealDurationS ?? 0,
           catMotion: scene?.catIncidentMotion() ?? undefined,
+          // 本轮：写实蒙皮模型的自检事实（加载状态 / 骨骼数 / 步态权重 / 四爪坐标）。
+          // 没有它，「真的在迈步」与「只移动位置」在无头环境里无法区分。
+          cat: scene?.catVariantState(),
           // 第三阶段：项圈硬件与触须无干涉区的显示状态（形态方案的可断言事实）
           collar: scene?.collarState() ?? undefined,
           // 第四阶段（本页布局）：App 预览的显示状态与它此刻显示的内容。

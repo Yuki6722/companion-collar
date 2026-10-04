@@ -66,7 +66,7 @@ export interface SceneSnapshot {
    * 为什么单独记：这两者是**形态方案**这一条信息的载体。只断言"模型加载成功"
    * 无法发现"项圈没挂上"或"无干涉区跟着身体而不是跟着头"这两类故障。
    */
-  collar?: { collar: boolean; whiskerZone: boolean; parts: number };
+  collar?: { collar: boolean; whiskerZone: boolean; parts: number; partNames?: string[] };
   /**
    * App 预览（右栏 iPhone 机模）。
    *
@@ -94,6 +94,15 @@ export interface SceneSnapshot {
       reasons: number;
     };
   };
+  /**
+   * 喵喵写实模型的自检事实（`HomeScene.catVariantState()`）。
+   *
+   * 为什么必须记：这一轮交付的核心宣称是「场景里的猫**真的在迈步**，不是只移动位置」。
+   * 只断言 `catAt` 变化无法区分「走了 2 米」和「瞬移了 2 米」——那正是实测到的故障形态
+   * （一次位移起步 50 ms 内跳 0.45 m）。记下 `walkWeight`（步态权重）与四爪局部坐标，
+   * 才能把「迈步」这件事变成可断言的文本。
+   */
+  cat?: Record<string, unknown>;
 }
 
 export interface DebugOptions {
@@ -141,53 +150,67 @@ export function installDebugHandle(
   window.setInterval(render, 1000);
 
   if (options.autoSequence) {
-    // 时间点刻意错开：等资产与首帧稳定 → 切激动（含 0.8 s 过渡）→ 回传 → 切回平静 → 回传。
-    // 最后再触发一次突发演示并回传：断言「注入的突发确实出现在快照里」。
-    window.setTimeout(() => post(), 6000);
-    window.setTimeout(() => {
-      call(handle, 'setCatState', 'agitated');
-    }, 8000);
-    window.setTimeout(() => post(), 10_500);
-    window.setTimeout(() => {
-      call(handle, 'setCatState', 'calm');
-    }, 12_000);
-    window.setTimeout(() => post(), 14_500);
-    // App 预览的收起 / 展开：这是右栏唯一的东西，必须能自动验证它确实在切换
-    window.setTimeout(() => {
-      call(handle, 'app', 'off');
-    }, 15_000);
-    window.setTimeout(() => {
-      call(handle, 'app', 'on');
-    }, 15_600);
-    window.setTimeout(() => {
-      call(handle, 'setAutoCat', '');
-      call(handle, 'incident', 'seizure');
-    }, 16_000);
-    // 抽搐自 16 s 起持续 15 s（演示时间），在它进行中回传一次
-    window.setTimeout(() => post(), 18_000);
-    // 打开项圈与触须无干涉区并回传：让 `?debug=1&auto=1` 一次跑完就覆盖形态可视化。
-    window.setTimeout(() => {
-      call(handle, 'collar', 'zone');
-    }, 19_000);
-    window.setTimeout(() => post(), 21_000);
-    // 逐个切 App 的页签并回传：事件流 / 漂移 / 档案都要留下可断言的快照
-    window.setTimeout(() => {
-      call(handle, 'app', 'events');
-    }, 22_000);
-    window.setTimeout(() => post(), 22_500);
-    window.setTimeout(() => {
-      call(handle, 'app', 'drift');
-    }, 24_000);
-    window.setTimeout(() => post(), 24_500);
-    window.setTimeout(() => {
-      call(handle, 'app', 'profile');
-    }, 26_000);
-    window.setTimeout(() => post(), 26_500);
-    window.setTimeout(() => {
-      call(handle, 'app', 'live');
-    }, 28_000);
-    // 抽搐结束后再回传一次：用来对照「突发期间」与「突发之后」的标签
-    window.setTimeout(() => post(), 32_000);
+    // ⚠️ 为什么整套时间点要等**资产就绪**才起跑：这一序列原本按固定墙钟起跑，
+    // 而猫是可异步加载的（写实蒙皮 GLB 5.4 MB + 贴图解码）。在慢一点的机器上，
+    // 6 秒的快照会在模型到位之前拍下，于是「演示时钟在推进」「段内进展计数在推进」
+    // 变成假阴性——而且看上去像功能坏了。改成「画面真的开始了再按秒数检查它」。
+    const startAutoSequence = (): void => {
+      // 时间点刻意错开：等资产与首帧稳定 → 切激动（含 0.8 s 过渡）→ 回传 → 切回平静 → 回传。
+      // 最后再触发一次突发演示并回传：断言「注入的突发确实出现在快照里」。
+      window.setTimeout(() => post(), 6000);
+      window.setTimeout(() => {
+        call(handle, 'setCatState', 'agitated');
+      }, 8000);
+      window.setTimeout(() => post(), 10_500);
+      window.setTimeout(() => {
+        call(handle, 'setCatState', 'calm');
+      }, 12_000);
+      window.setTimeout(() => post(), 14_500);
+      // App 预览的收起 / 展开：这是右栏唯一的东西，必须能自动验证它确实在切换
+      window.setTimeout(() => {
+        call(handle, 'app', 'off');
+      }, 15_000);
+      window.setTimeout(() => {
+        call(handle, 'app', 'on');
+      }, 15_600);
+      window.setTimeout(() => {
+        call(handle, 'setAutoCat', '');
+        call(handle, 'incident', 'seizure');
+      }, 16_000);
+      // 抽搐自 16 s 起持续 15 s（演示时间），在它进行中回传一次
+      window.setTimeout(() => post(), 18_000);
+      // 打开项圈与触须无干涉区并回传：让 `?debug=1&auto=1` 一次跑完就覆盖形态可视化。
+      window.setTimeout(() => {
+        call(handle, 'collar', 'zone');
+      }, 19_000);
+      window.setTimeout(() => post(), 21_000);
+      // 逐个切 App 的页签并回传：事件流 / 漂移 / 档案都要留下可断言的快照
+      window.setTimeout(() => {
+        call(handle, 'app', 'events');
+      }, 22_000);
+      window.setTimeout(() => post(), 22_500);
+      window.setTimeout(() => {
+        call(handle, 'app', 'drift');
+      }, 24_000);
+      window.setTimeout(() => post(), 24_500);
+      window.setTimeout(() => {
+        call(handle, 'app', 'profile');
+      }, 26_000);
+      window.setTimeout(() => post(), 26_500);
+      window.setTimeout(() => {
+        call(handle, 'app', 'live');
+      }, 28_000);
+      // 抽搐结束后再回传一次：用来对照「突发期间」与「突发之后」的标签
+      window.setTimeout(() => post(), 32_000);
+    };
+    const deadline = Date.now() + 60_000;
+    const waitForAssets = (): void => {
+      const snap = snapshot();
+      const catModel = snap.cat?.model as { loaded?: boolean } | undefined;
+      if ((snap.modelsLoaded > 0 && catModel?.loaded !== false) || Date.now() > deadline) startAutoSequence();
+      else window.setTimeout(waitForAssets, 250);
+    };
+    waitForAssets();
   }
 
   return { post, handle };

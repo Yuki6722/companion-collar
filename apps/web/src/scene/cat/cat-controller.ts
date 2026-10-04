@@ -74,6 +74,10 @@ export class CatController {
   private incidentMotion: IncidentMotion | null = null;
   /** 外部模式的朝向，用于手动↔自主切换时保持朝向连续 */
   private externalRotY = 0;
+  /** 最近一次 `applyPose` 收到的步态相位（供蒙皮动作驱动复用） */
+  private lastGaitPhase = 0;
+  /** 外部模式下当前姿势（`snapPoseFor` 写入），供蒙皮动作驱动读取 */
+  private externalPosture: CatPosture = 'lying';
 
   constructor(rig: CatRig, opts: CatControllerOptions = {}) {
     this.rig = rig;
@@ -139,6 +143,7 @@ export class CatController {
   setExternalTransform(t: Transform, gaitPhase: number): void {
     this.mode = 'external';
     this.externalRotY = t.rotY;
+    this.lastGaitPhase = gaitPhase;
     this.applyTransform(t, 1, gaitPhase);
   }
 
@@ -153,6 +158,7 @@ export class CatController {
     // 叠加「在做事」的头部动作配方（只有进食/饮水/用砂盆有）。
     // 注意：本次调用带 `activity` 时用活动配方覆盖姿势基准，避免上一种行为的头部动作残留。
     this.externalPose = { ...base };
+    this.externalPosture = posture;
     if (immediate) this.fromPose = { ...this.externalPose };
   }
 
@@ -241,7 +247,7 @@ export class CatController {
     for (const fn of this.listeners) fn(id);
   }
 
-  update(dt: number, gaitPhase = 0): void {
+  update(dt: number, gaitPhase = this.mode === 'external' ? this.lastGaitPhase : 0): void {
     const step = Math.min(dt, 0.1);
     this.time += step;
     if (this.transitionStartMs !== null && this.blendNow() >= 1) this.transitionStartMs = null;
@@ -301,7 +307,23 @@ export class CatController {
     rig.body.position.y += bob;
   }
 
+  /** 当前姿势，供蒙皮骨骼驱动读取。 */
+  currentPosture(): CatPosture {
+    if (this.mode === 'external') {
+      // 外部模式：姿势由行为时间线经 `snapPoseFor` 写入
+      return this.externalPosture;
+    }
+    // 手动模式：喵喵的两个档位语义上都属于「蹲伏/站立」一类，取当前目标态的近似
+    return this.target === 'agitated' ? 'crouching' : 'lying';
+  }
+
+  /** 行为运行时的步态相位；不能被 update 的默认值清零。 */
+  gaitPhase(): number {
+    return this.lastGaitPhase;
+  }
+
   private applyPose(pose: CatPoseParams, dt: number, gaitPhase = 0): void {
+    this.lastGaitPhase = gaitPhase;
     const rig = this.rig;
     const t = this.time;
     const omega = (freq: number): number => t * freq * Math.PI * 2;

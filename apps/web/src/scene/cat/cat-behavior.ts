@@ -76,7 +76,7 @@ export class CatBehaviorRuntime {
   private lastWallMs: number;
   private gait = new GaitPhase();
   private plan: TravelPlan | null = null;
-  private planStartT = 0;
+  private travelElapsedS = 0;
   private currentSegmentKey = '';
   /** 当前区间（缓存，避免每帧重新二分查找） */
   private currentSegment: CatBehaviorSegment | null = null;
@@ -164,6 +164,15 @@ export class CatBehaviorRuntime {
     this.lastWallMs = wallMs;
     const step = this.paused ? 0 : Math.min(dt, 0.1) + Math.max(0, elapsed - Math.min(dt, 0.1));
 
+    // ⚠️ 位移动画**不吃 wall-clock 追赶量**。
+    //
+    // `step` 会把「距上一帧的整段真实时间」补进来（模型加载、首帧着色器编译、
+    // 标签页切回来）。这对**数据时钟**是对的，但用来推进**走路动画**就是把两秒的路
+    // 塞进一帧：实测一次位移起步 50 ms 内跳了 0.45 m（≈8.7 m/s，是 walkSpeedMps 的 20 倍），
+    // 而整段平均只有 0.48 m/s——画面读起来就是「先瞬移再走」。
+    // 因此位移只按当帧渲染时间推进，并沿用仓库既有的 0.1 s 上限。
+    if (this.plan && !this.paused) this.travelElapsedS += Math.min(Math.max(dt, 0), 0.1);
+
     if (step > 0) {
       // ⚠️ 突发段**不乘演示倍率**。
       //
@@ -173,7 +182,12 @@ export class CatBehaviorRuntime {
       // 因此突发段按真实时间推进，其余行为仍按倍率推进节律。
       const current = activityAt(this.timeline, this.t);
       const realTime = current.incidentKind !== undefined;
-      this.t = Math.min(this.timeline.durationS, this.t + step * (realTime ? 1 : this.timeScale));
+      const segmentEnd = current.t + current.durS;
+      const traveling = this.plan && this.travelElapsedS < this.plan.durationS;
+      // Let the same shared clock slow down for visible locomotion. Do not skip a
+      // short walk segment at 20× and snap the cat to the following anchor.
+      const next = this.t + step * (realTime ? 1 : this.timeScale);
+      this.t = Math.min(this.timeline.durationS, segmentEnd, traveling ? Math.min(next, segmentEnd-0.000001) : next);
       if (this.t >= this.timeline.durationS) this.t = this.timeline.durationS;
     }
 
@@ -189,7 +203,7 @@ export class CatBehaviorRuntime {
       if (isTravel && place) {
         // 位移时长直接取区间长度，保证画面时序与数据一致
         this.plan = planTravel(this.transform, place, seg.durS);
-        this.planStartT = this.t;
+        this.travelElapsedS = 0;
         this.gait.reset();
       } else {
         this.plan = null;
@@ -217,7 +231,7 @@ export class CatBehaviorRuntime {
     }
 
     if (this.plan) {
-      const elapsedS = this.t - Math.max(0, this.planStartT);
+      const elapsedS = this.travelElapsedS;
       this.transform = travelAt(this.plan, elapsedS);
       // 位移已结束（到得早）时不再走步态，原地站着等下一段——这样猫不会「原地踏步」，
       // 也不会为了拖满时间线而放慢成蜗牛。

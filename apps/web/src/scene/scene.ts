@@ -84,6 +84,7 @@ interface CameraMove {
 }
 
 export class HomeScene {
+  /** 喵喵：写实蒙皮模型的控制器。 */
   readonly cat: CatController | null;
   /** 自主行为运行时；行为层关闭时为 null */
   private behavior: CatBehaviorRuntime | null = null;
@@ -139,6 +140,11 @@ export class HomeScene {
   /** 项圈默认可见：它是产品形态本身，不该藏在参数后面（`?collar=off` 可关） */
   private collarVisible = true;
   private whiskerZoneVisible = false;
+  private catReducedMotion = false;
+  private catModelReady = false;
+  private miaoRig: CatRig | null = null;
+  private followCat = false;
+  private readonly followedPosition = new THREE.Vector3();
 
   constructor(opts: SceneOptions) {
     this.canvasHost = opts.canvasHost;
@@ -233,15 +239,25 @@ export class HomeScene {
     const catGear = buildCatGear(root, mats);
     this.resourceRings = catGear.resourceRings;
 
+    this.catReducedMotion = opts.reducedMotion;
     const catRig = buildCat(mats, this.settings.furShells);
     root.add(catRig.root);
+    this.miaoRig = catRig;
     this.collarRig = catRig;
-    // 项圈默认隐藏：它承载的是「形态方案」这一条信息，不是场景的默认外观。
-    // `?collar=on` 或 HUD 开关把它打开；`?collar=zone` 连无干涉区一起打开。
+    // 项圈跟随新模型的颈部骨骼；仍由原有图层开关控制。
     catRig.collar.visible = this.collarVisible;
     catRig.whiskerZone.visible = this.whiskerZoneVisible;
     this.cat = new CatController(catRig, { reducedMotion: opts.reducedMotion });
     this.behaviorOnStatus = opts.onBehaviorStatus ?? null;
+
+    void catRig.ready?.then(() => {
+      this.catModelReady = true;
+      // Reset the runtime wall clock after async model loading.
+      const wasPaused = this.behavior?.isPaused() ?? false;
+      if (!wasPaused) { this.behavior?.setPaused(true); this.behavior?.setPaused(false); }
+    }).catch(() => {
+      if (!this.disposed) this.callbacks.onFatal?.('喵喵模型加载失败，请刷新页面重试。');
+    });
 
     // 猫头顶的状态标签：**独立于资源标签层**，因此单独给一个宿主。
     // 资源标签那层有「相互遮挡就隐藏」的贪心去重，猫的状态标签绝不能因为
@@ -251,7 +267,7 @@ export class HomeScene {
     opts.labelHost.appendChild(this.catLabelHost);
 
     // 自主行为：默认开启。时间线由调用方给（仿真器产出）或本地按同一套规则生成。
-    // `?behavior=off` 可关掉，回到第一阶段的手动演示档位。
+    // `?behavior-off`（裸标志，注意不是 `behavior=off`）可关掉，回到第一阶段的手动演示档位。
     const behaviorEnabled = !new URLSearchParams(window.location.search).has('behavior-off');
     if (behaviorEnabled && this.cat) {
       const timeline =
@@ -266,7 +282,18 @@ export class HomeScene {
       this.catStatus = new CatStatusLabel(this.catLabelHost);
       this.statusVisible = !new URLSearchParams(window.location.search).has('status-off');
       this.catStatus.setVisible(this.statusVisible);
+      const walkCheck = new URLSearchParams(window.location.search).has('walk-check');
+      // `?walk-check=1` 要检查的是**走路**，所以先找 `posture: 'walking'` 的位移段。
+      // 只按 `activity === 'locomoting'` 找会命中「攀跳」段（有高差 → 位移带弧线），
+      // 检查入口于是演示的是跳，不是走。找不到才退回任意位移段。
+      const walkable = (seg: (typeof timeline.segments)[number]): boolean =>
+        seg.activity === 'locomoting' && seg.resolved !== false && seg.t > 0;
+      const firstWalk = walkCheck
+        ? timeline.segments.find(seg => walkable(seg) && seg.posture === 'walking')
+          ?? timeline.segments.find(walkable)
+        : undefined;
       this.behavior = new CatBehaviorRuntime(timeline, this.cat, {
+        startAtS: firstWalk ? Math.max(0, firstWalk.t-0.1) : 0,
         onStatus: this.onBehaviorStatus,
       });
     }
@@ -439,6 +466,7 @@ export class HomeScene {
   }
 
   setReducedMotion(on: boolean): void {
+    this.catReducedMotion = on;
     this.cat?.setReducedMotion(on);
   }
 
@@ -503,12 +531,15 @@ export class HomeScene {
   }
 
   /** 自检用：项圈与无干涉区的显示状态。 */
-  collarState(): { collar: boolean; whiskerZone: boolean; parts: number } {
+  collarState(): { collar: boolean; whiskerZone: boolean; parts: number; partNames: string[] } {
     const rig = this.collarRig;
     return {
       collar: rig?.collar.visible ?? false,
       whiskerZone: rig?.whiskerZone.visible ?? false,
       parts: rig?.collar.children.length ?? 0,
+      // 记部件**名字**而不只是数量：写实模型的项圈多了一个状态指示灯（5 → 6），
+      // 只断言数量的自检无法区分「硬件改了」与「硬件没了」。
+      partNames: rig?.collar.children.map((c) => c.name).filter(Boolean) ?? [],
     };
   }
 
@@ -519,9 +550,11 @@ export class HomeScene {
    * 缓动依赖渲染帧推进，而无头/低帧率环境下帧数不可控，会让截图位置每次都不一样。
    */
   preset(id: string, immediate = false): void {
+    this.followCat = id === 'cat-follow';
     if (id === 'cat-follow') {
       const p = this.cat?.rig.root.position;
       if (!p) return;
+      this.followedPosition.copy(p);
       if (this.behavior) {
         // 自主行为下猫会到处走，第一阶段那两套「相对猫的固定偏移」不再成立
         // （偏移是按站位朝向手写的，转个身就会钻进家具里）。
@@ -601,7 +634,13 @@ export class HomeScene {
     return n;
   }
 
+  /** 工程自检：加载状态、骨骼与当前动作。 */
+  catVariantState(): Record<string, unknown> {
+    return { variant: 'miao', model: this.cat?.rig.debugInfo?.() ?? null };
+  }
+
   dispose(): void {
+    this.miaoRig?.dispose?.();
     this.disposed = true;
     this.running = false;
     this.renderer.setAnimationLoop(null);
@@ -753,8 +792,30 @@ export class HomeScene {
 
     // 自主行为优先：它自己会把位置与姿势落到 rig 上，并调用控制器推进微动作。
     // 行为层关闭时退回第一阶段的手动路径。
-    if (this.behavior) this.behavior.update(dt);
-    else this.cat?.update(dt);
+    if (this.catModelReady) {
+      if (this.behavior) this.behavior.update(dt);
+      else this.cat?.update(dt);
+    }
+    if (this.cat) {
+      this.cat.rig.animate?.(dt, {
+        gaitPhase: this.cat.gaitPhase(),
+        posture: this.cat.currentPosture(),
+        activity: this.behavior?.status().activity,
+        incident: this.cat.incidentMotionSnapshot(),
+        reducedMotion: this.catReducedMotion || this.behavior?.isPaused(),
+      });
+    }
+    if (this.followCat && this.cat) {
+      const position = this.cat.rig.root.position;
+      const delta = position.clone().sub(this.followedPosition);
+      this.camera.position.add(delta);
+      this.controls.target.add(delta);
+      if (this.move) {
+        this.move.fromPos.add(delta); this.move.toPos.add(delta);
+        this.move.fromTarget.add(delta); this.move.toTarget.add(delta);
+      }
+      this.followedPosition.copy(position);
+    }
     this.controls.update();
 
     if (this.settings.shadows) {

@@ -157,7 +157,12 @@ export class Hud {
     this.incidentLine = el('p', { class: 'state-hint', text: '尚未触发突发演示。' });
 
     const catPanel = el('section', { class: 'panel panel-cat' }, [
-      el('h2', { class: 'panel-title', text: '猫的行为' }),
+      el('h2', { class: 'panel-title', text: '喵喵的行为' }),
+      el('p', { class: 'state-hint' }, [
+        el('a', { text: '模型与动作检查', attrs: { href: './cat-studio.html' } }),
+        document.createTextNode(' · '),
+        el('a', { text: '模型来源', attrs: { href: './assets/models/CREDITS-CATS.md', target: '_blank', rel: 'noopener' } }),
+      ]),
       modeRow,
       this.behaviorLine,
       el('h3', { class: 'panel-subtitle', text: '手动演示档位' }),
