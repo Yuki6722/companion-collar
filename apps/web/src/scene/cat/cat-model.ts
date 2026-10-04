@@ -54,6 +54,14 @@ export interface CatRig {
    * 它默认隐藏（只在讲解/截图时打开），因为它是一个**约束标注**，不是外观。
    */
   whiskerZone: THREE.Group;
+  /**
+   * 项圈相机的机位锚点（世界变换由场景每帧读取）。
+   *
+   * 为什么要有它：项圈前端那颗摄像头**拍到的画面**是产品的一部分
+   * （App 的「实时」页就是它）。把机位做成 rig 里的一个空节点，
+   * 就自然跟着猫的身体与朝向走，不需要在场景里再算一遍三角函数。
+   */
+  povAnchor: THREE.Object3D;
 }
 
 export function buildCat(_mats: MaterialLibrary, _furLayers: number): CatRig {

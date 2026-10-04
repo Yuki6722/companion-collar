@@ -60,6 +60,12 @@ export function createRealisticCat(coat: 'bengal' | 'black', modelPromise?: Prom
   }
   const thermistor = new T.Mesh(new T.SphereGeometry(0.004, 12, 10), new T.MeshStandardMaterial({ color: 0xb5651d, roughness: 0.55 }));
   thermistor.name = 'collar-thermistor'; thermistor.position.set(0, -0.052, 0.002); collar.add(thermistor);
+  const lens = new T.Mesh(new T.CylinderGeometry(0.007, 0.007, 0.006, 14), new T.MeshStandardMaterial({ color: 0x14161a, roughness: 0.25, metalness: 0.5 }));
+  lens.name = 'collar-camera'; lens.rotation.x = Math.PI / 2;
+  lens.position.set(0, -0.025, 0.047); collar.add(lens);
+  // Follow the same neck transform as the hardware, through walking and lowered poses.
+  const povAnchor = new T.Object3D(); povAnchor.name = 'cat-pov-anchor';
+  povAnchor.position.set(0, -0.025, 0.053); collar.add(povAnchor);
   const zone = new T.Mesh(new T.SphereGeometry(0.10, 16, 12), new T.MeshBasicMaterial({color:0x70cbbb,wireframe:true,transparent:true,opacity:0.25}));
   zone.scale.set(1.4, 0.7, 0.8); whiskerZone.add(zone);
 
@@ -279,7 +285,7 @@ export function createRealisticCat(coat: 'bengal' | 'black', modelPromise?: Prom
   };
   return {
     root, body, torso, chest, hips, head, earL, earR, eyeL, eyeR, pupilL, pupilR, nose,
-    tail, legs, breathParts: [], furShells: [], collar, whiskerZone, ready, animate,
+    tail, legs, breathParts: [], furShells: [], collar, whiskerZone, povAnchor, ready, animate,
     debugInfo: () => ({ loaded, error, coat, action:currentAction, bones:bones.size, phase, walkWeight,
       feet:chains.map(l => point(l.toe).toArray().map(n => Math.round(n*SCALE*1000)/1000)),
       // 头骨原点（视觉局部坐标）：它随躯干/脊柱旋转而移动，是**身体真的在动**的唯一可断言信号。

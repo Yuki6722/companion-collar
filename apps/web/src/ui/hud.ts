@@ -71,6 +71,8 @@ export class Hud {
   private readonly issues: HTMLElement;
   private readonly fatal: HTMLElement;
   private readonly presetHost: HTMLElement;
+  /** 已添加的机位 id（自检用：能发现"该删的机位没删"） */
+  private readonly presetIds: string[] = [];
   private readonly callbacks: HudCallbacks;
   private readonly modeButtons = new Map<'auto' | 'manual', HTMLButtonElement>();
   private readonly behaviorLine: HTMLElement;
@@ -247,6 +249,7 @@ export class Hud {
   }
 
   addPreset(preset: PresetSpec): void {
+    this.presetIds.push(preset.id);
     const button = el(
       'button',
       {
@@ -258,6 +261,16 @@ export class Hud {
       [el('span', { text: preset.label })],
     );
     this.presetHost.append(button);
+  }
+
+  /**
+   * 左栏机位按钮的 id 列表（自检用）。
+   *
+   * 为什么记 id 而不数按钮：有一个真实故障是"**该删的机位没删**"
+   * （例如已经没人用的固定高度机位仍留在列表里），数个数发现不了。
+   */
+  presetIdList(): string[] {
+    return [...this.presetIds];
   }
 
   setCatState(id: CatStateId): void {

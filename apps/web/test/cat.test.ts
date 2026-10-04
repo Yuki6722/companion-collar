@@ -50,6 +50,28 @@ test('external gait survives the controller update instead of being reset to fra
   rig.dispose!();
 });
 
+test('realistic collar camera follows neck poses and room transforms', async () => {
+  const rig = createRealisticCat('bengal', loadGeometry()); await rig.ready;
+  assert.ok(rig.collar.getObjectByName('collar-camera'), 'main collar hardware must survive model replacement');
+  assert.equal(rig.povAnchor.parent, rig.collar);
+  const pose = (posture: string) => {
+    for (let i = 0; i < 90; i++) rig.animate!(1 / 60, { posture, gaitPhase: 0, reducedMotion: true });
+    rig.root.updateMatrixWorld(true);
+    return rig.povAnchor.getWorldPosition(new T.Vector3());
+  };
+  const standing = pose('standing');
+  assert.ok(standing.y > 0.1 && standing.y < 0.5, `camera height ${standing.y}`);
+  const lying = pose('lying');
+  assert.ok(lying.y < standing.y - 0.05, 'camera lowers with the actual neck');
+  pose('standing');
+  const local = rig.povAnchor.position.clone();
+  rig.root.position.set(3, 1, -2); rig.root.rotation.y = 1.3;
+  const transformed = pose('standing');
+  assert.ok(transformed.distanceTo(rig.collar.localToWorld(local)) < 1e-8);
+  assert.ok(Math.abs(transformed.y - standing.y - 1) < 0.001);
+  rig.dispose!();
+});
+
 test('walk cycle has continuous endpoints and overlapping support, not a synchronized hop', () => {
   for(let phase=0;phase<1;phase+=0.01){
     const feet=[0,0.25,0.5,0.75].map(offset=>pawCycle(phase+offset));

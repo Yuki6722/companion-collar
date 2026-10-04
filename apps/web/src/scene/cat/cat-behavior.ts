@@ -3,14 +3,14 @@
  *
  * 数据流：
  *   `Session.behaviorTimeline`（core 产出）
- *     → 本文件按 wall clock 求「此刻应在哪个锚点、什么姿势、是否处于突发」
+ *     → 本文件按渲染帧时间推进「此刻应在哪个锚点、什么姿势、是否处于突发」
  *     → `locomotion` 把路走完
  *     → `CatController.setExternalTransform()` 落到 rig 上
  *
  * 三条边界（都会出现在界面上）：
  *   1. 自主行为是**演示**，不是对猫的感受或健康状况的判断；
  *   2. 突发演示由用户手动触发或仿真注入，只演示**动作**，不命名任何状况；
- *   3. 时间线的推进由 wall clock 推导——后台降帧不会让猫「卡在半路」。
+ *   3. 时间线与位移按渲染帧推进，每帧上限 0.1 秒，避免加载或后台恢复时瞬移。
  */
 import { ACTIVITY_DEFS, CAT_ANCHOR_LABELS, INCIDENT_DEFS, activityAt, incidentAt } from '@camp/core';
 import type {
@@ -61,9 +61,14 @@ export interface BehaviorStatus {
   segmentRealDurationS: number;
 }
 
-function now(): number {
-  return typeof performance !== 'undefined' ? performance.now() : 0;
-}
+/**
+ * 跳跃门限（米）：高度差超过它就算「跳」，允许直接改目标（不走完整轨迹）。
+ *
+ * 与 `locomotion` 里 `planTravel` 用的 `OPERATIVE_CONSTANTS.jumpMinHeightM` 是**同一个量**，
+ * 这里重复一次是为了避免在热路径上每次都查常量表；两处都由 `AGENTS.md` 的行为常量表定义，
+ * 单测会断言它们相等（不一致会导致"该跳的时候走、该走的时候跳"）。
+ */
+const JUMP_GATE_M = 0.15;
 
 export class CatBehaviorRuntime {
   private readonly timeline: CatBehaviorTimeline;
@@ -73,10 +78,21 @@ export class CatBehaviorRuntime {
   private paused = false;
   /** 行为时间线内的当前时刻（秒） */
   private t = 0;
-  private lastWallMs: number;
   private gait = new GaitPhase();
   private plan: TravelPlan | null = null;
-  private travelElapsedS = 0;
+  /**
+   * 当前位移已经花掉的**真实**秒数。
+   *
+   * ⚠️ 这是本轮修掉的一个真故障：位移时长是按**真实几何**算出来的真实秒数
+   * （`planTravel` 里 `naturalS` 是"走过去要几秒"），但推进量原先取的是
+   * `this.t - planStartT`——那是**时间线秒**，而时间线在 20× 倍率下走得飞快。
+   * 结果一次计划 3 真实秒的走路，0.15 秒就走完了：**看起来就是瞬移**。
+   * 现在位移按真实秒推进，并由 `effectiveTimeScale` 让时间线跟着走路一起走
+   * （走完这段正好用完这段位移的时间线时长），因此不瞬移、也不落后于时间线。
+   */
+  private planElapsedS = 0;
+  /** 当前位移对应的时间线段结束时刻（会话内秒），用于给时间线"刹车" */
+  private planSegmentEndT = 0;
   private currentSegmentKey = '';
   /** 当前区间（缓存，避免每帧重新二分查找） */
   private currentSegment: CatBehaviorSegment | null = null;
@@ -88,24 +104,37 @@ export class CatBehaviorRuntime {
   constructor(
     timeline: CatBehaviorTimeline,
     controller: CatController,
-    options: { startAtS?: number; onStatus?: (s: BehaviorStatus) => void } = {},
+    options: {
+      startAtS?: number;
+      onStatus?: (s: BehaviorStatus) => void;
+      /**
+       * 起始变换。给了它就从这里继续（用于**运行中换一条时间线**：
+       * 若不传，构造时会直接落到时间线给出的锚点上——那就是一次瞬移）。
+       */
+      startTransform?: CatTransform;
+    } = {},
   ) {
     this.timeline = timeline;
     this.controller = controller;
     this.timeScale = timeline.timeScale > 0 ? timeline.timeScale : 1;
     this.paused = false;
     this.t = Math.max(0, Math.min(timeline.durationS, options.startAtS ?? 0));
-    this.lastWallMs = now();
     this.onStatus = options.onStatus ?? null;
 
-    // 起始位置直接落在时间线给出的锚点上，不做过渡——
-    // 首屏不该看到猫从别处「飘」过来（与第一阶段 snapTo 的理由相同）。
+    // 起始位置：优先沿用调用方给的变换（换时间线时用），否则直接落在时间线的锚点上。
+    // 首帧不做过渡是刻意的——首屏不该看到猫从别处"飘"过来。
     const first = activityAt(timeline, this.t);
     this.currentSegment = first;
     const place = anchorPlace(first.anchorId) ?? anchorPlace('floor-living');
-    this.transform = place
-      ? { x: place.position.x, y: place.heightM, z: place.position.z, rotY: place.facing }
-      : { x: 0, y: 0, z: 0, rotY: 0 };
+    this.transform =
+      options.startTransform ??
+      (place
+        ? { x: place.position.x, y: place.heightM, z: place.position.z, rotY: place.facing }
+        : { x: 0, y: 0, z: 0, rotY: 0 });
+    if (options.startTransform && place) {
+      // 换时间线时若猫不在新锚点上，不要瞬移过去——交给 `update` 里的走路逻辑走过去。
+      this.plannedArrival = place;
+    }
     this.controller.snapPoseFor(first.posture, true);
     this.controller.setActivityMotion(ACTIVITY_MOTION[first.activity] ?? null);
     this.controller.setExternalTransform(this.transform, 0);
@@ -114,11 +143,12 @@ export class CatBehaviorRuntime {
     this.onStatus?.(this.status());
   }
 
+  /** 首帧就与目标锚点不一致时，记下目标，让 `update` 第一帧开始走过去。 */
+  private plannedArrival: CatAnchorPlace | null = null;
+
   setPaused(on: boolean): void {
     if (this.paused === on) return;
     this.paused = on;
-    // 暂停后重新计时，避免恢复时一次性补上暂停期间的全部时间
-    this.lastWallMs = now();
   }
 
   isPaused(): boolean {
@@ -132,19 +162,22 @@ export class CatBehaviorRuntime {
   status(): BehaviorStatus {
     const seg = this.currentSegment ?? activityAt(this.timeline, this.t);
     const incident = incidentAt(this.timeline, this.t);
-    const def = ACTIVITY_DEFS[seg.activity];
     const place = anchorPlace(seg.anchorId);
+    const moving = this.plan !== null;
+    // 正在走的时候，标签必须说「移动」——即使时间线已经翻到下一段。
+    // 这是「标签要与画面一致」这条纪律的落点：猫在走，标签就不该写「休息」。
+    const movingDef = ACTIVITY_DEFS.locomoting;
     return {
-      activityLabel: def?.label ?? seg.activity,
-      postureLabel: postureLabelOf(seg.posture),
-      activity: seg.activity,
-      posture: seg.posture,
+      activityLabel: moving ? movingDef.label : (ACTIVITY_DEFS[seg.activity]?.label ?? seg.activity),
+      postureLabel: postureLabelOf(moving ? 'walking' : seg.posture),
+      activity: moving ? 'locomoting' : seg.activity,
+      posture: moving ? 'walking' : seg.posture,
       anchorId: seg.anchorId,
       anchorLabel: CAT_ANCHOR_LABELS[seg.anchorId] ?? place?.label ?? seg.anchorId,
       hourOfDay: hourOfDay(this.t),
       timeS: this.t,
       incident: incident?.kind ?? null,
-      moving: this.plan !== null,
+      moving,
       segmentIndex: this.timeline.segments.indexOf(seg),
       segmentElapsedS: this.segmentElapsedS,
       // 段的**真实**时长：突发段本来就按真实时间推进，其余段要除以倍率
@@ -158,20 +191,8 @@ export class CatBehaviorRuntime {
   }
 
   update(dt: number): void {
-    const wallMs = now();
-    // 用 wall clock 推导推进量，而不是累加 dt：dt 在后台标签里会被浏览器压低
-    const elapsed = Math.max(0, (wallMs - this.lastWallMs) / 1000);
-    this.lastWallMs = wallMs;
-    const step = this.paused ? 0 : Math.min(dt, 0.1) + Math.max(0, elapsed - Math.min(dt, 0.1));
-
-    // ⚠️ 位移动画**不吃 wall-clock 追赶量**。
-    //
-    // `step` 会把「距上一帧的整段真实时间」补进来（模型加载、首帧着色器编译、
-    // 标签页切回来）。这对**数据时钟**是对的，但用来推进**走路动画**就是把两秒的路
-    // 塞进一帧：实测一次位移起步 50 ms 内跳了 0.45 m（≈8.7 m/s，是 walkSpeedMps 的 20 倍），
-    // 而整段平均只有 0.48 m/s——画面读起来就是「先瞬移再走」。
-    // 因此位移只按当帧渲染时间推进，并沿用仓库既有的 0.1 s 上限。
-    if (this.plan && !this.paused) this.travelElapsedS += Math.min(Math.max(dt, 0), 0.1);
+    // 共用帧时间；模型加载、后台标签恢复和暂停都不能积攒下一帧的位移。
+    const step = this.paused ? 0 : Math.min(Math.max(dt, 0), 0.1);
 
     if (step > 0) {
       // ⚠️ 突发段**不乘演示倍率**。
@@ -182,12 +203,7 @@ export class CatBehaviorRuntime {
       // 因此突发段按真实时间推进，其余行为仍按倍率推进节律。
       const current = activityAt(this.timeline, this.t);
       const realTime = current.incidentKind !== undefined;
-      const segmentEnd = current.t + current.durS;
-      const traveling = this.plan && this.travelElapsedS < this.plan.durationS;
-      // Let the same shared clock slow down for visible locomotion. Do not skip a
-      // short walk segment at 20× and snap the cat to the following anchor.
-      const next = this.t + step * (realTime ? 1 : this.timeScale);
-      this.t = Math.min(this.timeline.durationS, segmentEnd, traveling ? Math.min(next, segmentEnd-0.000001) : next);
+      this.t = Math.min(this.timeline.durationS, this.t + step * this.effectiveTimeScale(realTime));
       if (this.t >= this.timeline.durationS) this.t = this.timeline.durationS;
     }
 
@@ -198,17 +214,8 @@ export class CatBehaviorRuntime {
 
     if (segChanged) {
       this.currentSegmentKey = key;
-      const place = anchorPlace(seg.anchorId);
-      const isTravel = seg.activity === 'locomoting' && seg.resolved !== false && place;
-      if (isTravel && place) {
-        // 位移时长直接取区间长度，保证画面时序与数据一致
-        this.plan = planTravel(this.transform, place, seg.durS);
-        this.travelElapsedS = 0;
-        this.gait.reset();
-      } else {
-        this.plan = null;
-        this.gait.reset();
-      }
+      this.retargetIfNeeded(seg);
+
       // 姿势切换：由控制器按新姿势重建基准参数；
       // 同时把「在做什么」的头部动作配方叠上去——进食/饮水/用砂盆的姿势都是蹲伏，
       // 只有头部动作能把它们区分开。
@@ -230,14 +237,24 @@ export class CatBehaviorRuntime {
       this.segmentElapsedS += step;
     }
 
+    // 首帧若与目标锚点不一致（换时间线的情形），这里把它补成一次走路
+    if (this.plannedArrival) {
+      const target = this.plannedArrival;
+      this.plannedArrival = null;
+      if (!this.plan && this.needsWalkTo(target)) this.startPlan(target);
+    }
+
     if (this.plan) {
-      const elapsedS = this.travelElapsedS;
-      this.transform = travelAt(this.plan, elapsedS);
-      // 位移已结束（到得早）时不再走步态，原地站着等下一段——这样猫不会「原地踏步」，
-      // 也不会为了拖满时间线而放慢成蜗牛。
-      const arrived = elapsedS >= this.plan.durationS;
-      const phase = arrived ? 0 : this.gait.advance(step, 1.9);
+      this.planElapsedS += step;
+      const k = Math.min(1, this.planElapsedS / this.plan.durationS);
+      this.transform = travelAt(this.plan, this.planElapsedS);
+      // 步态相位只在**真的在移动**时推进；到得早就地站住，不「原地踏步」。
+      const phase = k < 1 ? this.gait.advance(step, 1.9) : 0;
       this.controller.setExternalTransform(this.transform, phase);
+      if (k >= 1) {
+        this.plan = null;
+        this.gait.reset();
+      }
     } else {
       // 静止：位置贴合到当前锚点（位移结束时可能因缓动留有极小残差）
       const place = anchorPlace(seg.anchorId);
@@ -248,6 +265,73 @@ export class CatBehaviorRuntime {
 
     this.controller.update(step);
     this.emitStatus();
+  }
+
+  /**
+   * 演示倍率的**局部刹车**：正在走路时放缓时间线，让「走完这段」与「这段位移的时间线时长用完」同时发生。
+   *
+   * 为什么必须有它：位移时长是按真实几何算的**真实秒数**（一次 3 m 的横穿约 3 秒），
+   * 而时间线在 20× 下同样的位移只给 1 秒真实时间。若不刹车，只有两个坏选择：
+   *   - 让猫按时间线速度走 → 0.15 秒走完 3 m，就是**瞬移**；
+   *   - 让猫按真实速度走 → 它永远落在时间线后面，一路都在追赶，看起来像一直在赶路。
+   * 刹车之后两者同时结束：走路看得清、时间线不落后、标签也不会与画面矛盾。
+   *
+   * 代价是演示总时长略增（实测：一天的位移段合计约 5.5–6.7%，
+   * 每段需要补的真实时间中位数约 1.5 秒 → 整场演示约多几分钟）。
+   */
+  private effectiveTimeScale(realTime: boolean): number {
+    if (realTime) return 1;
+    if (!this.plan) return this.timeScale;
+    const remainReal = Math.max(0, this.plan.durationS - this.planElapsedS);
+    const remainSim = Math.max(0, this.planSegmentEndT - this.t);
+    if (remainReal <= 0.05) return this.timeScale;
+    return Math.min(this.timeScale, remainSim / remainReal);
+  }
+
+  /** 当前位置与目标锚点的差距是否值得走一趟（避免为一两厘米的残差规划位移）。 */
+  private needsWalkTo(place: CatAnchorPlace): boolean {
+    const flat = Math.hypot(place.position.x - this.transform.x, place.position.z - this.transform.z);
+    const dy = Math.abs(place.heightM - this.transform.y);
+    return flat > 0.05 || dy > 0.03;
+  }
+
+  private samePlace(a: CatTransform, place: CatAnchorPlace): boolean {
+    return (
+      Math.hypot(place.position.x - a.x, place.position.z - a.z) < 0.05 &&
+      Math.abs(place.heightM - a.y) < 0.03
+    );
+  }
+
+  /**
+   * 段切换时决定要不要（重新）规划位移。
+   *
+   * 三条规则：
+   *   1. 位移段（`locomoting` 且已解析）→ 一定规划；
+   *   2. **非位移段而猫不在该锚点上** → 也规划。这条覆盖"时间线直接在两个锚点之间切换"
+   *      的情形：以前这里会 `restAt` 直接落到锚点上，也就是**瞬移**；
+   *   3. **跳跃例外**：高度差超过跳跃门限时按跳处理，可以直接改目标（用户要的
+   *      「只有跳跃可以忽略轨迹」）。普通走路若目标变了，则从**当前位置**重新规划，
+   *      保持轨迹连续——绝不「先瞬移再走」。
+   */
+  private retargetIfNeeded(seg: CatBehaviorSegment): void {
+    const place = anchorPlace(seg.anchorId);
+    if (!place) return;
+    const isTravel = seg.activity === 'locomoting' && seg.resolved !== false;
+    if (!isTravel && !this.needsWalkTo(place)) {
+      // 已经在该锚点上：若还在走（例如刚走到）就让它走完，别把残差吃掉
+      return;
+    }
+    const jump = Math.abs(place.heightM - this.transform.y) > JUMP_GATE_M;
+    if (this.plan && !jump && this.samePlace(this.plan.to, place)) return; // 已经在去这里的路上
+    this.startPlan(place, seg);
+  }
+
+  private startPlan(place: CatAnchorPlace, seg?: CatBehaviorSegment): void {
+    this.plan = planTravel(this.transform, place, 0);
+    this.planElapsedS = 0;
+    const endSeg = seg ?? this.currentSegment;
+    this.planSegmentEndT = endSeg ? endSeg.t + endSeg.durS : this.t;
+    this.gait.reset();
   }
 
   private emitStatus(): void {

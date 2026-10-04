@@ -67,6 +67,29 @@ export interface SceneSnapshot {
    * 无法发现"项圈没挂上"或"无干涉区跟着身体而不是跟着头"这两类故障。
    */
   collar?: { collar: boolean; whiskerZone: boolean; parts: number; partNames?: string[] };
+  /** 位移探针：证明"两个动作之间是走过去的"（见 `HomeScene.startMotionProbe`） */
+  catMotionProbe?: {
+    samples: number;
+    durationS: number;
+    maxSpeedMps: number;
+    maxStepM: number;
+    movingShare: number;
+    distinctPositions: number;
+  } | null;
+  /** 项圈相机这一路（App「实时」页）的运行事实 */
+  catPov?: {
+    bound: boolean;
+    frames: number;
+    width: number;
+    height: number;
+    /** 镜头离猫所站表面的高度（米）——核对"视角高度与猫一致" */
+    eyeHeightM?: number;
+    follow?: boolean;
+  };
+  /** 当前是否在移动中（走路会持续若干真实秒，标签应显示「移动」） */
+  catMoving?: boolean;
+  /** 左栏机位按钮的 id 列表（用于断言"该删的机位真的删了"） */
+  presets?: string[];
   /**
    * App 预览（右栏 iPhone 机模）。
    *
@@ -80,6 +103,22 @@ export interface SceneSnapshot {
     hourOfDay: number;
     readings: Record<string, { value: number | null; validity: string | null }>;
     eventRows: number;
+    /** 行为次数统计（喝水 / 玩耍 / 用砂盆…） */
+    counts?: Record<string, number>;
+    /** 当前档案（验证"档案页可选且生效"） */
+    profile?: { breedId: string; ageMonths: number };
+    /** 档案页的选项数量与选中值（验证下拉真的可选、选项齐全） */
+    profileOptions?: { breeds: number; ages: number; selectedBreed: string; selectedAge: string };
+    /**
+     * 机身尺寸与滚动事实（验证"iPhone 大小不变，内容在机身内滑动"）。
+     * `phoneHeight` 在不同模块之间应保持不变，而长内容模块的 `canScroll` 应为 true。
+     */
+    layout?: {
+      phoneHeight: number;
+      bodyClientHeight: number;
+      bodyScrollHeight: number;
+      canScroll: boolean;
+    };
     /**
      * 读数变化提示的状态。
      *
@@ -150,64 +189,70 @@ export function installDebugHandle(
   window.setInterval(render, 1000);
 
   if (options.autoSequence) {
-    // ⚠️ 为什么整套时间点要等**资产就绪**才起跑：这一序列原本按固定墙钟起跑，
-    // 而猫是可异步加载的（写实蒙皮 GLB 5.4 MB + 贴图解码）。在慢一点的机器上，
-    // 6 秒的快照会在模型到位之前拍下，于是「演示时钟在推进」「段内进展计数在推进」
-    // 变成假阴性——而且看上去像功能坏了。改成「画面真的开始了再按秒数检查它」。
     const startAutoSequence = (): void => {
-      // 时间点刻意错开：等资产与首帧稳定 → 切激动（含 0.8 s 过渡）→ 回传 → 切回平静 → 回传。
-      // 最后再触发一次突发演示并回传：断言「注入的突发确实出现在快照里」。
-      window.setTimeout(() => post(), 6000);
-      window.setTimeout(() => {
-        call(handle, 'setCatState', 'agitated');
-      }, 8000);
-      window.setTimeout(() => post(), 10_500);
-      window.setTimeout(() => {
-        call(handle, 'setCatState', 'calm');
-      }, 12_000);
-      window.setTimeout(() => post(), 14_500);
-      // App 预览的收起 / 展开：这是右栏唯一的东西，必须能自动验证它确实在切换
-      window.setTimeout(() => {
-        call(handle, 'app', 'off');
-      }, 15_000);
-      window.setTimeout(() => {
-        call(handle, 'app', 'on');
-      }, 15_600);
-      window.setTimeout(() => {
-        call(handle, 'setAutoCat', '');
-        call(handle, 'incident', 'seizure');
-      }, 16_000);
-      // 抽搐自 16 s 起持续 15 s（演示时间），在它进行中回传一次
-      window.setTimeout(() => post(), 18_000);
-      // 打开项圈与触须无干涉区并回传：让 `?debug=1&auto=1` 一次跑完就覆盖形态可视化。
-      window.setTimeout(() => {
-        call(handle, 'collar', 'zone');
-      }, 19_000);
-      window.setTimeout(() => post(), 21_000);
-      // 逐个切 App 的页签并回传：事件流 / 漂移 / 档案都要留下可断言的快照
-      window.setTimeout(() => {
-        call(handle, 'app', 'events');
-      }, 22_000);
-      window.setTimeout(() => post(), 22_500);
-      window.setTimeout(() => {
-        call(handle, 'app', 'drift');
-      }, 24_000);
-      window.setTimeout(() => post(), 24_500);
-      window.setTimeout(() => {
-        call(handle, 'app', 'profile');
-      }, 26_000);
-      window.setTimeout(() => post(), 26_500);
-      window.setTimeout(() => {
-        call(handle, 'app', 'live');
-      }, 28_000);
-      // 抽搐结束后再回传一次：用来对照「突发期间」与「突发之后」的标签
-      window.setTimeout(() => post(), 32_000);
+    // 时间点刻意错开：等资产与首帧稳定 → 切激动（含 0.8 s 过渡）→ 回传 → 切回平静 → 回传。
+    // 最后再触发一次突发演示并回传：断言「注入的突发确实出现在快照里」。
+    window.setTimeout(() => post(), 6000);
+    window.setTimeout(() => {
+      call(handle, 'setCatState', 'agitated');
+    }, 8000);
+    window.setTimeout(() => post(), 10_500);
+    window.setTimeout(() => {
+      call(handle, 'setCatState', 'calm');
+    }, 12_000);
+    window.setTimeout(() => post(), 14_500);
+    // 位移探针：随后 2.5 秒逐帧记录猫的位置，用来判定"是走过去的"还是"瞬移过去的"
+    window.setTimeout(() => {
+      call(handle, 'probe', '2500');
+    }, 17_500);
+    // App 预览的收起 / 展开：这是右栏唯一的东西，必须能自动验证它确实在切换
+    window.setTimeout(() => {
+      call(handle, 'app', 'off');
+    }, 15_000);
+    window.setTimeout(() => {
+      call(handle, 'app', 'on');
+    }, 15_600);
+    window.setTimeout(() => {
+      call(handle, 'setAutoCat', '');
+      call(handle, 'incident', 'seizure');
+    }, 19_000);
+    // 抽搐持续 15 秒（演示时间），在它进行中回传一次
+    window.setTimeout(() => post(), 21_000);
+    // 打开项圈与触须无干涉区并回传：让 `?debug=1&auto=1` 一次跑完就覆盖形态可视化。
+    window.setTimeout(() => {
+      call(handle, 'collar', 'zone');
+    }, 22_000);
+    // 位移探针的结果在这里回传（探针窗口在 20 s 结束）
+    window.setTimeout(() => post(), 20_600);
+    // 逐个切 App 的页签并回传：事件流 / 健康 / 档案都要留下可断言的快照
+    window.setTimeout(() => {
+      call(handle, 'app', 'events');
+    }, 23_000);
+    window.setTimeout(() => post(), 23_500);
+    window.setTimeout(() => {
+      call(handle, 'app', 'health');
+    }, 24_500);
+    window.setTimeout(() => post(), 25_000);
+    window.setTimeout(() => {
+      call(handle, 'app', 'profile');
+    }, 26_000);
+    window.setTimeout(() => post(), 26_500);
+    // 换一个品种：验证「改档案 → 重建会话 → 基线跟着变」这条路真的通
+    window.setTimeout(() => {
+      call(handle, 'breed', 'maine-coon');
+    }, 27_500);
+    window.setTimeout(() => post(), 28_500);
+    window.setTimeout(() => {
+      call(handle, 'app', 'live');
+    }, 28_000);
+    // 抽搐结束后再回传一次：用来对照「突发期间」与「突发之后」的标签
+    window.setTimeout(() => post(), 32_000);
     };
     const deadline = Date.now() + 60_000;
     const waitForAssets = (): void => {
       const snap = snapshot();
-      const catModel = snap.cat?.model as { loaded?: boolean } | undefined;
-      if ((snap.modelsLoaded > 0 && catModel?.loaded !== false) || Date.now() > deadline) startAutoSequence();
+      const model = snap.cat?.model as { loaded?: boolean } | undefined;
+      if ((snap.modelsLoaded > 0 && model?.loaded === true) || Date.now() > deadline) startAutoSequence();
       else window.setTimeout(waitForAssets, 250);
     };
     waitForAssets();
@@ -245,6 +290,18 @@ export function summarize(snap: SceneSnapshot): string {
     `collar=${snap.collar?.collar ? 1 : 0}`,
     `whiskerZone=${snap.collar?.whiskerZone ? 1 : 0}`,
     `collarParts=${snap.collar?.parts ?? 0}`,
+    `presets=${(snap.presets ?? []).join('+') || 'none'}`,
+    `catMoving=${snap.catMoving ? 1 : 0}`,
+    `povFrames=${snap.catPov?.frames ?? 0}`,
+    `povBound=${snap.catPov?.bound ? 1 : 0}`,
+    `povEyeHeight=${snap.catPov?.eyeHeightM ?? 'none'}`,
+    `appPhoneH=${snap.app?.layout?.phoneHeight ?? 0}`,
+    `appBodyScroll=${snap.app?.layout ? `${snap.app.layout.bodyClientHeight}/${snap.app.layout.bodyScrollHeight}` : 'none'}`,
+    `appCounts=${snap.app?.counts?.drinking ?? 0}`,
+    `appBreedOptions=${snap.app?.profileOptions?.breeds ?? 0}`,
+    `appBreed=${snap.app?.profileOptions?.selectedBreed ?? 'none'}`,
+    `probeMaxSpeed=${snap.catMotionProbe?.maxSpeedMps ?? 'none'}`,
+    `probeDistinct=${snap.catMotionProbe?.distinctPositions ?? 'none'}`,
     `appCollapsed=${snap.app?.collapsed ? 1 : 0}`,
     `appTab=${snap.app?.tab ?? 'none'}`,
     `appHr=${snap.app?.readings.hr?.value ?? 'none'}`,
